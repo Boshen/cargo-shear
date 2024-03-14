@@ -1,22 +1,17 @@
 [package]
 name = "cargo-shear"
-version = "0.6.1"
+version = "0.0.1"
 edition = "2021"
 description = "Detect and remove unused dependencies from Cargo.toml"
 authors = ["Boshen <boshenc@gmail.com>"]
 repository = "https://github.com/Boshen/cargo-shear"
-keywords = []
-categories = []
+keywords = ["cargo", "udeps", "machete", "unused", "dependencies"]
+categories = ["development-tools", "development-tools::cargo-plugins"]
 license = "MIT"
 readme = "README.md"
 
 [dependencies]
 walkdir = "2.5.0"
-
-[profile.release]
-opt-level = 3
-lto = "fat"
-codegen-units = 1
-strip = "symbols"
-debug = false
-panic = "abort"
+cargo_metadata = "0.18.1"
+cargo_toml = "0.19.2"
+syn = { version = "2", features = ["full", "visit"] }

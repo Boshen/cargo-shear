@@ -9,6 +9,12 @@ init:
 watch command:
   cargo watch -x '{{command}}'
 
+build-release:
+  cargo build --release
+
+run-release command:
+  ./target/release/cargo-shear {{command}}
+
 fmt:
   cargo fmt
   taplo format
