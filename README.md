@@ -1,4 +1,4 @@
-# Cargo Sheer
+# Cargo Shear
 
 Detect and remove unused dependencies from `Cargo.toml` in Rust projects.
 
