@@ -42,7 +42,7 @@ dependencies = [
 
 [[package]]
 name = "cargo-shear"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "bpaf",
  "cargo_metadata",
