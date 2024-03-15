@@ -10,10 +10,10 @@ use walkdir::WalkDir;
 
 type Deps = HashSet<String>;
 
-// options("pretty") + the "batteries" feature will strip name from `cargo shear"
+// options("shear") + the "batteries" feature will strip name using `bpaf::cargo_helper` from `cargo shear"
 // See <https://docs.rs/bpaf/latest/bpaf/batteries/fn.cargo_helper.html>
 #[derive(Debug, Clone, Bpaf)]
-#[bpaf(options("pretty"))]
+#[bpaf(options("shear"))]
 pub struct Options {
     #[bpaf(positional("PATH"), fallback(PathBuf::from(".")))]
     path: PathBuf,
