@@ -16,10 +16,14 @@ Detect and remove unused dependencies from `Cargo.toml` in Rust projects.
   * can we run some other command and get the macro expanded source to parse?
   * is there an API for getting imports instead of parsing?
 
-## Improvements
+## TODO
 
-* add a CLI, preferably [bpaf](https://docs.rs/bpaf/latest/bpaf/index.html)
-* make the reporting more granular for `[dependencies]`, `[dev-dependencies]` and `[build-dependencies]`
+- [ ] make the reporting more granular for `[dependencies]`, `[dev-dependencies]` and `[build-dependencies]`
+- [ ] `--fix`
+- [ ] add tests
+- [ ] exit codes
+- [ ] error recovery
+- [ ] print things more nicely
 
 ## Prior Arts
 

@@ -1,5 +1,8 @@
 use cargo_shear::shear;
 
+use cargo_shear::options;
+
 fn main() {
-    shear();
+    let options = options().fallback_to_usage().run();
+    shear(&options);
 }

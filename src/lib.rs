@@ -1,18 +1,24 @@
 use std::{
     collections::HashSet,
-    env, fs,
+    fs,
     path::{Path, PathBuf},
 };
 
+use bpaf::Bpaf;
 use cargo_metadata::{Metadata, MetadataCommand, Package};
 use walkdir::WalkDir;
 
 type Deps = HashSet<String>;
 
-pub fn shear() {
-    let current_dir = env::args().nth(1).map_or_else(|| PathBuf::from("."), PathBuf::from);
+#[derive(Debug, Clone, Bpaf)]
+#[bpaf(options)]
+pub struct Options {
+    #[bpaf(positional("PATH"), fallback(PathBuf::from(".")))]
+    path: PathBuf,
+}
 
-    let metadata = MetadataCommand::new().current_dir(&current_dir).exec().unwrap();
+pub fn shear(options: &Options) {
+    let metadata = MetadataCommand::new().current_dir(&options.path).exec().unwrap();
     let workspace_root = metadata.workspace_root.as_std_path();
 
     for package in metadata.workspace_packages() {

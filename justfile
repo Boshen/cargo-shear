@@ -18,3 +18,6 @@ run-release command:
 fmt:
   cargo fmt
   taplo format
+
+lint:
+  cargo clippy
