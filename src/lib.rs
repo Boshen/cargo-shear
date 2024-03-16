@@ -1,3 +1,5 @@
+mod import_collector;
+
 use std::{
     collections::HashSet,
     fs,
@@ -7,6 +9,8 @@ use std::{
 use bpaf::Bpaf;
 use cargo_metadata::{Metadata, MetadataCommand, Package};
 use walkdir::WalkDir;
+
+use crate::import_collector::collect_imports;
 
 type Deps = HashSet<String>;
 
@@ -92,52 +96,5 @@ fn shear_package(workspace_root: &Path, package: &Package) {
 
 fn process_rust_source(path: &Path) -> Option<Deps> {
     let source_text = fs::read_to_string(path).unwrap();
-    let Ok(syntax) = syn::parse_str::<syn::File>(&source_text) else { return None };
-    let mut collector = ImportsCollector::default();
-    collector.visit(&syntax);
-    Some(collector.deps)
-}
-
-#[derive(Default)]
-struct ImportsCollector {
-    deps: Deps,
-}
-
-impl ImportsCollector {
-    fn visit(&mut self, syntax: &syn::File) {
-        use syn::visit::Visit;
-        self.visit_file(syntax);
-    }
-
-    fn is_known_import(s: &str) -> bool {
-        matches!(s, "crate" | "super" | "self" | "std")
-    }
-}
-
-impl<'a> syn::visit::Visit<'a> for ImportsCollector {
-    /// A path prefix of imports in a use item: `std::....`
-    fn visit_use_path(&mut self, use_path: &'a syn::UsePath) {
-        let ident = use_path.ident.to_string();
-        if Self::is_known_import(&ident) {
-            return;
-        }
-        self.deps.insert(ident);
-        syn::visit::visit_use_path(self, use_path);
-    }
-
-    /// A path at which a named item is exported (e.g. `std::collections::HashMap`).
-    ///
-    /// This also gets crate level or renamed imports (I don't know how to fix yet).
-    fn visit_path(&mut self, path: &'a syn::Path) {
-        if path.segments.len() <= 1 {
-            return;
-        }
-        let Some(path_segment) = path.segments.first() else { return };
-        let ident = path_segment.ident.to_string();
-        if Self::is_known_import(&ident) || ident.chars().next().is_some_and(|c| c.is_uppercase()) {
-            return;
-        }
-        self.deps.insert(ident);
-        syn::visit::visit_path(self, path);
-    }
+    collect_imports(&source_text).ok()
 }
