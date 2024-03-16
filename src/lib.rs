@@ -8,6 +8,7 @@ use std::{
 
 use bpaf::Bpaf;
 use cargo_metadata::{Metadata, MetadataCommand, Package};
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use walkdir::WalkDir;
 
 use crate::import_collector::collect_imports;
@@ -78,9 +79,10 @@ fn shear_package(workspace_root: &Path, package: &Package) {
         })
         .collect::<HashSet<_>>();
 
-    let rust_file_deps = rust_file_paths
-        .iter()
-        .filter_map(|path| process_rust_source(path))
+    let rust_file_deps =
+        rust_file_paths.par_iter().filter_map(|path| process_rust_source(path)).collect::<Vec<_>>();
+    let rust_file_deps = rust_file_deps
+        .into_iter()
         .reduce(|a, b| a.union(&b).cloned().collect())
         .unwrap_or_default();
 
