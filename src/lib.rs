@@ -4,6 +4,7 @@ use std::{
     collections::{HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
+    str::FromStr,
 };
 
 use bpaf::Bpaf;
@@ -18,6 +19,9 @@ use crate::import_collector::collect_imports;
 #[derive(Debug, Clone, Bpaf)]
 #[bpaf(options("shear"))]
 pub struct CargoShearOptions {
+    #[bpaf(long)]
+    fix: bool,
+
     #[bpaf(positional("PATH"), fallback(PathBuf::from(".")))]
     path: PathBuf,
 }
@@ -43,7 +47,7 @@ impl CargoShear {
         let workspace_root = metadata.workspace_root.as_std_path();
 
         for package in metadata.workspace_packages() {
-            Self::shear_package(workspace_root, package);
+            self.shear_package(workspace_root, package);
         }
 
         Self::shear_workspace(&metadata);
@@ -72,7 +76,7 @@ impl CargoShear {
         }
     }
 
-    fn shear_package(workspace_root: &Path, package: &Package) {
+    fn shear_package(&self, workspace_root: &Path, package: &Package) {
         let dir = package.manifest_path.parent().unwrap().as_std_path();
 
         let rust_file_paths = package
@@ -122,6 +126,7 @@ impl CargoShear {
                 .map(|name| package_deps_map[name].clone())
                 .collect::<Vec<_>>();
             println!("{:?}: {unused_dep_names:?}", dir.strip_prefix(workspace_root).unwrap());
+            self.try_fix_package(package.manifest_path.as_std_path(), &unused_dep_names);
         }
     }
 
@@ -132,5 +137,28 @@ impl CargoShear {
     fn process_rust_source(path: &Path) -> Option<Deps> {
         let source_text = fs::read_to_string(path).unwrap();
         collect_imports(&source_text).ok()
+    }
+
+    fn try_fix_package(&self, cargo_toml_path: &Path, unused_dep_names: &[String]) {
+        if !self.options.fix {
+            return;
+        }
+
+        let manifest = fs::read_to_string(cargo_toml_path).unwrap();
+        let mut manifest = toml_edit::DocumentMut::from_str(&manifest).unwrap();
+        let dependencies = manifest
+            .iter_mut()
+            .find_map(|(k, v)| (v.is_table_like() && k == "dependencies").then_some(Some(v)))
+            .flatten()
+            .expect("dependencies table is missing or empty")
+            .as_table_mut()
+            .expect("unexpected missing table");
+
+        for k in unused_dep_names {
+            dependencies.remove(k).unwrap_or_else(|| panic!("Dependency {k} not found"));
+        }
+
+        let serialized = manifest.to_string();
+        fs::write(cargo_toml_path, serialized).expect("Cargo.toml write error");
     }
 }

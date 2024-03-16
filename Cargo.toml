@@ -27,3 +27,4 @@ proc-macro2 = {version="1", features = ["span-locations"]}
 syn = { version = "2", features = ["full", "visit", "extra-traits"] }
 regex = "1.10.3"
 rayon = "1.9.0"
+toml_edit = { version = "0.22.7", features = ["parse"] }

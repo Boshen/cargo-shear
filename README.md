@@ -6,7 +6,7 @@ Detect and remove unused dependencies from `Cargo.toml` in Rust projects.
 
 ```bash
 cargo install cargo-shear
-cargo shear
+cargo shear --fix
 ```
 
 
@@ -20,7 +20,7 @@ cargo shear
 ## TODO
 
 - [ ] make the reporting more granular for `[dependencies]`, `[dev-dependencies]` and `[build-dependencies]`
-- [ ] `--fix`
+- [ ] `--fix` the root Cargot.toml
 - [ ] add tests
 - [ ] exit codes
 - [ ] error recovery
