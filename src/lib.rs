@@ -90,7 +90,8 @@ fn shear_package(workspace_root: &Path, package: &Package) {
         .dependencies
         .iter()
         .map(dependency_name)
-        .map(|name| name.replace('-', "_"))
+        // change `package-name` and `Package_name` to `package_name`
+        .map(|name| name.replace('-', "_").to_lowercase())
         .collect::<HashSet<_>>();
 
     let unused_deps = package_deps.difference(&rust_file_deps).collect::<Vec<_>>();

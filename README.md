@@ -18,21 +18,6 @@ Detect and remove unused dependencies from `Cargo.toml` in Rust projects.
 - [ ] error recovery
 - [ ] print things more nicely
 
-### False positives to be fixed
-
-- [ ] uppercase package name, e.g. `Inflector`
-
-```rust
-    pub type ModuleIdToFileName = std::sync::Arc<
-  dashmap::DashMap<
-    rspack_core::ModuleIdentifier,
-    (String, AssetInfo),
-    std::hash::BuildHasherDefault<rspack_identifier::IdentifierHasher>,
-  >,
->;
-```
-
-
 ## Prior Arts
 
 * https://github.com/est31/cargo-udeps
