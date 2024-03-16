@@ -105,6 +105,12 @@ impl<'a> syn::visit::Visit<'a> for ImportCollector {
     fn visit_meta_list(&mut self, m: &'a syn::MetaList) {
         self.collect_tokens(&m.tokens)
     }
+
+    /// An extern crate item: extern crate serde.
+    fn visit_item_extern_crate(&mut self, i: &'a syn::ItemExternCrate) {
+        let ident = i.ident.to_string();
+        self.add_import(ident);
+    }
 }
 
 #[cfg(test)]
@@ -160,5 +166,10 @@ mod tests {
           struct Foo;
         "#,
         );
+    }
+
+    #[test]
+    fn extern_crate() {
+        test("extern crate foo;");
     }
 }
