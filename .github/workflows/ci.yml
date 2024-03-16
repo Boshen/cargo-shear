@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize]
+    paths-ignore:
+      - '**/*.md'
+      - '**/*.yml'
+      - '!.github/workflows/ci.yml'
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**/*.md'
+      - '**/*.yml'
+      - '!.github/workflows/ci.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.ref_name != 'main' }}
+
+jobs:
+  test:
+    name: Test
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: moonrepo/setup-rust@v1
+        with:
+          components: clippy,rustfmt,taplo-cli
+          cache-base: main
+      - run: |
+          cargo test
+          cargo clippy -- -D warnings
+          cargo fmt --all -- --check
+          typos
