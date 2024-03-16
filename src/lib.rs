@@ -71,9 +71,9 @@ fn shear_package(workspace_root: &Path, package: &Package) {
                 let target_dir = target.src_path.parent().unwrap();
                 WalkDir::new(target_dir)
                     .into_iter()
-                    .filter_map(|e| e.ok())
+                    .filter_map(std::result::Result::ok)
                     .filter(|e| e.path().extension().is_some_and(|ext| ext == "rs"))
-                    .map(|e| e.into_path())
+                    .map(walkdir::DirEntry::into_path)
                     .collect::<Vec<_>>()
             }
         })

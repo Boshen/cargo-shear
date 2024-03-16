@@ -46,7 +46,7 @@ impl ImportCollector {
         }
         let Some(path_segment) = path.segments.first() else { return };
         let ident = path_segment.ident.to_string();
-        if ident.chars().next().is_some_and(|c| c.is_uppercase()) {
+        if ident.chars().next().is_some_and(char::is_uppercase) {
             return;
         }
         self.add_import(ident);
@@ -61,8 +61,8 @@ impl ImportCollector {
     // `println!("{}", foo::bar);`
     //                 ^^^^^^^^ search for the `::` pattern
     fn collect_tokens(&mut self, tokens: &proc_macro2::TokenStream) {
-        let Some(source_text) = tokens.span().source_text() else { return };
         static MACRO_RE: OnceLock<Regex> = OnceLock::new();
+        let Some(source_text) = tokens.span().source_text() else { return };
         let idents = MACRO_RE
             .get_or_init(|| Regex::new(r"(\w+)::(\w+)").unwrap())
             .captures_iter(&source_text)
@@ -90,7 +90,7 @@ impl<'a> syn::visit::Visit<'a> for ImportCollector {
         syn::visit::visit_path(self, i);
     }
 
-    /// A path like std::slice::Iter, optionally qualified with a self-type as in <Vec<T> as SomeTrait>::Associated.
+    /// A path like `std::slice::Iter`, optionally qualified with a self-type as in <Vec<T> as `SomeTrait>::Associated`.
     fn visit_type_path(&mut self, i: &'a syn::TypePath) {
         self.collect_type_path(i);
         syn::visit::visit_type_path(self, i);
@@ -103,7 +103,7 @@ impl<'a> syn::visit::Visit<'a> for ImportCollector {
 
     /// A structured list within an attribute, like derive(Copy, Clone).
     fn visit_meta_list(&mut self, m: &'a syn::MetaList) {
-        self.collect_tokens(&m.tokens)
+        self.collect_tokens(&m.tokens);
     }
 
     /// An extern crate item: extern crate serde.
@@ -161,10 +161,10 @@ mod tests {
     #[test]
     fn meta_list() {
         test(
-            r#"
+            r"
           #[derive(foo::Deserialize, foo::Serialize)]
           struct Foo;
-        "#,
+        ",
         );
     }
 
