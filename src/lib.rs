@@ -1,7 +1,7 @@
 mod import_collector;
 
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
 };
@@ -86,18 +86,24 @@ fn shear_package(workspace_root: &Path, package: &Package) {
         .reduce(|a, b| a.union(&b).cloned().collect())
         .unwrap_or_default();
 
-    let package_deps = package
+    let package_deps_map = package
         .dependencies
         .iter()
-        .map(dependency_name)
-        // change `package-name` and `Package_name` to `package_name`
-        .map(|name| name.replace('-', "_").to_lowercase())
-        .collect::<HashSet<_>>();
+        .map(|d| {
+            let dep_name = dependency_name(d);
+            // change `package-name` and `Package_name` to `package_name`
+            let mod_name = dep_name.clone().replace('-', "_").to_lowercase();
+            (mod_name, dep_name)
+        })
+        .collect::<HashMap<String, String>>();
 
-    let unused_deps = package_deps.difference(&rust_file_deps).collect::<Vec<_>>();
+    let mod_names = package_deps_map.keys().cloned().collect::<HashSet<_>>();
+    let unused_deps = mod_names.difference(&rust_file_deps).collect::<Vec<_>>();
 
     if !unused_deps.is_empty() {
-        println!("{:?}: {unused_deps:?}", dir.strip_prefix(workspace_root).unwrap());
+        let unused_dep_names =
+            unused_deps.into_iter().map(|name| package_deps_map[name].clone()).collect::<Vec<_>>();
+        println!("{:?}: {unused_dep_names:?}", dir.strip_prefix(workspace_root).unwrap());
     }
 }
 
