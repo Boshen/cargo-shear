@@ -32,3 +32,7 @@ cargo shear --fix
 * https://github.com/bnjbvr/cargo-machete
 
 ## Trophy Cases
+
+* -7 lines from [oxc](https://github.com/oxc-project/oxc/pull/2729)
+* -59 lines from [rspack](https://github.com/web-infra-dev/rspack/pull/5954)
+* -39 lines from [rolldown](https://github.com/rolldown/rolldown/pull/593)
