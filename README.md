@@ -2,6 +2,14 @@
 
 Detect and remove unused dependencies from `Cargo.toml` in Rust projects.
 
+## Usage
+
+```bash
+cargo install cargo-shear
+cargo shear
+```
+
+
 ## Technique
 
 1. use the `cargo_metadata` crate to list all dependencies specified in `[workspace.dependencies]` and `[dependencies]`
