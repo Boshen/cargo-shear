@@ -9,13 +9,6 @@ Detect and remove unused dependencies from `Cargo.toml` in Rust projects.
 3. use `syn` to parse these Rust files and extract imports
 4. identify the difference between the imports and the package dependencies
 
-## False positives (to be solved):
-
-* macros
-  * how can imports be collected from macros? e.g. in `println!({}, foo::bar)`, `foo` is a macro token instead of an identifier
-  * can we run some other command and get the macro expanded source to parse?
-  * is there an API for getting imports instead of parsing?
-
 ## TODO
 
 - [ ] make the reporting more granular for `[dependencies]`, `[dev-dependencies]` and `[build-dependencies]`
@@ -27,9 +20,7 @@ Detect and remove unused dependencies from `Cargo.toml` in Rust projects.
 
 ### False positives to be fixed
 
-- [ ] package renames
 - [ ] uppercase package name, e.g. `Inflector`
-- [ ] pathname in type arguments
 
 ```rust
     pub type ModuleIdToFileName = std::sync::Arc<

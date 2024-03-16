@@ -7,7 +7,7 @@ use std::{
 };
 
 use bpaf::Bpaf;
-use cargo_metadata::{Metadata, MetadataCommand, Package};
+use cargo_metadata::{Dependency, Metadata, MetadataCommand, Package};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use walkdir::WalkDir;
 
@@ -47,8 +47,8 @@ fn shear_workspace(metadata: &Metadata) {
     let all_package_deps = metadata
         .workspace_packages()
         .iter()
-        .flat_map(|p| &p.dependencies)
-        .map(|p| p.name.clone())
+        .flat_map(|package| &package.dependencies)
+        .map(dependency_name)
         .collect::<Deps>();
     let workspace_deps = workspace.dependencies.keys().cloned().collect::<HashSet<String>>();
     let unused_workspace_deps = workspace_deps.difference(&all_package_deps);
@@ -86,14 +86,22 @@ fn shear_package(workspace_root: &Path, package: &Package) {
         .reduce(|a, b| a.union(&b).cloned().collect())
         .unwrap_or_default();
 
-    let package_deps =
-        package.dependencies.iter().map(|d| d.name.replace('-', "_")).collect::<HashSet<_>>();
+    let package_deps = package
+        .dependencies
+        .iter()
+        .map(dependency_name)
+        .map(|name| name.replace('-', "_"))
+        .collect::<HashSet<_>>();
 
     let unused_deps = package_deps.difference(&rust_file_deps).collect::<Vec<_>>();
 
     if !unused_deps.is_empty() {
         println!("{:?}: {unused_deps:?}", dir.strip_prefix(workspace_root).unwrap());
     }
+}
+
+fn dependency_name(dependency: &Dependency) -> String {
+    dependency.rename.as_ref().unwrap_or(&dependency.name).clone()
 }
 
 fn process_rust_source(path: &Path) -> Option<Deps> {
