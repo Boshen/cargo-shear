@@ -60,9 +60,8 @@ impl ImportCollector {
 
     // `println!("{}", foo::bar);`
     //                 ^^^^^^^^ search for the `::` pattern
-    fn collect_macro(&mut self, m: &syn::Macro) {
-        self.collect_path(&m.path);
-        let Some(source_text) = m.tokens.span().source_text() else { return };
+    fn collect_tokens(&mut self, tokens: &proc_macro2::TokenStream) {
+        let Some(source_text) = tokens.span().source_text() else { return };
         static MACRO_RE: OnceLock<Regex> = OnceLock::new();
         let idents = MACRO_RE
             .get_or_init(|| Regex::new(r"(\w+)::(\w+)").unwrap())
@@ -97,8 +96,14 @@ impl<'a> syn::visit::Visit<'a> for ImportCollector {
         syn::visit::visit_type_path(self, i);
     }
 
-    fn visit_macro(&mut self, i: &'a syn::Macro) {
-        self.collect_macro(i);
+    fn visit_macro(&mut self, m: &'a syn::Macro) {
+        self.collect_path(&m.path);
+        self.collect_tokens(&m.tokens);
+    }
+
+    /// A structured list within an attribute, like derive(Copy, Clone).
+    fn visit_meta_list(&mut self, m: &'a syn::MetaList) {
+        self.collect_tokens(&m.tokens)
     }
 }
 
@@ -107,40 +112,53 @@ mod tests {
     use super::collect_imports;
     use std::collections::HashSet;
 
+    fn test(source_text: &str) {
+        let deps = collect_imports(source_text).unwrap();
+        let expected = HashSet::from_iter(["foo".to_string()]);
+        assert_eq!(deps, expected, "{source_text}");
+    }
+
     #[test]
     fn export_path() {
-        let source = r"
+        test(
+            r"
           #[test]
           fn box_serialize() {
             let b = foo::bar(&b).unwrap();
           }
-        ";
-        let deps = collect_imports(source).unwrap();
-        let expected = HashSet::from_iter(["foo".to_string()]);
-        assert_eq!(deps, expected);
+        ",
+        );
     }
 
     #[test]
     fn type_path() {
-        let source = r"
+        test(
+            r"
           fn main() {
             let x: Vec<foo::Bar> = vec![];
           }
-        ";
-        let deps = collect_imports(source).unwrap();
-        let expected = HashSet::from_iter(["foo".to_string()]);
-        assert_eq!(deps, expected);
+        ",
+        );
     }
 
     #[test]
-    fn macros() {
-        let source = r#"
+    fn r#macro() {
+        test(
+            r#"
           fn main() {
             println!("{}", foo::bar);
           }
-        "#;
-        let deps = collect_imports(source).unwrap();
-        let expected = HashSet::from_iter(["foo".to_string()]);
-        assert_eq!(deps, expected);
+        "#,
+        );
+    }
+
+    #[test]
+    fn meta_list() {
+        test(
+            r#"
+          #[derive(foo::Deserialize, foo::Serialize)]
+          struct Foo;
+        "#,
+        );
     }
 }
