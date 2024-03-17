@@ -4,13 +4,14 @@ use std::{
     collections::{HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
+    result::Result,
     str::FromStr,
 };
 
 use bpaf::Bpaf;
 use cargo_metadata::{Dependency, Metadata, MetadataCommand, Package};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-use walkdir::WalkDir;
+use walkdir::{DirEntry, WalkDir};
 
 use crate::import_collector::collect_imports;
 
@@ -76,6 +77,7 @@ impl CargoShear {
         }
     }
 
+    /// Returns the remaining dependencies
     fn shear_package(&self, workspace_root: &Path, package: &Package) {
         let dir = package.manifest_path.parent().unwrap().as_std_path();
 
@@ -89,9 +91,9 @@ impl CargoShear {
                     let target_dir = target.src_path.parent().unwrap();
                     WalkDir::new(target_dir)
                         .into_iter()
-                        .filter_map(std::result::Result::ok)
+                        .filter_map(Result::ok)
                         .filter(|e| e.path().extension().is_some_and(|ext| ext == "rs"))
-                        .map(walkdir::DirEntry::into_path)
+                        .map(DirEntry::into_path)
                         .collect::<Vec<_>>()
                 }
             })
@@ -100,11 +102,7 @@ impl CargoShear {
         let rust_file_deps = rust_file_paths
             .par_iter()
             .filter_map(|path| Self::process_rust_source(path))
-            .collect::<Vec<_>>();
-        let rust_file_deps = rust_file_deps
-            .into_iter()
-            .reduce(|a, b| a.union(&b).cloned().collect())
-            .unwrap_or_default();
+            .reduce(HashSet::new, |a, b| a.union(&b).cloned().collect());
 
         let package_deps_map = package
             .dependencies
