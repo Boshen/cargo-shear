@@ -46,9 +46,9 @@ impl CargoShear {
         let metadata = MetadataCommand::new().current_dir(&self.options.path).exec().unwrap();
         let workspace_root = metadata.workspace_root.as_std_path();
 
-        for package in metadata.workspace_packages() {
+        metadata.workspace_packages().par_iter().for_each(|package| {
             self.shear_package(workspace_root, package);
-        }
+        });
 
         Self::shear_workspace(&metadata);
     }
