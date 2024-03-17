@@ -146,16 +146,15 @@ impl CargoShear {
 
         let manifest = fs::read_to_string(cargo_toml_path).unwrap();
         let mut manifest = toml_edit::DocumentMut::from_str(&manifest).unwrap();
-        let dependencies = manifest
-            .iter_mut()
-            .find_map(|(k, v)| (v.is_table_like() && k == "dependencies").then_some(Some(v)))
-            .flatten()
-            .expect("dependencies table is missing or empty")
-            .as_table_mut()
-            .expect("unexpected missing table");
 
-        for k in unused_dep_names {
-            dependencies.remove(k).unwrap_or_else(|| panic!("Dependency {k} not found"));
+        for table_name in ["dependencies", "dev-dependencies", "build-dependencies"] {
+            if let Some(dependencies) =
+                manifest.get_mut(table_name).and_then(|item| item.as_table_mut())
+            {
+                for k in unused_dep_names {
+                    dependencies.remove(k);
+                }
+            }
         }
 
         let serialized = manifest.to_string();
