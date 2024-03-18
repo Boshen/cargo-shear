@@ -4,16 +4,19 @@ use std::{
     collections::{HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
-    result::Result,
     str::FromStr,
 };
 
+use anyhow::Result;
 use bpaf::Bpaf;
 use cargo_metadata::{Dependency, Metadata, MetadataCommand, Package};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use walkdir::{DirEntry, WalkDir};
 
 use crate::import_collector::collect_imports;
+
+#[derive(Debug)]
+pub struct Error;
 
 // options("shear") + the "batteries" feature will strip name using `bpaf::cargo_helper` from `cargo shear"
 // See <https://docs.rs/bpaf/latest/bpaf/batteries/fn.cargo_helper.html>
@@ -39,45 +42,52 @@ impl CargoShear {
         Self { options }
     }
 
-    pub fn run(self) {
-        self.shear();
+    /// # Errors
+    pub fn run(self) -> Result<()> {
+        self.shear()
     }
 
-    fn shear(&self) {
-        let metadata = MetadataCommand::new().current_dir(&self.options.path).exec().unwrap();
+    fn shear(&self) -> Result<()> {
+        let metadata = MetadataCommand::new().current_dir(&self.options.path).exec()?;
         let workspace_root = metadata.workspace_root.as_std_path();
 
         let all_pkg_deps = metadata
             .workspace_packages()
             .par_iter()
             .map(|package| self.shear_package(workspace_root, package))
-            .reduce(HashSet::new, |a, b| a.union(&b).cloned().collect());
+            .collect::<Result<Vec<Deps>>>()?
+            .into_iter()
+            .fold(HashSet::new(), |a, b| a.union(&b).cloned().collect());
 
-        self.shear_workspace(&metadata, &all_pkg_deps);
+        self.shear_workspace(&metadata, &all_pkg_deps)
     }
 
-    fn shear_workspace(&self, metadata: &Metadata, all_pkg_deps: &Deps) {
+    fn shear_workspace(&self, metadata: &Metadata, all_pkg_deps: &Deps) -> Result<()> {
         if metadata.workspace_packages().len() <= 1 {
-            return;
+            return Ok(());
         }
         let metadata_path = metadata.workspace_root.as_std_path();
         let cargo_toml_path = metadata_path.join("Cargo.toml");
-        let metadata = cargo_toml::Manifest::from_path(&cargo_toml_path).unwrap();
-        let Some(workspace) = &metadata.workspace else { return };
+        let metadata = cargo_toml::Manifest::from_path(&cargo_toml_path)?;
+        let Some(workspace) = &metadata.workspace else { return Ok(()) };
 
         let workspace_deps = workspace.dependencies.keys().cloned().collect::<HashSet<String>>();
         let unused_deps = workspace_deps.difference(all_pkg_deps).cloned().collect::<Vec<_>>();
 
         if unused_deps.is_empty() {
-            return;
+            return Ok(());
         }
         println!("root: {unused_deps:?}");
-        self.try_fix_package(&cargo_toml_path, &unused_deps);
+        self.try_fix_package(&cargo_toml_path, &unused_deps)
     }
 
     /// Returns the remaining dependencies
-    fn shear_package(&self, workspace_root: &Path, package: &Package) -> Deps {
-        let dir = package.manifest_path.parent().unwrap().as_std_path();
+    fn shear_package(&self, workspace_root: &Path, package: &Package) -> Result<Deps> {
+        let dir = package
+            .manifest_path
+            .parent()
+            .unwrap_or_else(|| panic!("failed to get parent path {}", &package.manifest_path))
+            .as_std_path();
 
         let rust_file_paths = package
             .targets
@@ -86,7 +96,9 @@ impl CargoShear {
                 if target.kind.iter().any(|s| s == "custom-build") {
                     vec![target.src_path.clone().into_std_path_buf()]
                 } else {
-                    let target_dir = target.src_path.parent().unwrap();
+                    let target_dir = target.src_path.parent().unwrap_or_else(|| {
+                        panic!("failed to get parentp path {}", &target.src_path)
+                    });
                     WalkDir::new(target_dir)
                         .into_iter()
                         .filter_map(Result::ok)
@@ -99,8 +111,10 @@ impl CargoShear {
 
         let rust_file_deps = rust_file_paths
             .par_iter()
-            .filter_map(|path| Self::process_rust_source(path))
-            .reduce(HashSet::new, |a, b| a.union(&b).cloned().collect());
+            .map(|path| Self::process_rust_source(path))
+            .collect::<Result<Vec<Deps>>>()?
+            .into_iter()
+            .fold(HashSet::new(), |a, b| a.union(&b).cloned().collect());
 
         let dependency_names =
             package.dependencies.iter().map(Self::dependency_name).collect::<Deps>();
@@ -118,35 +132,38 @@ impl CargoShear {
         let unused_deps = mod_names.difference(&rust_file_deps).collect::<Vec<_>>();
 
         if unused_deps.is_empty() {
-            return dependency_names;
+            return Ok(dependency_names);
         }
 
         let unused_dep_names =
             unused_deps.into_iter().map(|name| package_deps_map[name].clone()).collect::<Vec<_>>();
-        println!("{:?}: {unused_dep_names:?}", dir.strip_prefix(workspace_root).unwrap());
-        self.try_fix_package(package.manifest_path.as_std_path(), &unused_dep_names);
-        dependency_names
+        let path = dir.strip_prefix(workspace_root).unwrap_or(dir);
+        println!("{path:?}: {unused_dep_names:?}");
+        self.try_fix_package(package.manifest_path.as_std_path(), &unused_dep_names)?;
+        let dependency_names = dependency_names
             .difference(&HashSet::from_iter(unused_dep_names))
             .cloned()
-            .collect::<Deps>()
+            .collect::<Deps>();
+        Ok(dependency_names)
     }
 
     fn dependency_name(dependency: &Dependency) -> String {
         dependency.rename.as_ref().unwrap_or(&dependency.name).clone()
     }
 
-    fn process_rust_source(path: &Path) -> Option<Deps> {
-        let source_text = fs::read_to_string(path).unwrap();
-        collect_imports(&source_text).ok()
+    fn process_rust_source(path: &Path) -> Result<Deps> {
+        let source_text = fs::read_to_string(path)?;
+        let imports = collect_imports(&source_text)?;
+        Ok(imports)
     }
 
-    fn try_fix_package(&self, cargo_toml_path: &Path, unused_dep_names: &[String]) {
+    fn try_fix_package(&self, cargo_toml_path: &Path, unused_dep_names: &[String]) -> Result<()> {
         if !self.options.fix {
-            return;
+            return Ok(());
         }
 
-        let manifest = fs::read_to_string(cargo_toml_path).unwrap();
-        let mut manifest = toml_edit::DocumentMut::from_str(&manifest).unwrap();
+        let manifest = fs::read_to_string(cargo_toml_path)?;
+        let mut manifest = toml_edit::DocumentMut::from_str(&manifest)?;
 
         if let Some(dependencies) = manifest
             .get_mut("workspace")
@@ -171,5 +188,6 @@ impl CargoShear {
 
         let serialized = manifest.to_string();
         fs::write(cargo_toml_path, serialized).expect("Cargo.toml write error");
+        Ok(())
     }
 }

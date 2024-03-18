@@ -22,7 +22,6 @@ cargo shear --fix
 - [ ] make the reporting more granular for `[dependencies]`, `[dev-dependencies]` and `[build-dependencies]`
 - [ ] add tests
 - [ ] exit codes
-- [ ] error recovery
 - [ ] print things more nicely
 
 ## Prior Arts

@@ -64,7 +64,10 @@ impl ImportCollector {
         static MACRO_RE: OnceLock<Regex> = OnceLock::new();
         let Some(source_text) = tokens.span().source_text() else { return };
         let idents = MACRO_RE
-            .get_or_init(|| Regex::new(r"(\w+)::(\w+)").unwrap())
+            .get_or_init(|| {
+                Regex::new(r"(\w+)::(\w+)")
+                    .unwrap_or_else(|e| panic!("Failed to parse regex {e:?}"))
+            })
             .captures_iter(&source_text)
             .filter_map(|c| c.get(1))
             .map(|m| m.as_str())
