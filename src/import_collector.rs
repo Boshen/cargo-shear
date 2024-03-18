@@ -69,7 +69,8 @@ impl ImportCollector {
             .filter_map(|c| c.get(1))
             .map(|m| m.as_str())
             .filter(|s| !Self::is_known_import(s))
-            .map(ToString::to_string);
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
         self.deps.extend(idents);
     }
 }
@@ -103,6 +104,7 @@ impl<'a> syn::visit::Visit<'a> for ImportCollector {
 
     /// A structured list within an attribute, like derive(Copy, Clone).
     fn visit_meta_list(&mut self, m: &'a syn::MetaList) {
+        self.collect_path(&m.path);
         self.collect_tokens(&m.tokens);
     }
 
@@ -171,5 +173,15 @@ mod tests {
     #[test]
     fn extern_crate() {
         test("extern crate foo;");
+    }
+
+    #[test]
+    fn meta_list_path() {
+        test(
+            r#"
+        #[foo::instrument(level = "debug")]
+        fn print_with_indent() {}
+        "#,
+        );
     }
 }
