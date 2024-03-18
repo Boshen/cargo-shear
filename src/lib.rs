@@ -148,16 +148,16 @@ impl CargoShear {
         let manifest = fs::read_to_string(cargo_toml_path).unwrap();
         let mut manifest = toml_edit::DocumentMut::from_str(&manifest).unwrap();
 
-        manifest
+        if let Some(dependencies) = manifest
             .get_mut("workspace")
             .and_then(|item| item.as_table_mut())
             .and_then(|table| table.get_mut("dependencies"))
             .and_then(|item| item.as_table_mut())
-            .map(|dependencies| {
-                for k in unused_dep_names {
-                    dependencies.remove(k);
-                }
-            });
+        {
+            for k in unused_dep_names {
+                dependencies.remove(k);
+            }
+        }
 
         for table_name in ["dependencies", "dev-dependencies", "build-dependencies"] {
             if let Some(dependencies) =
