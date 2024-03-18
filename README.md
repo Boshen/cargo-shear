@@ -20,7 +20,6 @@ cargo shear --fix
 ## TODO
 
 - [ ] make the reporting more granular for `[dependencies]`, `[dev-dependencies]` and `[build-dependencies]`
-- [ ] `--fix` the root Cargot.toml
 - [ ] add tests
 - [ ] exit codes
 - [ ] error recovery
