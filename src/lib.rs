@@ -68,7 +68,7 @@ impl CargoShear {
         let workspace_deps = workspace.dependencies.keys().cloned().collect::<HashSet<String>>();
         let unused_deps = workspace_deps.difference(all_pkg_deps).cloned().collect::<Vec<_>>();
 
-        if workspace_deps.is_empty() {
+        if unused_deps.is_empty() {
             return;
         }
         println!("root: {unused_deps:?}");
