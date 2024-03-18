@@ -76,6 +76,14 @@ impl ImportCollector {
 }
 
 impl<'a> syn::visit::Visit<'a> for ImportCollector {
+    /// A path at which a named item is exported (e.g. `std::collections::HashMap`).
+    ///
+    /// This also gets crate level or renamed imports (I don't know how to fix yet).
+    fn visit_path(&mut self, i: &'a syn::Path) {
+        self.collect_path(i);
+        syn::visit::visit_path(self, i);
+    }
+
     /// A path prefix of imports in a use item: `std::....`
     fn visit_use_path(&mut self, i: &'a syn::UsePath) {
         self.collect_use_path(i);
@@ -83,12 +91,10 @@ impl<'a> syn::visit::Visit<'a> for ImportCollector {
         // syn::visit::visit_use_path(self, i);
     }
 
-    /// A path at which a named item is exported (e.g. `std::collections::HashMap`).
-    ///
-    /// This also gets crate level or renamed imports (I don't know how to fix yet).
-    fn visit_path(&mut self, i: &'a syn::Path) {
-        self.collect_path(i);
-        syn::visit::visit_path(self, i);
+    /// A suffix of an import tree in a use item: Type as Renamed or *.
+    fn visit_use_rename(&mut self, i: &'a syn::UseRename) {
+        let ident = i.ident.to_string();
+        self.add_import(ident);
     }
 
     /// A path like `std::slice::Iter`, optionally qualified with a self-type as in <Vec<T> as `SomeTrait>::Associated`.
@@ -183,5 +189,10 @@ mod tests {
         fn print_with_indent() {}
         "#,
         );
+    }
+
+    #[test]
+    fn use_rename() {
+        test("use foo as bar;");
     }
 }
