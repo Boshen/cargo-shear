@@ -47,38 +47,36 @@ impl CargoShear {
         let metadata = MetadataCommand::new().current_dir(&self.options.path).exec().unwrap();
         let workspace_root = metadata.workspace_root.as_std_path();
 
-        metadata.workspace_packages().par_iter().for_each(|package| {
-            self.shear_package(workspace_root, package);
-        });
+        let all_pkg_deps = metadata
+            .workspace_packages()
+            .par_iter()
+            .map(|package| self.shear_package(workspace_root, package))
+            .reduce(HashSet::new, |a, b| a.union(&b).cloned().collect());
 
-        Self::shear_workspace(&metadata);
+        self.shear_workspace(&metadata, &all_pkg_deps);
     }
 
-    fn shear_workspace(metadata: &Metadata) {
+    fn shear_workspace(&self, metadata: &Metadata, all_pkg_deps: &Deps) {
         if metadata.workspace_packages().len() <= 1 {
             return;
         }
-        let root_metadata_path = metadata.workspace_root.as_std_path();
-        let root_metadata =
-            cargo_toml::Manifest::from_path(root_metadata_path.join("Cargo.toml")).unwrap();
-        let Some(workspace) = &root_metadata.workspace else { return };
+        let metadata_path = metadata.workspace_root.as_std_path();
+        let cargo_toml_path = metadata_path.join("Cargo.toml");
+        let metadata = cargo_toml::Manifest::from_path(&cargo_toml_path).unwrap();
+        let Some(workspace) = &metadata.workspace else { return };
 
-        let all_package_deps = metadata
-            .workspace_packages()
-            .iter()
-            .flat_map(|package| &package.dependencies)
-            .map(Self::dependency_name)
-            .collect::<Deps>();
         let workspace_deps = workspace.dependencies.keys().cloned().collect::<HashSet<String>>();
-        let unused_workspace_deps = workspace_deps.difference(&all_package_deps);
+        let unused_deps = workspace_deps.difference(all_pkg_deps).cloned().collect::<Vec<_>>();
 
-        if !workspace_deps.is_empty() {
-            println!("root: {unused_workspace_deps:?}");
+        if workspace_deps.is_empty() {
+            return;
         }
+        println!("root: {unused_deps:?}");
+        self.try_fix_package(&cargo_toml_path, &unused_deps);
     }
 
     /// Returns the remaining dependencies
-    fn shear_package(&self, workspace_root: &Path, package: &Package) {
+    fn shear_package(&self, workspace_root: &Path, package: &Package) -> Deps {
         let dir = package.manifest_path.parent().unwrap().as_std_path();
 
         let rust_file_paths = package
@@ -104,28 +102,33 @@ impl CargoShear {
             .filter_map(|path| Self::process_rust_source(path))
             .reduce(HashSet::new, |a, b| a.union(&b).cloned().collect());
 
-        let package_deps_map = package
-            .dependencies
+        let dependency_names =
+            package.dependencies.iter().map(Self::dependency_name).collect::<Deps>();
+
+        let package_deps_map = dependency_names
             .iter()
-            .map(|d| {
-                let dep_name = Self::dependency_name(d);
+            .map(|dep_name| {
                 // change `package-name` and `Package_name` to `package_name`
                 let mod_name = dep_name.clone().replace('-', "_").to_lowercase();
-                (mod_name, dep_name)
+                (mod_name, dep_name.clone())
             })
             .collect::<HashMap<String, String>>();
 
         let mod_names = package_deps_map.keys().cloned().collect::<HashSet<_>>();
         let unused_deps = mod_names.difference(&rust_file_deps).collect::<Vec<_>>();
 
-        if !unused_deps.is_empty() {
-            let unused_dep_names = unused_deps
-                .into_iter()
-                .map(|name| package_deps_map[name].clone())
-                .collect::<Vec<_>>();
-            println!("{:?}: {unused_dep_names:?}", dir.strip_prefix(workspace_root).unwrap());
-            self.try_fix_package(package.manifest_path.as_std_path(), &unused_dep_names);
+        if unused_deps.is_empty() {
+            return dependency_names;
         }
+
+        let unused_dep_names =
+            unused_deps.into_iter().map(|name| package_deps_map[name].clone()).collect::<Vec<_>>();
+        println!("{:?}: {unused_dep_names:?}", dir.strip_prefix(workspace_root).unwrap());
+        self.try_fix_package(package.manifest_path.as_std_path(), &unused_dep_names);
+        dependency_names
+            .difference(&HashSet::from_iter(unused_dep_names))
+            .cloned()
+            .collect::<Deps>()
     }
 
     fn dependency_name(dependency: &Dependency) -> String {
@@ -144,6 +147,17 @@ impl CargoShear {
 
         let manifest = fs::read_to_string(cargo_toml_path).unwrap();
         let mut manifest = toml_edit::DocumentMut::from_str(&manifest).unwrap();
+
+        manifest
+            .get_mut("workspace")
+            .and_then(|item| item.as_table_mut())
+            .and_then(|table| table.get_mut("dependencies"))
+            .and_then(|item| item.as_table_mut())
+            .map(|dependencies| {
+                for k in unused_dep_names {
+                    dependencies.remove(k);
+                }
+            });
 
         for table_name in ["dependencies", "dev-dependencies", "build-dependencies"] {
             if let Some(dependencies) =
