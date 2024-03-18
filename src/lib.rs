@@ -6,6 +6,7 @@ use std::{
     path::{Path, PathBuf},
     process::ExitCode,
     str::FromStr,
+    sync::atomic::{AtomicUsize, Ordering},
 };
 
 use anyhow::Result;
@@ -33,27 +34,26 @@ pub struct CargoShearOptions {
 
 pub struct CargoShear {
     options: CargoShearOptions,
+
+    unused_dependencies: AtomicUsize,
 }
 
 type Deps = HashSet<String>;
 
-#[derive(Default)]
-struct ShearedPackage {
-    dependencies: HashSet<String>,
-    unused_dependencies: usize,
-}
-
 impl CargoShear {
     #[must_use]
     pub fn new(options: CargoShearOptions) -> Self {
-        Self { options }
+        Self { options, unused_dependencies: AtomicUsize::default() }
     }
 
     #[must_use]
     pub fn run(self) -> ExitCode {
         match self.shear() {
-            Ok(0) => ExitCode::from(0),
-            Ok(_) => ExitCode::from(1),
+            Ok(()) => {
+                let no_deps = self.unused_dependencies.load(Ordering::SeqCst) == 0;
+                // returns 0 if no deps, 1 if has deps
+                ExitCode::from(u8::from(no_deps))
+            }
             Err(err) => {
                 println!("{err}");
                 ExitCode::from(2)
@@ -61,49 +61,45 @@ impl CargoShear {
         }
     }
 
-    /// Returns the number of unused dependencies.
-    fn shear(&self) -> Result<usize> {
+    fn shear(&self) -> Result<()> {
         let metadata = MetadataCommand::new().current_dir(&self.options.path).exec()?;
         let workspace_root = metadata.workspace_root.as_std_path();
 
-        let packages = metadata
+        let package_dependencies = metadata
             .workspace_packages()
             .par_iter()
             .map(|package| self.shear_package(workspace_root, package))
-            .collect::<Result<Vec<ShearedPackage>>>()?
+            .collect::<Result<Vec<Deps>>>()?
             .into_iter()
-            .fold(ShearedPackage::default(), |a, b| ShearedPackage {
-                dependencies: a.dependencies.union(&b.dependencies).cloned().collect(),
-                unused_dependencies: a.unused_dependencies + b.unused_dependencies,
-            });
+            .fold(HashSet::new(), |a, b| a.union(&b).cloned().collect());
 
-        let unused_dependencies = self.shear_workspace(&metadata, &packages.dependencies)?;
-        Ok(unused_dependencies + packages.unused_dependencies)
+        self.shear_workspace(&metadata, &package_dependencies)
     }
 
     /// Returns the number of unused dependencies.
-    fn shear_workspace(&self, metadata: &Metadata, all_pkg_deps: &Deps) -> Result<usize> {
+    fn shear_workspace(&self, metadata: &Metadata, all_pkg_deps: &Deps) -> Result<()> {
         if metadata.workspace_packages().len() <= 1 {
-            return Ok(0);
+            return Ok(());
         }
         let metadata_path = metadata.workspace_root.as_std_path();
         let cargo_toml_path = metadata_path.join("Cargo.toml");
         let metadata = cargo_toml::Manifest::from_path(&cargo_toml_path)?;
-        let Some(workspace) = &metadata.workspace else { return Ok(0) };
+        let Some(workspace) = &metadata.workspace else { return Ok(()) };
 
         let workspace_deps = workspace.dependencies.keys().cloned().collect::<HashSet<String>>();
         let unused_deps = workspace_deps.difference(all_pkg_deps).cloned().collect::<Vec<_>>();
 
         if unused_deps.is_empty() {
-            return Ok(0);
+            return Ok(());
         }
         println!("root: {unused_deps:?}");
         self.try_fix_package(&cargo_toml_path, &unused_deps)?;
-        Ok(unused_deps.len())
+        self.unused_dependencies.fetch_add(unused_deps.len(), Ordering::SeqCst);
+        Ok(())
     }
 
     /// Returns the remaining dependencies and number of unused dependencies.
-    fn shear_package(&self, workspace_root: &Path, package: &Package) -> Result<ShearedPackage> {
+    fn shear_package(&self, workspace_root: &Path, package: &Package) -> Result<Deps> {
         let dir = package
             .manifest_path
             .parent()
@@ -126,7 +122,7 @@ impl CargoShear {
         let rust_file_deps = Self::get_package_dependencies_from_rust_files(package)?;
         let unused_deps = mod_names.difference(&rust_file_deps).collect::<Vec<_>>();
         if unused_deps.is_empty() {
-            return Ok(ShearedPackage { dependencies: dependency_names, unused_dependencies: 0 });
+            return Ok(dependency_names);
         }
 
         let unused_dep_names =
@@ -136,12 +132,12 @@ impl CargoShear {
         let path = dir.strip_prefix(workspace_root).unwrap_or(dir);
         println!("{path:?}: {unused_dep_names:?}");
 
-        let unused_dependencies = unused_dep_names.len();
+        self.unused_dependencies.fetch_add(unused_dep_names.len(), Ordering::SeqCst);
         let dependency_names = dependency_names
             .difference(&HashSet::from_iter(unused_dep_names))
             .cloned()
             .collect::<Deps>();
-        Ok(ShearedPackage { dependencies: dependency_names, unused_dependencies })
+        Ok(dependency_names)
     }
 
     fn get_package_dependencies_from_rust_files(package: &Package) -> Result<Deps> {
