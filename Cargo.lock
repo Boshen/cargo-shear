@@ -67,7 +67,6 @@ dependencies = [
  "rayon",
  "regex",
  "syn",
- "thiserror",
  "toml_edit",
  "walkdir",
 ]

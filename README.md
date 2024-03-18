@@ -9,6 +9,13 @@ cargo install cargo-shear
 cargo shear --fix
 ```
 
+### Exit Code (for CI)
+
+The exit code gives an indication whether unused dependencies have been found:
+
+* 0 if found no unused dependencies,
+* 1 if it found at least one unused dependency,
+* 2 if there was an error during processing (in which case there's no indication whether any unused dependency was found or not).
 
 ## Technique
 
@@ -21,7 +28,6 @@ cargo shear --fix
 
 - [ ] make the reporting more granular for `[dependencies]`, `[dev-dependencies]` and `[build-dependencies]`
 - [ ] add tests
-- [ ] exit codes
 - [ ] print things more nicely
 
 ## Prior Arts
