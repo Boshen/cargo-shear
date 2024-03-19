@@ -22,7 +22,7 @@ test = false
 walkdir = "2.5.0"
 cargo_metadata = "0.18.1"
 cargo_toml = "0.19.2"
-bpaf = { version = "0.9.9", features = ["derive", "batteries"] }
+bpaf = { version = "0.9.10", features = ["derive", "batteries"] }
 proc-macro2 = {version="1", features = ["span-locations"]}
 syn = { version = "2", features = ["full", "visit" ] } # add "extra-traits" to debug syn ast
 regex = "1.10.3"
