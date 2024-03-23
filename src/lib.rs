@@ -118,7 +118,23 @@ impl CargoShear {
             })
             .collect::<HashMap<String, String>>();
 
-        let mod_names = package_deps_map.keys().cloned().collect::<HashSet<_>>();
+        let ignored_names = package
+            .metadata
+            .as_object()
+            .and_then(|object| object.get("cargo-shear").and_then(|object| object.get("ignored")))
+            .and_then(|ignored| {
+                ignored.as_array().map(|ignored| {
+                    ignored.iter().filter_map(|item| item.as_str()).collect::<HashSet<_>>()
+                })
+            })
+            .unwrap_or_default();
+
+        let mod_names = package_deps_map
+            .keys()
+            .filter(|name| !ignored_names.contains(name.as_str()))
+            .cloned()
+            .collect::<HashSet<_>>();
+
         let rust_file_deps = Self::get_package_dependencies_from_rust_files(package)?;
         let unused_deps = mod_names.difference(&rust_file_deps).collect::<Vec<_>>();
         if unused_deps.is_empty() {
