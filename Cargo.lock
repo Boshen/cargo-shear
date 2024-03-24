@@ -19,9 +19,9 @@ checksum = "0952808a6c2afd1aa8947271f3a60f1a6763c7b912d210184c5149b5cf147247"
 
 [[package]]
 name = "bpaf"
-version = "0.9.10"
+version = "0.9.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "670e033211c20c5ca9e90395c7c78fb89143fd4b4eaaad55d65e2eea18d1efc1"
+checksum = "567fc5f0a754100df11b167b2a247b2366fc1ac18e9b776a07659be00878f681"
 dependencies = [
  "bpaf_derive",
 ]
