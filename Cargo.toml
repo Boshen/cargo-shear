@@ -26,6 +26,6 @@ bpaf = { version = "0.9.10", features = ["derive", "batteries"] }
 proc-macro2 = {version="1", features = ["span-locations"]}
 syn = { version = "2", features = ["full", "visit" ] } # add "extra-traits" to debug syn ast
 regex = "1.10.4"
-rayon = "1.9.0"
+rayon = "1.10.0"
 toml_edit = { version = "0.22.9", features = ["parse"] }
 anyhow = "1.0.81"
