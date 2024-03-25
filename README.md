@@ -31,7 +31,8 @@ The exit code gives an indication whether unused dependencies have been found:
 - [ ] make the reporting more granular for `[dependencies]`, `[dev-dependencies]` and `[build-dependencies]`
 - [ ] add tests
 - [ ] print things nicely
-- [ ] ignore `[package.metadata.cargo-shear] ignored = ["crate"]`
+- [x] ignore `[package.metadata.cargo-shear] ignored = ["crate"]`
+
 
 ## Prior Arts
 
