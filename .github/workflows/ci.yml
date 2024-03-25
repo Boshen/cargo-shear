@@ -25,13 +25,24 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: taiki-e/checkout-action@v1
+
       - name: Install Rust
         uses: moonrepo/setup-rust@v1
         with:
           components: clippy,rustfmt
           cache-base: main
+
       - run: |
           cargo test
           cargo clippy -- -D warnings
           cargo fmt --all -- --check
+
+  typos:
+    name: Typos
+    runs-on: ubuntu-latest
+    steps:
+      - uses: taiki-e/checkout-action@v1
+      - uses: crate-ci/typos@master
+        with:
+          files: .
