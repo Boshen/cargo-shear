@@ -50,9 +50,9 @@ impl CargoShear {
     pub fn run(self) -> ExitCode {
         match self.shear() {
             Ok(()) => {
-                let no_deps = self.unused_dependencies.load(Ordering::SeqCst) == 0;
+                let has_deps = self.unused_dependencies.load(Ordering::SeqCst) > 0;
                 // returns 0 if no deps, 1 if has deps
-                ExitCode::from(u8::from(no_deps))
+                ExitCode::from(u8::from(has_deps))
             }
             Err(err) => {
                 println!("{err}");
