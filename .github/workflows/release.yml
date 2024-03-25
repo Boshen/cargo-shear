@@ -17,11 +17,11 @@ jobs:
   create-release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: taiki-e/checkout-action@v1
+
       - uses: taiki-e/create-gh-release-action@v1
         with:
           changelog: CHANGELOG.md
-          draft: true
           allow-missing-changelog: true
           token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -53,15 +53,20 @@ jobs:
       contents: write
     steps:
       - uses: taiki-e/checkout-action@v1
+
       - name: Install Rust
         run: rustup update stable --no-self-update
+
       - uses: taiki-e/setup-cross-toolchain-action@v1
         with:
           target: ${{ matrix.target }}
+
       - run: echo "RUSTFLAGS=${RUSTFLAGS} -C target-feature=+crt-static" >>"${GITHUB_ENV}"
         if: contains(matrix.target, '-windows-msvc')
+
       - run: echo "RUSTFLAGS=${RUSTFLAGS} -C target-feature=+crt-static -C link-self-contained=yes" >>"${GITHUB_ENV}"
         if: contains(matrix.target, '-linux-musl')
+
       - uses: taiki-e/upload-rust-binary-action@v1
         with:
           bin: cargo-shear
@@ -69,3 +74,7 @@ jobs:
           tar: all
           zip: windows
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - run: cargo publish
+        env:
+          CARGO_REGISTRY_TOKEN : ${{ secrets.CARGO_REGISTRY_TOKEN }}
