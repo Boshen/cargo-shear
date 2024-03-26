@@ -14,7 +14,7 @@ permissions:
 jobs:
   upload-assets:
     name: ${{ matrix.target }}
-    if: github.repository_owner == 'Boshen' && startsWith(github.event.release.name, 'cargo-shear-v')
+    if: github.repository_owner == 'Boshen'
     strategy:
       matrix:
         include:
