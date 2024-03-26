@@ -2,9 +2,8 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - v[0-9]+.*
+  release:
+    types: [published]
 
 defaults:
   run:
@@ -28,7 +27,7 @@ jobs:
   upload-assets:
     name: ${{ matrix.target }}
     needs: create-release
-    if: github.repository_owner == 'Boshen'
+    if: github.repository_owner == 'Boshen' && startsWith(github.event.release.name, 'cargo-shear-v')
     strategy:
       matrix:
         include:
@@ -74,7 +73,3 @@ jobs:
           tar: all
           zip: windows
           token: ${{ secrets.GITHUB_TOKEN }}
-
-      - run: cargo publish
-        env:
-          CARGO_REGISTRY_TOKEN : ${{ secrets.CARGO_REGISTRY_TOKEN }}
