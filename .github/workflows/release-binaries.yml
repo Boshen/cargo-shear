@@ -1,5 +1,4 @@
-# Copied from https://github.com/taiki-e/cargo-no-dev-deps/blob/main/.github/workflows/release.yml
-name: Release
+name: Release Binaries
 
 on:
   release:
@@ -13,17 +12,6 @@ permissions:
   contents: write
 
 jobs:
-  create-release:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: taiki-e/checkout-action@v1
-
-      - uses: taiki-e/create-gh-release-action@v1
-        with:
-          changelog: CHANGELOG.md
-          allow-missing-changelog: true
-          token: ${{ secrets.GITHUB_TOKEN }}
-
   upload-assets:
     name: ${{ matrix.target }}
     needs: create-release
