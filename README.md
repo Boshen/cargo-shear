@@ -2,7 +2,7 @@
 
 Detect and remove unused dependencies from `Cargo.toml` in Rust projects.
 
-Does not with dependencies from macros (yet).
+Does not work with transitive dependencies from macros (need to manually ignore).
 
 ## Installation
 
