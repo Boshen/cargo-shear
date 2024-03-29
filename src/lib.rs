@@ -2,7 +2,7 @@ mod import_collector;
 
 use std::{
     collections::{HashMap, HashSet},
-    fs,
+    env, fs,
     path::{Path, PathBuf},
     process::ExitCode,
     str::FromStr,
@@ -48,9 +48,27 @@ impl CargoShear {
 
     #[must_use]
     pub fn run(self) -> ExitCode {
+        println!("Analyzing {}", self.options.path.to_string_lossy());
+
         match self.shear() {
             Ok(()) => {
                 let has_deps = self.unused_dependencies.load(Ordering::SeqCst) > 0;
+
+                println!("Done!");
+
+                if has_deps {
+                    println!(
+                        "\n\
+                        If you believe cargo-shear has detected an unused dependency incorrectly,\n\
+                        you can add the dependency to the list of dependencies to ignore in the\n\
+                        `[package.metadata.cargo-shear]` section of the appropriate Cargo.toml.\n\
+                        For example:\n\
+                        \n\
+                        [package.metadata.cargo-shear]\n\
+                        ignored = [\"crate-name\"]"
+                    );
+                }
+
                 // returns 0 if no deps, 1 if has deps
                 ExitCode::from(u8::from(has_deps))
             }
@@ -92,7 +110,16 @@ impl CargoShear {
         if unused_deps.is_empty() {
             return Ok(());
         }
-        println!("root: {unused_deps:?}");
+
+        let path = cargo_toml_path
+            .strip_prefix(env::current_dir()?)
+            .unwrap_or(&cargo_toml_path)
+            .to_string_lossy();
+        println!("root -- {path}:",);
+        for unused_dep in &unused_deps {
+            println!("  {unused_dep}");
+        }
+        println!();
         self.try_fix_package(&cargo_toml_path, &unused_deps)?;
         self.unused_dependencies.fetch_add(unused_deps.len(), Ordering::SeqCst);
         Ok(())
@@ -141,16 +168,28 @@ impl CargoShear {
             return Ok(dependency_names);
         }
 
-        let unused_dep_names =
+        let unused_deps =
             unused_deps.into_iter().map(|name| package_deps_map[name].clone()).collect::<Vec<_>>();
-        self.try_fix_package(package.manifest_path.as_std_path(), &unused_dep_names)?;
+        self.try_fix_package(package.manifest_path.as_std_path(), &unused_deps)?;
 
-        let path = dir.strip_prefix(workspace_root).unwrap_or(dir);
-        println!("{path:?}: {unused_dep_names:?}");
+        if !unused_deps.is_empty() {
+            self.unused_dependencies.fetch_add(unused_deps.len(), Ordering::SeqCst);
+            let name = &package.name;
+            let path = package
+                .manifest_path
+                .as_std_path()
+                .strip_prefix(workspace_root)
+                .unwrap_or(dir)
+                .to_string_lossy();
+            println!("{name} -- {path}:");
+            for unused_dep in &unused_deps {
+                println!("  {unused_dep}");
+            }
+            println!();
+        }
 
-        self.unused_dependencies.fetch_add(unused_dep_names.len(), Ordering::SeqCst);
         let dependency_names = dependency_names
-            .difference(&HashSet::from_iter(unused_dep_names))
+            .difference(&HashSet::from_iter(unused_deps))
             .cloned()
             .collect::<Deps>();
         Ok(dependency_names)
