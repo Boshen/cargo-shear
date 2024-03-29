@@ -2,8 +2,6 @@
 
 Detect and remove unused dependencies from `Cargo.toml` in Rust projects.
 
-Does not work with transitive dependencies from macros (need to manually ignore).
-
 ## Installation
 
 ```bash
@@ -17,6 +15,17 @@ cargo install cargo-shear
 ```bash
 cargo shear --fix
 ```
+
+## Ignore false positives
+
+`cargo shear` does not work with transitive dependencies from macros; they need to be ignored manually by adding them to the package's `Cargo.toml`:
+
+```toml
+[package.metadata.cargo-shear]
+ignored = ["crate"]
+```
+
+Otherwise please report the issue as a bug.
 
 ## CI
 
@@ -37,15 +46,6 @@ The exit code gives an indication whether unused dependencies have been found:
 * 0 if found no unused dependencies,
 * 1 if it found at least one unused dependency,
 * 2 if there was an error during processing (in which case there's no indication whether any unused dependency was found or not).
-
-## Ignore
-
-Add to package's `Cargo.toml`
-
-```toml
-[package.metadata.cargo-shear]
-ignored = ["crate"]
-```
 
 ## Technique
 
