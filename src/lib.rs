@@ -80,7 +80,8 @@ impl CargoShear {
     }
 
     fn shear(&self) -> Result<()> {
-        let metadata = MetadataCommand::new().current_dir(&self.options.path).exec()?;
+        // no_deps: only workspace packages are required, the `resolve` is not used.
+        let metadata = MetadataCommand::new().current_dir(&self.options.path).no_deps().exec()?;
         let workspace_root = metadata.workspace_root.as_std_path();
 
         let package_dependencies = metadata
