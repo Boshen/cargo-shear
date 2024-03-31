@@ -46,3 +46,12 @@ jobs:
       - uses: crate-ci/typos@master
         with:
           files: .
+
+  shear:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: taiki-e/checkout-action@v1
+        uses: moonrepo/setup-rust@v1
+        with:
+          cache-base: main
+      - run: cargo run .
