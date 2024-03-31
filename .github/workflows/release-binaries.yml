@@ -35,8 +35,6 @@ jobs:
             os: macos-11
     runs-on: ${{ matrix.os || 'ubuntu-20.04' }}
     timeout-minutes: 60
-    permissions:
-      contents: write
     steps:
       - uses: taiki-e/checkout-action@v1
 
