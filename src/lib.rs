@@ -62,6 +62,7 @@ impl CargoShear {
                         If you believe cargo-shear has detected an unused dependency incorrectly,\n\
                         you can add the dependency to the list of dependencies to ignore in the\n\
                         `[package.metadata.cargo-shear]` section of the appropriate Cargo.toml.\n\
+                        \n\
                         For example:\n\
                         \n\
                         [package.metadata.cargo-shear]\n\
@@ -126,7 +127,7 @@ impl CargoShear {
         Ok(())
     }
 
-    /// Returns the remaining dependencies and number of unused dependencies.
+    /// Returns the remaining package dependency names.
     fn shear_package(&self, workspace_root: &Path, package: &Package) -> Result<Deps> {
         let dir = package
             .manifest_path
@@ -134,45 +135,49 @@ impl CargoShear {
             .unwrap_or_else(|| panic!("failed to get parent path {}", &package.manifest_path))
             .as_std_path();
 
-        let ignored_names = package
-            .metadata
-            .as_object()
-            .and_then(|object| object.get("cargo-shear"))
-            .and_then(|object| object.get("ignored"))
-            .and_then(|ignored| ignored.as_array())
-            .map(|ignored| ignored.iter().filter_map(|item| item.as_str()).collect::<HashSet<_>>())
-            .unwrap_or_default();
+        let ignored_package_names = Self::get_ignored_package_names(package);
 
-        let dependency_names = package
+        let package_dependency_names = package
             .dependencies
             .iter()
             .map(Self::dependency_name)
-            .filter(|name| !ignored_names.contains(name.as_str()))
+            .filter(|name| !ignored_package_names.contains(name.as_str()))
             .collect::<Deps>();
 
-        let package_deps_map = dependency_names
+        // Create a mapping for package names to modules names.
+        // Changes `package-name` and `Package_name` to `package_name`.
+        // For example:
+        // * The module name for `Inflector` is `inflector`.
+        // * The module name for `cfg-if` is `cfg_if`.
+        let package_deps_map = package_dependency_names
             .iter()
             .map(|dep_name| {
-                // change `package-name` and `Package_name` to `package_name`
-                let mod_name = dep_name.clone().replace('-', "_").to_lowercase();
-                (mod_name, dep_name.clone())
+                let module_name = dep_name.clone().replace('-', "_").to_lowercase();
+                (module_name, dep_name.clone())
             })
             .collect::<HashMap<String, String>>();
 
-        let mod_names = package_deps_map.keys().cloned().collect::<HashSet<_>>();
+        let module_names_from_package_deps =
+            package_deps_map.keys().cloned().collect::<HashSet<_>>();
 
-        let rust_file_deps = Self::get_package_dependencies_from_rust_files(package)?;
-        let unused_deps = mod_names.difference(&rust_file_deps).collect::<Vec<_>>();
-        if unused_deps.is_empty() {
-            return Ok(dependency_names);
+        let module_names_from_rust_files = Self::get_package_dependencies_from_rust_files(package)?;
+        let unused_module_names = module_names_from_package_deps
+            .difference(&module_names_from_rust_files)
+            .collect::<Vec<_>>();
+
+        if unused_module_names.is_empty() {
+            return Ok(package_dependency_names);
         }
 
-        let unused_deps =
-            unused_deps.into_iter().map(|name| package_deps_map[name].clone()).collect::<Vec<_>>();
-        self.try_fix_package(package.manifest_path.as_std_path(), &unused_deps)?;
+        let unused_dependency_names = unused_module_names
+            .into_iter()
+            .map(|name| package_deps_map[name].clone())
+            .collect::<Vec<_>>();
 
-        if !unused_deps.is_empty() {
-            self.unused_dependencies.fetch_add(unused_deps.len(), Ordering::SeqCst);
+        self.try_fix_package(package.manifest_path.as_std_path(), &unused_dependency_names)?;
+
+        if !unused_dependency_names.is_empty() {
+            self.unused_dependencies.fetch_add(unused_dependency_names.len(), Ordering::SeqCst);
             let name = &package.name;
             let path = package
                 .manifest_path
@@ -181,17 +186,28 @@ impl CargoShear {
                 .unwrap_or(dir)
                 .to_string_lossy();
             println!("{name} -- {path}:");
-            for unused_dep in &unused_deps {
+            for unused_dep in &unused_dependency_names {
                 println!("  {unused_dep}");
             }
             println!();
         }
 
-        let dependency_names = dependency_names
-            .difference(&HashSet::from_iter(unused_deps))
+        let package_dependency_names = package_dependency_names
+            .difference(&HashSet::from_iter(unused_dependency_names))
             .cloned()
             .collect::<Deps>();
-        Ok(dependency_names)
+        Ok(package_dependency_names)
+    }
+
+    fn get_ignored_package_names(package: &Package) -> HashSet<&str> {
+        package
+            .metadata
+            .as_object()
+            .and_then(|object| object.get("cargo-shear"))
+            .and_then(|object| object.get("ignored"))
+            .and_then(|ignored| ignored.as_array())
+            .map(|ignored| ignored.iter().filter_map(|item| item.as_str()).collect::<HashSet<_>>())
+            .unwrap_or_default()
     }
 
     fn get_package_dependencies_from_rust_files(package: &Package) -> Result<Deps> {
