@@ -32,3 +32,13 @@ regex = "1.10.4"
 rayon = "1.10.0"
 toml_edit = { version = "0.22.9", features = ["parse"] }
 anyhow = "1.0.81"
+
+[profile.release]
+# Configurations explicitly listed here for clarity.
+# Using the best options for performance.
+opt-level     = 3
+lto           = "fat"
+codegen-units = 1
+strip         = "symbols"
+debug         = false
+panic         = "abort"   # Let it crash and force ourselves to write safe Rust.
