@@ -17,9 +17,6 @@ use walkdir::{DirEntry, WalkDir};
 
 use crate::import_collector::collect_imports;
 
-#[derive(Debug)]
-pub struct Error;
-
 // options("shear") + the "batteries" feature will strip name using `bpaf::cargo_helper` from `cargo shear"
 // See <https://docs.rs/bpaf/latest/bpaf/batteries/fn.cargo_helper.html>
 #[derive(Debug, Clone, Bpaf)]
@@ -96,7 +93,6 @@ impl CargoShear {
         self.shear_workspace(&metadata, &package_dependencies)
     }
 
-    /// Returns the number of unused dependencies.
     fn shear_workspace(&self, metadata: &Metadata, all_pkg_deps: &Deps) -> Result<()> {
         if metadata.workspace_packages().len() <= 1 {
             return Ok(());
