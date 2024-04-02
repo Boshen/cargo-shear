@@ -11,7 +11,7 @@ use std::{
 
 use anyhow::{Context, Result};
 use bpaf::Bpaf;
-use cargo_metadata::{Metadata, MetadataCommand, Package};
+use cargo_metadata::{CargoOpt, Metadata, MetadataCommand, Package};
 use cargo_util_schemas::core::PackageIdSpec;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use walkdir::{DirEntry, WalkDir};
@@ -79,7 +79,10 @@ impl CargoShear {
     }
 
     fn shear(&self) -> Result<()> {
-        let metadata = MetadataCommand::new().current_dir(&self.options.path).exec()?;
+        let metadata = MetadataCommand::new()
+            .features(CargoOpt::AllFeatures)
+            .current_dir(&self.options.path)
+            .exec()?;
 
         let package_dependencies = metadata
             .workspace_packages()
