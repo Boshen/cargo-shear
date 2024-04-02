@@ -9,9 +9,10 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use bpaf::Bpaf;
-use cargo_metadata::{Dependency, Metadata, MetadataCommand, Package};
+use cargo_metadata::{Metadata, MetadataCommand, Package};
+use cargo_util_schemas::core::PackageIdSpec;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use walkdir::{DirEntry, WalkDir};
 
@@ -78,14 +79,12 @@ impl CargoShear {
     }
 
     fn shear(&self) -> Result<()> {
-        // no_deps: only workspace packages are required, the `resolve` is not used.
-        let metadata = MetadataCommand::new().current_dir(&self.options.path).no_deps().exec()?;
-        let workspace_root = metadata.workspace_root.as_std_path();
+        let metadata = MetadataCommand::new().current_dir(&self.options.path).exec()?;
 
         let package_dependencies = metadata
             .workspace_packages()
             .par_iter()
-            .map(|package| self.shear_package(workspace_root, package))
+            .map(|package| self.shear_package(&metadata, package))
             .collect::<Result<Vec<Deps>>>()?
             .into_iter()
             .fold(HashSet::new(), |a, b| a.union(&b).cloned().collect());
@@ -124,7 +123,9 @@ impl CargoShear {
     }
 
     /// Returns the remaining package dependency names.
-    fn shear_package(&self, workspace_root: &Path, package: &Package) -> Result<Deps> {
+    fn shear_package(&self, metadata: &Metadata, package: &Package) -> Result<Deps> {
+        let workspace_root = metadata.workspace_root.as_std_path();
+
         let dir = package
             .manifest_path
             .parent()
@@ -133,30 +134,32 @@ impl CargoShear {
 
         let ignored_package_names = Self::get_ignored_package_names(package);
 
-        let package_dependency_names = package
-            .dependencies
+        let package_dependency_names_map = metadata
+            .resolve
+            .as_ref()
+            .context("`cargo_metadata::MetadataCommand::no_deps` should not be called.")?
+            .nodes
             .iter()
-            .map(Self::dependency_name)
-            .filter(|name| !ignored_package_names.contains(name.as_str()))
-            .collect::<Deps>();
-
-        // Create a mapping for package names to modules names.
-        // Changes `package-name` and `Package_name` to `package_name`.
-        // For example:
-        // * The module name for `Inflector` is `inflector`.
-        // * The module name for `cfg-if` is `cfg_if`.
-        let package_deps_map = package_dependency_names
+            .find(|node| node.id == package.id)
+            .context("package should exist")?
+            .deps // `deps` handles renamed dependencies whereas `dependencies` does not
             .iter()
-            .map(|dep_name| {
-                let module_name = dep_name.clone().replace('-', "_").to_lowercase();
-                (module_name, dep_name.clone())
+            .filter_map(|node_dep| {
+                let package_name =
+                    PackageIdSpec::parse(&node_dep.pkg.repr).ok()?.name().to_string();
+                Some((node_dep.name.clone(), package_name))
             })
+            .filter(|(_, name)| !ignored_package_names.contains(name.as_str()))
             .collect::<HashMap<String, String>>();
 
         let module_names_from_package_deps =
-            package_deps_map.keys().cloned().collect::<HashSet<_>>();
+            package_dependency_names_map.keys().cloned().collect::<HashSet<_>>();
+
+        let package_dependency_names =
+            package_dependency_names_map.values().cloned().collect::<HashSet<_>>();
 
         let module_names_from_rust_files = Self::get_package_dependencies_from_rust_files(package)?;
+
         let unused_module_names = module_names_from_package_deps
             .difference(&module_names_from_rust_files)
             .collect::<Vec<_>>();
@@ -167,7 +170,7 @@ impl CargoShear {
 
         let unused_dependency_names = unused_module_names
             .into_iter()
-            .map(|name| package_deps_map[name].clone())
+            .map(|name| package_dependency_names_map[name].clone())
             .collect::<Vec<_>>();
 
         self.try_fix_package(package.manifest_path.as_std_path(), &unused_dependency_names)?;
@@ -235,10 +238,6 @@ impl CargoShear {
                 }
             })
             .collect()
-    }
-
-    fn dependency_name(dependency: &Dependency) -> String {
-        dependency.rename.as_ref().unwrap_or(&dependency.name).clone()
     }
 
     fn process_rust_source(path: &Path) -> Result<Deps> {
