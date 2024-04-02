@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.18](https://github.com/Boshen/cargo-shear/compare/v0.0.17...v0.0.18) - 2024-04-02
+
+### Added
+- use cargo metadata module resolution to get module names instead of package names
+- add `profile.release` to Cargo.toml
+
+### Other
+- small tweaks
+
 ## [0.0.17](https://github.com/Boshen/cargo-shear/compare/v0.0.16...v0.0.17) - 2024-04-01
 
 ### Fixed
