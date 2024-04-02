@@ -63,7 +63,7 @@ dependencies = [
 
 [[package]]
 name = "cargo-shear"
-version = "0.0.18"
+version = "0.0.19"
 dependencies = [
  "anyhow",
  "bpaf",
