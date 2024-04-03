@@ -30,8 +30,12 @@ pub struct CargoShearOptions {
     #[bpaf(long)]
     fix: bool,
 
-    #[bpaf(positional("PATH"), fallback(PathBuf::from(".")))]
+    #[bpaf(positional("PATH"), fallback_with(default_path))]
     path: PathBuf,
+}
+
+fn default_path() -> Result<PathBuf> {
+    env::current_dir().map_err(|err| anyhow::anyhow!(err))
 }
 
 pub struct CargoShear {
@@ -144,21 +148,24 @@ impl CargoShear {
 
         let ignored_package_names = Self::get_ignored_package_names(package);
 
-        let package_dependency_names_map = metadata
+        let this_package = metadata
             .resolve
             .as_ref()
             .context("`cargo_metadata::MetadataCommand::no_deps` should not be called.")?
             .nodes
             .iter()
             .find(|node| node.id == package.id)
-            .context("package should exist")?
+            .context("package should exist")?;
+
+        let package_dependency_names_map = this_package
             .deps // `deps` handles renamed dependencies whereas `dependencies` does not
             .iter()
-            .filter_map(|node_dep| {
-                let package_name =
-                    PackageIdSpec::parse(&node_dep.pkg.repr).ok()?.name().to_string();
-                Some((node_dep.name.clone(), package_name))
+            .map(|node_dep| {
+                Self::parse_package_id(&node_dep.pkg.repr)
+                    .map(|package_name| (node_dep.name.clone(), package_name))
             })
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
             .filter(|(_, name)| !ignored_package_names.contains(name.as_str()))
             .collect::<HashMap<String, String>>();
 
@@ -199,6 +206,22 @@ impl CargoShear {
             .cloned()
             .collect::<Deps>();
         Ok(package_dependency_names)
+    }
+
+    fn parse_package_id(s: &str) -> Result<String> {
+        // The node id can have multiple representations:
+        if s.contains(' ') {
+            // < Rust 1.77 : `memchr 2.7.1 (registry+https://github.com/rust-lang/crates.io-index)`
+            s.split(' ')
+                .next()
+                .map(ToString::to_string)
+                .ok_or_else(|| anyhow::anyhow!("{s} should have a space"))
+        } else {
+            // >= Rust 1.77: `registry+https://github.com/rust-lang/crates.io-index#memchr@2.7.1`
+            PackageIdSpec::parse(s)
+                .map(|id| id.name().to_string())
+                .map_err(|err| anyhow::anyhow!(err))
+        }
     }
 
     fn get_ignored_package_names(package: &Package) -> HashSet<&str> {
