@@ -10,6 +10,20 @@ categories = ["development-tools", "development-tools::cargo-plugins"]
 license = "MIT"
 readme = "README.md"
 
+[lints.clippy]
+all = "warn"
+cargo = "warn"
+pedantic = "warn"
+nursery = "warn"
+dbg_macro = "warn"
+unwrap_used = "warn"
+empty_drop = "warn"
+exit = "warn"
+empty_structs_with_brackets = "warn"
+rc_buffer = "warn"
+rc_mutex = "warn"
+same_name_method = "warn"
+
 [lib]
 doctest = false
 

@@ -48,7 +48,7 @@ type Deps = HashSet<String>;
 
 impl CargoShear {
     #[must_use]
-    pub fn new(options: CargoShearOptions) -> Self {
+    pub const fn new(options: CargoShearOptions) -> Self {
         Self { options, unused_dependencies: 0 }
     }
 
