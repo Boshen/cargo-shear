@@ -88,13 +88,11 @@ impl CargoShear {
             .current_dir(&self.options.path)
             .exec()?;
 
-        let package_dependencies = metadata
-            .workspace_packages()
-            .iter()
-            .map(|package| self.shear_package(&metadata, package))
-            .collect::<Result<Vec<Deps>>>()?
-            .into_iter()
-            .fold(HashSet::new(), |a, b| a.union(&b).cloned().collect());
+        let mut package_dependencies = HashSet::new();
+        for package in metadata.workspace_packages() {
+            let deps = self.shear_package(&metadata, package)?;
+            package_dependencies.extend(deps);
+        }
 
         self.shear_workspace(&metadata, &package_dependencies)
     }
