@@ -17,10 +17,15 @@ use walkdir::{DirEntry, WalkDir};
 
 use crate::import_collector::collect_imports;
 
+const VERSION: &str = match option_env!("SHEAR_VERSION") {
+    Some(v) => v,
+    None => "dev",
+};
+
 // options("shear") + the "batteries" feature will strip name using `bpaf::cargo_helper` from `cargo shear"
 // See <https://docs.rs/bpaf/latest/bpaf/batteries/fn.cargo_helper.html>
 #[derive(Debug, Clone, Bpaf)]
-#[bpaf(options("shear"))]
+#[bpaf(options("shear"), version(VERSION))]
 pub struct CargoShearOptions {
     #[bpaf(long)]
     fix: bool,

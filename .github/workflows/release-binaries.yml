@@ -35,6 +35,8 @@ jobs:
             os: macos-11
     runs-on: ${{ matrix.os || 'ubuntu-20.04' }}
     timeout-minutes: 60
+    env:
+      SHEAR_VERSION: ${{ GITHUB_REF }}
     steps:
       - uses: taiki-e/checkout-action@v1
 
