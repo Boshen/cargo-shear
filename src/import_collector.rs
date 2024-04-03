@@ -33,10 +33,23 @@ impl ImportCollector {
         }
     }
 
-    // `use foo::bar;`
-    fn collect_use_path(&mut self, use_path: &syn::UsePath) {
-        let ident = use_path.ident.to_string();
-        self.add_import(ident);
+    fn add_ident(&mut self, ident: &syn::Ident) {
+        self.add_import(ident.to_string());
+    }
+
+    fn collect_use_tree(&mut self, i: &syn::UseTree) {
+        use syn::UseTree;
+        match i {
+            UseTree::Path(use_path) => self.add_ident(&use_path.ident),
+            UseTree::Name(use_name) => self.add_ident(&use_name.ident),
+            UseTree::Rename(use_rename) => self.add_ident(&use_rename.ident),
+            UseTree::Glob(_) => {}
+            UseTree::Group(use_group) => {
+                for use_tree in &use_group.items {
+                    self.collect_use_tree(use_tree);
+                }
+            }
+        }
     }
 
     // `foo::bar` in expressions
@@ -79,36 +92,20 @@ impl ImportCollector {
 }
 
 impl<'a> syn::visit::Visit<'a> for ImportCollector {
-    /// A path at which a named item is exported (e.g. `std::collections::HashMap`).
-    ///
-    /// This also gets crate level or renamed imports (I don't know how to fix yet).
     fn visit_path(&mut self, i: &'a syn::Path) {
         self.collect_path(i);
         syn::visit::visit_path(self, i);
     }
 
-    /// A path prefix of imports in a use item: `std::....`
-    fn visit_use_path(&mut self, i: &'a syn::UsePath) {
-        self.collect_use_path(i);
-        // collect top level use, no need to descend into the use tree
-        // syn::visit::visit_use_path(self, i);
-    }
-
-    /// A suffix of an import tree in a use item: Type as Renamed or *.
-    fn visit_use_rename(&mut self, i: &'a syn::UseRename) {
-        let ident = i.ident.to_string();
-        self.add_import(ident);
+    /// A use declaration: `use std::collections::HashMap`.
+    fn visit_item_use(&mut self, i: &'a syn::ItemUse) {
+        self.collect_use_tree(&i.tree);
     }
 
     /// A path like `std::slice::Iter`, optionally qualified with a self-type as in <Vec<T> as `SomeTrait>::Associated`.
     fn visit_type_path(&mut self, i: &'a syn::TypePath) {
         self.collect_type_path(i);
         syn::visit::visit_type_path(self, i);
-    }
-
-    fn visit_macro(&mut self, m: &'a syn::Macro) {
-        self.collect_path(&m.path);
-        self.collect_tokens(&m.tokens);
     }
 
     /// A structured list within an attribute, like derive(Copy, Clone).
@@ -119,8 +116,12 @@ impl<'a> syn::visit::Visit<'a> for ImportCollector {
 
     /// An extern crate item: extern crate serde.
     fn visit_item_extern_crate(&mut self, i: &'a syn::ItemExternCrate) {
-        let ident = i.ident.to_string();
-        self.add_import(ident);
+        self.add_ident(&i.ident);
+    }
+
+    fn visit_macro(&mut self, m: &'a syn::Macro) {
+        self.collect_path(&m.path);
+        self.collect_tokens(&m.tokens);
     }
 }
 
@@ -137,46 +138,27 @@ mod tests {
 
     #[test]
     fn export_path() {
-        test(
-            r"
-          #[test]
-          fn box_serialize() {
-            let b = foo::bar(&b).unwrap();
-          }
-        ",
-        );
+        test("#[test] fn box_serialize() { let b = foo::bar(&b).unwrap(); }");
     }
 
     #[test]
     fn type_path() {
-        test(
-            r"
-          fn main() {
-            let x: Vec<foo::Bar> = vec![];
-          }
-        ",
-        );
+        test("fn main() { let x: Vec<foo::Bar> = vec![]; }");
     }
 
     #[test]
     fn r#macro() {
-        test(
-            r#"
-          fn main() {
-            println!("{}", foo::bar);
-          }
-        "#,
-        );
+        test(r#"fn main() { println!("{}", foo::bar); }"#);
+    }
+
+    #[test]
+    fn use_group() {
+        test("pub use { foo };");
     }
 
     #[test]
     fn meta_list() {
-        test(
-            r"
-          #[derive(foo::Deserialize, foo::Serialize)]
-          struct Foo;
-        ",
-        );
+        test("#[derive(foo::Deserialize, foo::Serialize)] struct Foo;");
     }
 
     #[test]
@@ -186,16 +168,16 @@ mod tests {
 
     #[test]
     fn meta_list_path() {
-        test(
-            r#"
-        #[foo::instrument(level = "debug")]
-        fn print_with_indent() {}
-        "#,
-        );
+        test(r#"#[foo::instrument(level = "debug")] fn print_with_indent() {}"#);
     }
 
     #[test]
     fn use_rename() {
         test("use foo as bar;");
+    }
+
+    #[test]
+    fn struct_macro() {
+        test("#[foo::self_referencing] struct AST {}");
     }
 }
