@@ -40,8 +40,6 @@ jobs:
 
       - name: Install Rust
         uses: moonrepo/setup-rust@v1
-        with:
-          cache-base: main
 
       - uses: taiki-e/setup-cross-toolchain-action@v1
         with:

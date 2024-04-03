@@ -6,7 +6,6 @@ use std::{
     path::{Path, PathBuf},
     process::ExitCode,
     str::FromStr,
-    sync::atomic::{AtomicUsize, Ordering},
 };
 
 use anyhow::{Context, Result};
@@ -33,7 +32,7 @@ pub struct CargoShearOptions {
 pub struct CargoShear {
     options: CargoShearOptions,
 
-    unused_dependencies: AtomicUsize,
+    unused_dependencies: usize,
 }
 
 type Deps = HashSet<String>;
@@ -41,16 +40,16 @@ type Deps = HashSet<String>;
 impl CargoShear {
     #[must_use]
     pub fn new(options: CargoShearOptions) -> Self {
-        Self { options, unused_dependencies: AtomicUsize::default() }
+        Self { options, unused_dependencies: 0 }
     }
 
     #[must_use]
-    pub fn run(self) -> ExitCode {
+    pub fn run(mut self) -> ExitCode {
         println!("Analyzing {}", self.options.path.to_string_lossy());
 
         match self.shear() {
             Ok(()) => {
-                let has_deps = self.unused_dependencies.load(Ordering::SeqCst) > 0;
+                let has_deps = self.unused_dependencies > 0;
 
                 println!("Done!");
 
@@ -78,7 +77,7 @@ impl CargoShear {
         }
     }
 
-    fn shear(&self) -> Result<()> {
+    fn shear(&mut self) -> Result<()> {
         let metadata = MetadataCommand::new()
             .features(CargoOpt::AllFeatures)
             .current_dir(&self.options.path)
@@ -86,7 +85,7 @@ impl CargoShear {
 
         let package_dependencies = metadata
             .workspace_packages()
-            .par_iter()
+            .iter()
             .map(|package| self.shear_package(&metadata, package))
             .collect::<Result<Vec<Deps>>>()?
             .into_iter()
@@ -95,7 +94,7 @@ impl CargoShear {
         self.shear_workspace(&metadata, &package_dependencies)
     }
 
-    fn shear_workspace(&self, metadata: &Metadata, all_pkg_deps: &Deps) -> Result<()> {
+    fn shear_workspace(&mut self, metadata: &Metadata, all_pkg_deps: &Deps) -> Result<()> {
         if metadata.workspace_packages().len() <= 1 {
             return Ok(());
         }
@@ -121,19 +120,24 @@ impl CargoShear {
         }
         println!();
         self.try_fix_package(&cargo_toml_path, &unused_deps)?;
-        self.unused_dependencies.fetch_add(unused_deps.len(), Ordering::SeqCst);
+        self.unused_dependencies += unused_deps.len();
         Ok(())
     }
 
     /// Returns the remaining package dependency names.
-    fn shear_package(&self, metadata: &Metadata, package: &Package) -> Result<Deps> {
+    fn shear_package(&mut self, metadata: &Metadata, package: &Package) -> Result<Deps> {
         let workspace_root = metadata.workspace_root.as_std_path();
-
         let dir = package
             .manifest_path
             .parent()
-            .unwrap_or_else(|| panic!("failed to get parent path {}", &package.manifest_path))
+            .ok_or_else(|| anyhow::anyhow!("failed to get parent path {}", &package.manifest_path))?
             .as_std_path();
+        let relative_path = package
+            .manifest_path
+            .as_std_path()
+            .strip_prefix(workspace_root)
+            .unwrap_or(dir)
+            .to_string_lossy();
 
         let ignored_package_names = Self::get_ignored_package_names(package);
 
@@ -179,15 +183,8 @@ impl CargoShear {
         self.try_fix_package(package.manifest_path.as_std_path(), &unused_dependency_names)?;
 
         if !unused_dependency_names.is_empty() {
-            self.unused_dependencies.fetch_add(unused_dependency_names.len(), Ordering::SeqCst);
-            let name = &package.name;
-            let path = package
-                .manifest_path
-                .as_std_path()
-                .strip_prefix(workspace_root)
-                .unwrap_or(dir)
-                .to_string_lossy();
-            println!("{name} -- {path}:");
+            self.unused_dependencies += unused_dependency_names.len();
+            println!("{} -- {relative_path}:", package.name);
             for unused_dep in &unused_dependency_names {
                 println!("  {unused_dep}");
             }
