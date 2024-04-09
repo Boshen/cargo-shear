@@ -102,16 +102,27 @@ impl CargoShear {
         self.shear_workspace(&metadata, &package_dependencies)
     }
 
-    fn shear_workspace(&mut self, metadata: &Metadata, all_pkg_deps: &Deps) -> Result<()> {
-        if metadata.workspace_packages().len() <= 1 {
+    fn shear_workspace(
+        &mut self,
+        workspace_metadata: &Metadata,
+        all_pkg_deps: &Deps,
+    ) -> Result<()> {
+        if workspace_metadata.workspace_packages().len() <= 1 {
             return Ok(());
         }
-        let metadata_path = metadata.workspace_root.as_std_path();
+        let metadata_path = workspace_metadata.workspace_root.as_std_path();
         let cargo_toml_path = metadata_path.join("Cargo.toml");
         let metadata = cargo_toml::Manifest::from_path(&cargo_toml_path)?;
         let Some(workspace) = &metadata.workspace else { return Ok(()) };
+        let ignored_package_names =
+            Self::get_ignored_package_names(&workspace_metadata.workspace_metadata);
 
-        let workspace_deps = workspace.dependencies.keys().cloned().collect::<HashSet<String>>();
+        let workspace_deps = workspace
+            .dependencies
+            .keys()
+            .filter(|name| !ignored_package_names.contains(name.as_str()))
+            .cloned()
+            .collect::<HashSet<String>>();
         let unused_deps = workspace_deps.difference(all_pkg_deps).cloned().collect::<Vec<_>>();
 
         if unused_deps.is_empty() {
@@ -147,7 +158,7 @@ impl CargoShear {
             .unwrap_or(dir)
             .to_string_lossy();
 
-        let ignored_package_names = Self::get_ignored_package_names(package);
+        let ignored_package_names = Self::get_ignored_package_names(&package.metadata);
 
         let this_package = metadata
             .resolve
@@ -225,9 +236,8 @@ impl CargoShear {
         }
     }
 
-    fn get_ignored_package_names(package: &Package) -> HashSet<&str> {
-        package
-            .metadata
+    fn get_ignored_package_names(value: &serde_json::Value) -> HashSet<&str> {
+        value
             .as_object()
             .and_then(|object| object.get("cargo-shear"))
             .and_then(|object| object.get("ignored"))

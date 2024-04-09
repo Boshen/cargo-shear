@@ -48,6 +48,7 @@ rayon = "1.10.0"
 toml_edit = { version = "0.22.9", features = ["parse"] }
 anyhow = "1.0.81"
 cargo-util-schemas = "0.2.0"
+serde_json = "1.0.115"
 
 [profile.release]
 # Configurations explicitly listed here for clarity.
