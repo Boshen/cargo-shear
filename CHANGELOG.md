@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.24](https://github.com/Boshen/cargo-shear/compare/v0.0.23...v0.0.24) - 2024-04-09
+
+### Added
+- handle package rename in workspace dependencies
+- add ignore with [workspace.metadata.cargo-shear]
+
+### Other
+- space out printing
+
 ## [0.0.23](https://github.com/Boshen/cargo-shear/compare/v0.0.22...v0.0.23) - 2024-04-03
 
 ### Fixed
