@@ -55,12 +55,11 @@ impl CargoShear {
     #[must_use]
     pub fn run(mut self) -> ExitCode {
         println!("Analyzing {}", self.options.path.to_string_lossy());
+        println!();
 
         match self.shear() {
             Ok(()) => {
                 let has_deps = self.unused_dependencies > 0;
-
-                println!("Done!");
 
                 if has_deps {
                     println!(
@@ -74,6 +73,8 @@ impl CargoShear {
                         [package.metadata.cargo-shear]\n\
                         ignored = [\"crate-name\"]"
                     );
+                } else {
+                    println!("No unused dependencies!");
                 }
 
                 // returns 0 if no deps, 1 if has deps
