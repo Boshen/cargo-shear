@@ -114,15 +114,24 @@ impl CargoShear {
         let cargo_toml_path = metadata_path.join("Cargo.toml");
         let metadata = cargo_toml::Manifest::from_path(&cargo_toml_path)?;
         let Some(workspace) = &metadata.workspace else { return Ok(()) };
+
         let ignored_package_names =
             Self::get_ignored_package_names(&workspace_metadata.workspace_metadata);
 
         let workspace_deps = workspace
             .dependencies
-            .keys()
+            .iter()
+            .map(|(key, dependency)| {
+                // renamed package, e.g. `ustr = { package = "ustr-fxhash", version = "1.0.0" }`
+                dependency
+                    .detail()
+                    .and_then(|detail| detail.package.as_ref())
+                    .unwrap_or(key)
+                    .clone()
+            })
             .filter(|name| !ignored_package_names.contains(name.as_str()))
-            .cloned()
             .collect::<HashSet<String>>();
+
         let unused_deps = workspace_deps.difference(all_pkg_deps).cloned().collect::<Vec<_>>();
 
         if unused_deps.is_empty() {

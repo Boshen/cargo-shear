@@ -41,7 +41,7 @@ proc-macro2 = { version = "1", features = ["span-locations"] }
 syn = { version = "2", features = [
   "full",
   "visit",
-  "extra-traits" # add "extra-traits" to debug syn ast
+  "extra-traits", # add "extra-traits" to debug syn ast
 ] }
 regex = "1.10.4"
 rayon = "1.10.0"
