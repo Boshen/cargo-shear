@@ -25,6 +25,13 @@ cargo shear --fix
 ignored = ["crate"]
 ```
 
+or in workspace:
+
+```toml
+[workspace.metadata.cargo-shear]
+ignored = ["crate"]
+```
+
 Otherwise please report the issue as a bug.
 
 ## CI
