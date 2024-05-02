@@ -11,10 +11,10 @@ license = "MIT"
 readme = "README.md"
 
 [lints.clippy]
-all = "warn"
-cargo = "warn"
-pedantic = "warn"
-nursery = "warn"
+all = { level = "warn", priority = -1 }
+cargo = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
 dbg_macro = "warn"
 unwrap_used = "warn"
 empty_drop = "warn"
