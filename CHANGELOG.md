@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.25](https://github.com/Boshen/cargo-shear/compare/v0.0.24...v0.0.25) - 2024-05-02
+
+### Other
+- *(deps)* update dependency rust to v1.78.0 ([#40](https://github.com/Boshen/cargo-shear/pull/40))
+- *(renovate)* add rust-toolchain
+- *(deps)* update rust crate cargo-util-schemas to 0.3.0 ([#39](https://github.com/Boshen/cargo-shear/pull/39))
+- *(deps)* update rust crates ([#38](https://github.com/Boshen/cargo-shear/pull/38))
+- *(deps)* update rust crate bpaf to 0.9.12 ([#37](https://github.com/Boshen/cargo-shear/pull/37))
+- *(deps)* update rust crate cargo_toml to 0.20.2 ([#36](https://github.com/Boshen/cargo-shear/pull/36))
+- *(deps)* update rust crate cargo_toml to 0.20.1 ([#35](https://github.com/Boshen/cargo-shear/pull/35))
+- *(deps)* update rust crates ([#34](https://github.com/Boshen/cargo-shear/pull/34))
+- *(deps)* update rust crate toml_edit to 0.22.11 ([#33](https://github.com/Boshen/cargo-shear/pull/33))
+- *(deps)* update rust crate toml_edit to 0.22.10 ([#32](https://github.com/Boshen/cargo-shear/pull/32))
+- *(deps)* update rust crate serde_json to 1.0.116 ([#31](https://github.com/Boshen/cargo-shear/pull/31))
+- *(deps)* update rust crate anyhow to 1.0.82 ([#30](https://github.com/Boshen/cargo-shear/pull/30))
+- mention `[workspace.metadata.cargo-shear]`
+
 ## [0.0.24](https://github.com/Boshen/cargo-shear/compare/v0.0.23...v0.0.24) - 2024-04-09
 
 ### Added
