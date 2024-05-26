@@ -18,14 +18,17 @@ cargo shear --fix
 
 ## Ignore false positives
 
-`cargo shear` does not work with transitive dependencies from macros; they need to be ignored manually by adding them to the package's `Cargo.toml`:
+> [!IMPORTANT]
+> `cargo shear` does not work with transitive dependencies from macros;
+
+False positives can be ignored by adding them to the package's `Cargo.toml`:
 
 ```toml
 [package.metadata.cargo-shear]
 ignored = ["crate"]
 ```
 
-or in workspace:
+or in workspace's `Cargo.toml`:
 
 ```toml
 [workspace.metadata.cargo-shear]
