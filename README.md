@@ -19,7 +19,7 @@ cargo shear --fix
 ## Ignore false positives
 
 > [!IMPORTANT]
-> `cargo shear` does not work with transitive dependencies from macros;
+> `cargo shear` cannot detect dependency usages from macros because it uses `syn` to parse the files
 
 False positives can be ignored by adding them to the package's `Cargo.toml`:
 
