@@ -64,7 +64,13 @@ The exit code gives an indication whether unused dependencies have been found:
 ## Prior Arts
 
 * https://github.com/est31/cargo-udeps
+    * it collects dependency usage by compiling your project and find them from the `target/` directory
+    * does not seem to work anymore with the latest versions of `cargo`
+    * does not work with cargo workspaces
 * https://github.com/bnjbvr/cargo-machete
+    * it collects dependency usage by running regex patterns on source code
+    * does not detect all usages of a dependency
+    * does not remove unused dependencies from the workspace root
 
 ## Trophy Cases
 
