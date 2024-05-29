@@ -10,19 +10,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - exit code is 0 when performing fix ([#52](https://github.com/Boshen/cargo-shear/pull/52))
 
-### Other
-- *(deps)* lock file maintenance rust crates ([#49](https://github.com/Boshen/cargo-shear/pull/49))
-- update README
-- update README
-- link prior arts
-- document prior arts
-- allow branch `renovate/**`
-- *(deps)* lock file maintenance rust crates ([#46](https://github.com/Boshen/cargo-shear/pull/46))
-- *(deps)* lock file maintenance rust crates ([#44](https://github.com/Boshen/cargo-shear/pull/44))
-- add PR from astral-sh/uv
-- *(deps)* lock file maintenance rust crates ([#43](https://github.com/Boshen/cargo-shear/pull/43))
-- use shared renovate config
-
 ## [0.0.25](https://github.com/Boshen/cargo-shear/compare/v0.0.24...v0.0.25) - 2024-05-02
 
 ### Other
