@@ -64,10 +64,7 @@ impl CargoShear {
                 let has_fixed = self.fixed_dependencies > 0;
 
                 if has_fixed {
-                    println!(
-                        "Fixed {} dependencies!",
-                        self.fixed_dependencies
-                    );
+                    println!("Fixed {} dependencies!", self.fixed_dependencies);
                 }
 
                 let has_deps = (self.unused_dependencies - self.fixed_dependencies) > 0;
@@ -303,7 +300,11 @@ impl CargoShear {
         Ok(imports)
     }
 
-    fn try_fix_package(&mut self, cargo_toml_path: &Path, unused_dep_names: &[String]) -> Result<()> {
+    fn try_fix_package(
+        &mut self,
+        cargo_toml_path: &Path,
+        unused_dep_names: &[String],
+    ) -> Result<()> {
         if !self.options.fix {
             return Ok(());
         }
