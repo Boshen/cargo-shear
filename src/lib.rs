@@ -42,6 +42,8 @@ pub struct CargoShear {
     options: CargoShearOptions,
 
     unused_dependencies: usize,
+
+    fixed_dependencies: usize,
 }
 
 type Deps = HashSet<String>;
@@ -49,7 +51,7 @@ type Deps = HashSet<String>;
 impl CargoShear {
     #[must_use]
     pub const fn new(options: CargoShearOptions) -> Self {
-        Self { options, unused_dependencies: 0 }
+        Self { options, unused_dependencies: 0, fixed_dependencies: 0 }
     }
 
     #[must_use]
@@ -59,7 +61,16 @@ impl CargoShear {
 
         match self.shear() {
             Ok(()) => {
-                let has_deps = self.unused_dependencies > 0;
+                let has_fixed = self.fixed_dependencies > 0;
+
+                if has_fixed {
+                    println!(
+                        "Fixed {} dependencies!",
+                        self.fixed_dependencies
+                    );
+                }
+
+                let has_deps = (self.unused_dependencies - self.fixed_dependencies) > 0;
 
                 if has_deps {
                     println!(
@@ -292,7 +303,7 @@ impl CargoShear {
         Ok(imports)
     }
 
-    fn try_fix_package(&self, cargo_toml_path: &Path, unused_dep_names: &[String]) -> Result<()> {
+    fn try_fix_package(&mut self, cargo_toml_path: &Path, unused_dep_names: &[String]) -> Result<()> {
         if !self.options.fix {
             return Ok(());
         }
@@ -323,6 +334,7 @@ impl CargoShear {
             }
         }
 
+        self.fixed_dependencies += unused_dep_names.len();
         let serialized = manifest.to_string();
         fs::write(cargo_toml_path, serialized)?;
         Ok(())
