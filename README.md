@@ -83,3 +83,11 @@ The exit code gives an indication whether unused dependencies have been found:
 * -12 lines [ast-grep](https://github.com/ast-grep/ast-grep) [commit1](https://github.com/ast-grep/ast-grep/commit/c4ef252a71b05193f2ced327666f61836ad515c3) [commit2](https://github.com/ast-grep/ast-grep/commit/43edbc131e68173468e9aa302cab9b45263b1f76)
 * -66 lines [biome](https://github.com/biomejs/biome/pull/2153)
 * -164 lines [astral-sh/uv](https://github.com/astral-sh/uv/pull/3527)
+
+## [Sponsored By](https://github.com/sponsors/Boshen)
+
+<p align="center">
+  <a href="https://github.com/sponsors/Boshen">
+    <img src="https://raw.githubusercontent.com/Boshen/sponsors/main/sponsors.svg" alt="My sponsors" />
+  </a>
+</p>
