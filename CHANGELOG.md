@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.27](https://github.com/Boshen/cargo-shear/compare/v0.0.26...v0.0.27) - 2024-07-01
+
+### Other
+- *(deps)* update rust crate serde_json to v1.0.119 ([#60](https://github.com/Boshen/cargo-shear/pull/60))
+- *(deps)* update rust crates ([#59](https://github.com/Boshen/cargo-shear/pull/59))
+- *(deps)* update dependency rust to v1.79.0 ([#57](https://github.com/Boshen/cargo-shear/pull/57))
+- *(deps)* update rust crates ([#56](https://github.com/Boshen/cargo-shear/pull/56))
+- Update README.md
+- Create FUNDING.yml
+
 ## [0.0.26](https://github.com/Boshen/cargo-shear/compare/v0.0.25...v0.0.26) - 2024-05-29
 
 ### Added
