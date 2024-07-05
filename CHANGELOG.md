@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0](https://github.com/Boshen/cargo-shear/compare/v1.0.0...v1.0.0) - 2024-07-05
+
+Release v1.0.0.
+
+Consider `cargo-shear` as stable after using for a few months so we pin version in CI and introduce breaking changes in the future.
+
 ## [0.0.26](https://github.com/Boshen/cargo-shear/compare/v0.0.25...v0.0.26) - 2024-05-29
 
 ### Added
