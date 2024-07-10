@@ -175,7 +175,8 @@ impl CargoShear {
             .unwrap_or(dir)
             .to_string_lossy();
 
-        let ignored_package_names = Self::get_ignored_package_names(&package.metadata);
+        let mut ignored_package_names = Self::get_ignored_package_names(&package.metadata);
+        ignored_package_names.extend(Self::get_ignored_package_names(&metadata.workspace_metadata));
 
         let this_package = metadata
             .resolve
