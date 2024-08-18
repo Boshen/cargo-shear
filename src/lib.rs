@@ -30,6 +30,14 @@ pub struct CargoShearOptions {
     #[bpaf(long)]
     fix: bool,
 
+    /// Package(s) to check
+    /// If not specified, all packages are checked by default
+    #[bpaf(long, short, argument("SPEC"))]
+    package: Vec<String>,
+
+    /// Exclude packages from the check
+    exclude: Vec<String>,
+
     #[bpaf(positional("PATH"), fallback_with(default_path))]
     path: PathBuf,
 }
@@ -103,6 +111,18 @@ impl CargoShear {
 
         let mut package_dependencies = HashSet::new();
         for package in metadata.workspace_packages() {
+            // Skip if package is in the exclude list
+            if self.options.exclude.iter().any(|name| name == &package.name) {
+                continue;
+            }
+
+            // Skip if specific packages are specified and this package is not in the list
+            if !self.options.package.is_empty()
+                && !self.options.package.iter().any(|name| name == &package.name)
+            {
+                continue;
+            }
+
             let deps = self.shear_package(&metadata, package)?;
             package_dependencies.extend(deps);
         }
