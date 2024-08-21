@@ -74,6 +74,9 @@ The exit code gives an indication whether unused dependencies have been found:
     * it collects dependency usage by running regex patterns on source code
     * does not detect all usages of a dependency
     * does not remove unused dependencies from the workspace root
+* cargo and clippy
+    * There was intention to add similar features to cargo or clippy, but the progress is currently stagnant
+    * See https://github.com/rust-lang/rust/issues/57274 and https://github.com/rust-lang/rust-clippy/issues/4341
 
 ## Trophy Cases
 
