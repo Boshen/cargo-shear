@@ -1,6 +1,6 @@
 [package]
 name = "cargo-shear"
-version = "1.1.2"
+version = "1.1.3"
 edition = "2021"
 description = "Detect and remove unused dependencies from Cargo.toml"
 authors = ["Boshen <boshenc@gmail.com>"]
