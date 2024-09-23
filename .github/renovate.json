@@ -1,4 +1,11 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["github>Boshen/renovate"]
+  "extends": ["github>Boshen/renovate"],
+  "packageRules": [
+    {
+      "groupName": "rust crates",
+      "matchManagers": ["cargo"],
+      "rangeStrategy": "bump"
+    }
+  ]
 }
