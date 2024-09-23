@@ -65,7 +65,7 @@ impl ImportCollector {
         self.add_import(ident);
     }
 
-    // `let _: <foo:bar>`
+    // `let _: <foo::bar>`
     fn collect_type_path(&mut self, type_path: &syn::TypePath) {
         let path = &type_path.path;
         self.collect_path(path);
@@ -123,6 +123,14 @@ impl<'a> syn::visit::Visit<'a> for ImportCollector {
         self.collect_path(&m.path);
         self.collect_tokens(&m.tokens);
     }
+
+    fn visit_item(&mut self, i: &'a syn::Item) {
+        // For tokens not interpreted by Syn.
+        if let syn::Item::Verbatim(tokens) = i {
+            self.collect_tokens(tokens);
+        }
+        syn::visit::visit_item(self, i);
+    }
 }
 
 #[cfg(test)]
@@ -177,7 +185,12 @@ mod tests {
     }
 
     #[test]
-    fn struct_macro() {
+    fn macro_on_struct() {
         test("#[foo::self_referencing] struct AST {}");
+    }
+
+    #[test]
+    fn macro_on_verbatim() {
+        test("#[foo::ext(name = ParserExt)] pub impl Parser {}");
     }
 }
