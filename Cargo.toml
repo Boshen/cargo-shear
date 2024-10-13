@@ -36,8 +36,8 @@ test = false
 walkdir = "2.5.0"
 cargo_metadata = "0.18.1"
 cargo_toml = "0.20.5"
-bpaf = { version = "0.9.14", features = ["derive", "batteries"] }
-proc-macro2 = { version = "1.0.86", features = ["span-locations"] }
+bpaf = { version = "0.9.15", features = ["derive", "batteries"] }
+proc-macro2 = { version = "1.0.87", features = ["span-locations"] }
 syn = { version = "2.0.79", features = [
   "full",
   "visit",
