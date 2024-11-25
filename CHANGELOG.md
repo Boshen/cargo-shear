@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.4](https://github.com/Boshen/cargo-shear/compare/v1.1.3...v1.1.4) - 2024-11-25
+
+### Other
+
+- *(deps)* update rust crates ([#99](https://github.com/Boshen/cargo-shear/pull/99))
+- *(deps)* update rust crate serde_json to 1.0.133 ([#98](https://github.com/Boshen/cargo-shear/pull/98))
+- *(deps)* update rust crate anyhow to 1.0.93 ([#97](https://github.com/Boshen/cargo-shear/pull/97))
+- *(deps)* update rust crates ([#96](https://github.com/Boshen/cargo-shear/pull/96))
+- *(deps)* update rust crates ([#94](https://github.com/Boshen/cargo-shear/pull/94))
+- *(deps)* update rust crates ([#92](https://github.com/Boshen/cargo-shear/pull/92))
+- *(deps)* update dependency rust to v1.82.0 ([#91](https://github.com/Boshen/cargo-shear/pull/91))
+- *(deps)* update rust crates ([#90](https://github.com/Boshen/cargo-shear/pull/90))
+- *(deps)* update rust crates ([#88](https://github.com/Boshen/cargo-shear/pull/88))
+
 ## [1.1.3](https://github.com/Boshen/cargo-shear/compare/v1.1.2...v1.1.3) - 2024-09-23
 
 ### Fixed
