@@ -10,7 +10,7 @@ use std::{
 
 use anyhow::{Context, Result};
 use bpaf::Bpaf;
-use cargo_metadata::{CargoOpt, Metadata, MetadataCommand, Package};
+use cargo_metadata::{CargoOpt, Metadata, MetadataCommand, Package, TargetKind};
 use cargo_util_schemas::core::PackageIdSpec;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use walkdir::{DirEntry, WalkDir};
@@ -298,7 +298,7 @@ impl CargoShear {
             .targets
             .iter()
             .flat_map(|target| {
-                if target.kind.iter().any(|s| s == "custom-build") {
+                if target.kind.iter().any(|s| *s == TargetKind::CustomBuild) {
                     vec![target.src_path.clone().into_std_path_buf()]
                 } else {
                     let target_dir = target.src_path.parent().unwrap_or_else(|| {
