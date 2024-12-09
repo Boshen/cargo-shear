@@ -23,6 +23,7 @@ empty_structs_with_brackets = "warn"
 rc_buffer = "warn"
 rc_mutex = "warn"
 same_name_method = "warn"
+multiple_crate_versions = "allow"
 
 [lib]
 doctest = false
