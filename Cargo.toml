@@ -39,7 +39,7 @@ cargo_metadata = "0.19.1"
 cargo_toml = "0.21.0"
 bpaf = { version = "0.9.15", features = ["derive", "batteries"] }
 proc-macro2 = { version = "1.0.92", features = ["span-locations"] }
-syn = { version = "2.0.90", features = [
+syn = { version = "2.0.91", features = [
   "full",
   "visit",
   "extra-traits", # add "extra-traits" to debug syn ast
@@ -47,9 +47,9 @@ syn = { version = "2.0.90", features = [
 regex = "1.11.1"
 rayon = "1.10.0"
 toml_edit = { version = "0.22.22", features = ["parse"] }
-anyhow = "1.0.94"
+anyhow = "1.0.95"
 cargo-util-schemas = "0.7.0"
-serde_json = "1.0.133"
+serde_json = "1.0.134"
 
 [profile.release]
 # Configurations explicitly listed here for clarity.
