@@ -39,7 +39,7 @@ cargo_metadata = "0.19.1"
 cargo_toml = "0.21.0"
 bpaf = { version = "0.9.15", features = ["derive", "batteries"] }
 proc-macro2 = { version = "1.0.92", features = ["span-locations"] }
-syn = { version = "2.0.93", features = [
+syn = { version = "2.0.95", features = [
   "full",
   "visit",
   "extra-traits", # add "extra-traits" to debug syn ast
