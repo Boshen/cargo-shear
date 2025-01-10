@@ -9,7 +9,6 @@ keywords = ["cargo", "udeps", "machete", "unused", "dependencies"]
 categories = ["development-tools", "development-tools::cargo-plugins"]
 license = "MIT"
 readme = "README.md"
-resolver = "3"
 
 [lints.clippy]
 all = { level = "warn", priority = -1 }
