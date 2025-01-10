@@ -135,8 +135,9 @@ impl<'a> syn::visit::Visit<'a> for ImportCollector {
 
 #[cfg(test)]
 mod tests {
-    use super::collect_imports;
     use std::collections::HashSet;
+
+    use super::collect_imports;
 
     fn test(source_text: &str) {
         let deps = collect_imports(source_text).unwrap();
