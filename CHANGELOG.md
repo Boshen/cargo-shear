@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Other
 
-- `cargo update`
+- `cargo update` - support `resolver = "3"`
 - *(deps)* update dependency rust to v1.84.0 (#107)
 - *(deps)* update rust crate syn to 2.0.95 (#106)
 - *(deps)* update rust crate syn to 2.0.93 (#105)
