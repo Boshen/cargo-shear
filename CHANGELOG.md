@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.9](https://github.com/Boshen/cargo-shear/compare/v1.1.8...v1.1.9) - 2025-02-11
+
+### Other
+
+- *(deps)* lock file maintenance rust crates (#118)
+- Update README.md
+- *(deps)* update rust crates (#116)
+- *(deps)* update dependency rust to v1.84.1 (#115)
+- *(deps)* update rust crate bpaf to 0.9.16 (#114)
+- *(deps)* update rust crate serde_json to 1.0.137 (#113)
+- *(deps)* update rust crate serde_json to 1.0.136 (#112)
+- *(deps)* update rust crates (#110)
+
 ## [1.1.8](https://github.com/Boshen/cargo-shear/compare/v1.1.7...v1.1.8) - 2025-01-10
 
 ### Other
