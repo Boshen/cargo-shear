@@ -19,7 +19,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.RELEASE_PLZ_TOKEN }}
+          persist-credentials: true # for zizmor
 
       - name: Install Rust
         uses: moonrepo/setup-rust@e013866c4215f77c925f42f60257dec7dd18836e # v1
