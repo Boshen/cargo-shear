@@ -28,31 +28,17 @@ jobs:
     steps:
       - uses: taiki-e/checkout-action@v1
 
-      - name: Install Rust
-        uses: moonrepo/setup-rust@v1
+      - uses: oxc-project/setup-rust@cd82e1efec7fef815e2c23d296756f31c7cdc03d # v1.0.0
         with:
-          components: clippy,rustfmt
-          cache-base: main
+          save-cache: ${{ github.ref_name == 'main' }}
+          cache-key: warm
 
       - run: |
           cargo test
           cargo clippy -- -D warnings
           cargo fmt --all -- --check
+          cargo run .
 
-  typos:
-    name: Typos
-    runs-on: ubuntu-latest
-    steps:
-      - uses: taiki-e/checkout-action@v1
       - uses: crate-ci/typos@master
         with:
           files: .
-
-  shear:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: taiki-e/checkout-action@v1
-      - uses: moonrepo/setup-rust@v1
-        with:
-          cache-base: main
-      - run: cargo run .
