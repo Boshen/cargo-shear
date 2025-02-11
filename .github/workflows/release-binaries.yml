@@ -1,5 +1,7 @@
 name: Release Binaries
 
+permissions: {}
+
 on:
   release:
     types: [published]
@@ -8,13 +10,12 @@ defaults:
   run:
     shell: bash
 
-permissions:
-  contents: write
-
 jobs:
   upload-assets:
     name: ${{ matrix.target }}
     if: github.repository_owner == 'Boshen'
+    permissions:
+      contents: write
     strategy:
       matrix:
         include:
