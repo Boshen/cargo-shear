@@ -3,11 +3,13 @@
 _default:
   @just --list -u
 
-init:
-  cargo binstall cargo-watch taplo-cli
+alias r := ready
 
-watch command:
-  cargo watch -x '{{command}}'
+init:
+  cargo binstall watchexec-cli taplo-cli typos-cli
+
+watch *args='':
+  watchexec {{args}}
 
 build-release:
   cargo build --release
