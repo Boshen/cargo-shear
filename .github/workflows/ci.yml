@@ -34,6 +34,7 @@ jobs:
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: warm
+          components: clippy rustfmt
 
       - run: |
           cargo test
