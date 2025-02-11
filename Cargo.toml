@@ -46,7 +46,7 @@ syn = { version = "2.0.98", features = [
 ] }
 regex = "1.11.1"
 rayon = "1.10.0"
-toml_edit = { version = "0.22.23", features = ["parse"] }
+toml_edit = { version = "0.22.24", features = ["parse"] }
 anyhow = "1.0.95"
 cargo-util-schemas = "0.7.1"
 serde_json = "1.0.138"
