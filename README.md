@@ -16,10 +16,13 @@ cargo install cargo-shear
 cargo shear --fix
 ```
 
-## Ignore false positives
+## Limitation
 
 > [!IMPORTANT]
-> `cargo shear` cannot detect dependency usages from macros because it uses `syn` to parse the files
+> `cargo shear` cannot detect "hidden" imports from macro expansions.
+> This is because `cargo shear` uses `syn` to parse files and does not expand macros.
+
+## Ignore false positives
 
 False positives can be ignored by adding them to the package's `Cargo.toml`:
 
