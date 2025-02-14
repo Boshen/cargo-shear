@@ -21,10 +21,10 @@ jobs:
           fetch-depth: 0
           persist-credentials: true # for zizmor
 
-      - name: Install Rust
-        uses: moonrepo/setup-rust@e013866c4215f77c925f42f60257dec7dd18836e # v1
+      - uses: oxc-project/setup-rust@cd82e1efec7fef815e2c23d296756f31c7cdc03d # v1.0.0
         with:
-          cache-base: main
+          save-cache: ${{ github.ref_name == 'main' }}
+          cache-key: release
 
       - name: Run release-plz
         uses: MarcoIeni/release-plz-action@36d2dcf6a250ff9c4dfd2984e988d79ea67a4c6a # v0.5

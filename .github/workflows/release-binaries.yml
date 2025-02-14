@@ -41,8 +41,7 @@ jobs:
     steps:
       - uses: taiki-e/checkout-action@b13d20b7cda4e2f325ef19895128f7ff735c0b3d # v1
 
-      - name: Install Rust
-        uses: moonrepo/setup-rust@e013866c4215f77c925f42f60257dec7dd18836e # v1
+      - uses: oxc-project/setup-rust@cd82e1efec7fef815e2c23d296756f31c7cdc03d # v1.0.0
 
       - uses: taiki-e/setup-cross-toolchain-action@dd27a7558a45f6b00c1098e61fa074a038c287f6 # v1
         with:
