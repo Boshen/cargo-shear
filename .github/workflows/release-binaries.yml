@@ -39,11 +39,11 @@ jobs:
     env:
       SHEAR_VERSION: ${{ github.ref }}
     steps:
-      - uses: taiki-e/checkout-action@b13d20b7cda4e2f325ef19895128f7ff735c0b3d # v1
+      - uses: taiki-e/checkout-action@b13d20b7cda4e2f325ef19895128f7ff735c0b3d # v1.3.1
 
       - uses: oxc-project/setup-rust@cd82e1efec7fef815e2c23d296756f31c7cdc03d # v1.0.0
 
-      - uses: taiki-e/setup-cross-toolchain-action@dd27a7558a45f6b00c1098e61fa074a038c287f6 # v1
+      - uses: taiki-e/setup-cross-toolchain-action@dd27a7558a45f6b00c1098e61fa074a038c287f6 # v1.28.1
         with:
           target: ${{ matrix.target }}
 
@@ -53,7 +53,7 @@ jobs:
       - run: echo "RUSTFLAGS=${RUSTFLAGS} -C target-feature=+crt-static -C link-self-contained=yes" >>"${GITHUB_ENV}"
         if: contains(matrix.target, '-linux-musl')
 
-      - uses: taiki-e/upload-rust-binary-action@e7953b6078194a4ae5f5619632e3715db6275561 # v1
+      - uses: taiki-e/upload-rust-binary-action@e7953b6078194a4ae5f5619632e3715db6275561 # v1.24.0
         with:
           bin: cargo-shear
           target: ${{ matrix.target }}
