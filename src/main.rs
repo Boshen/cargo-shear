@@ -1,6 +1,6 @@
 use std::process::ExitCode;
 
-use cargo_shear::{cargo_shear_options, CargoShear};
+use cargo_shear::{CargoShear, cargo_shear_options};
 
 fn main() -> ExitCode {
     let options = cargo_shear_options().run();
