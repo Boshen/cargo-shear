@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.10](https://github.com/Boshen/cargo-shear/compare/v1.1.9...v1.1.10) - 2025-02-21
+
+### Other
+
+- Rust 2024
+- *(deps)* update dependency rust to v1.85.0 (#126)
+- *(deps)* update taiki-e/install-action action to v2.48.15 (#125)
+- *(deps)* update taiki-e/install-action action to v2.48.14 (#124)
+- *(deps)* update github-actions (#123)
+- use oxc-project/setup-rust
+- pinGitHubActionDigestsToSemver
+
 ## [1.1.9](https://github.com/Boshen/cargo-shear/compare/v1.1.8...v1.1.9) - 2025-02-11
 
 ### Other
