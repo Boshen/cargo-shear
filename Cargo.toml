@@ -10,21 +10,6 @@ categories = ["development-tools", "development-tools::cargo-plugins"]
 license = "MIT"
 readme = "README.md"
 
-[lints.clippy]
-all = { level = "warn", priority = -1 }
-cargo = { level = "warn", priority = -1 }
-pedantic = { level = "warn", priority = -1 }
-nursery = { level = "warn", priority = -1 }
-dbg_macro = "warn"
-unwrap_used = "warn"
-empty_drop = "warn"
-exit = "warn"
-empty_structs_with_brackets = "warn"
-rc_buffer = "warn"
-rc_mutex = "warn"
-same_name_method = "warn"
-multiple_crate_versions = "allow"
-
 [lib]
 doctest = false
 
@@ -60,3 +45,49 @@ codegen-units = 1
 strip = "symbols"
 debug = false
 panic = "abort"   # Let it crash and force ourselves to write safe Rust.
+
+[lints.rust]
+unsafe_code = "deny"
+deprecated = "warn"
+elided_lifetimes_in_paths = "warn"
+future_incompatible = { level = "warn", priority = -1 }
+nonstandard_style = { level = "warn", priority = -1 }
+rust_2018_idioms = { level = "warn", priority = -1 }
+rust_2021_prelude_collisions = "warn"
+semicolon_in_expressions_from_macros = "warn"
+trivial_numeric_casts = "warn"
+unsafe_op_in_unsafe_fn = "warn"                         # `unsafe_op_in_unsafe_fn` may become the default in future Rust versions: https://github.com/rust-lang/rust/issues/71668
+unused_extern_crates = "warn"
+unused_import_braces = "warn"
+unused_lifetimes = "warn"
+trivial_casts = "allow"
+unused_qualifications = "allow"
+
+[lints.rustdoc]
+all = "warn"
+missing_crate_level_docs = "warn"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+correctness = { level = "warn", priority = -1 }
+suspicious = { level = "warn", priority = -1 }
+style = { level = "warn", priority = -1 }
+complexity = { level = "warn", priority = -1 }
+perf = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+
+# Additional lints from https://rust-lang.github.io/rust-clippy/master/index.html?groups=restriction
+allow_attributes = "warn"
+allow_attributes_without_reason = "warn"
+assertions_on_result_states = "warn"
+create_dir = "warn"
+clone_on_ref_ptr = "warn"
+expect_used = "warn"
+missing_assert_message = "warn"
+panic_in_result_fn = "warn"
+str_to_string = "warn"
+todo = "warn"
+unimplemented = "warn"
+unwrap_used = "warn"
+wildcard_enum_match_arm = "warn"
