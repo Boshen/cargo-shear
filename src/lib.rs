@@ -1,4 +1,6 @@
 mod import_collector;
+#[cfg(test)]
+mod tests;
 
 use std::{
     collections::{HashMap, HashSet},
@@ -42,7 +44,7 @@ pub struct CargoShearOptions {
     path: PathBuf,
 }
 
-fn default_path() -> Result<PathBuf> {
+pub(crate) fn default_path() -> Result<PathBuf> {
     env::current_dir().map_err(|err| anyhow::anyhow!(err))
 }
 
@@ -269,7 +271,7 @@ impl CargoShear {
         } else {
             // >= Rust 1.77: `registry+https://github.com/rust-lang/crates.io-index#memchr@2.7.1`
             PackageIdSpec::parse(s)
-                .map(|id| id.name().to_string())
+                .map(|id| id.name().to_owned())
                 .map_err(|err| anyhow::anyhow!(err))
         }
     }
