@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.11](https://github.com/Boshen/cargo-shear/compare/v1.1.10...v1.1.11) - 2025-02-27
+
+### Other
+
+- improve tests & add more lints (#130)
+- *(deps)* update github-actions (#127)
+- update trigger
+
 ## [1.1.10](https://github.com/Boshen/cargo-shear/compare/v1.1.9...v1.1.10) - 2025-02-21
 
 ### Other
