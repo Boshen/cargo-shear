@@ -53,8 +53,10 @@ impl ImportCollector {
     }
 
     // `foo::bar` in expressions
-    fn collect_path(&mut self, path: &syn::Path) {
-        if path.segments.len() <= 1 {
+    fn collect_path(&mut self, path: &syn::Path, is_module: bool) {
+        if path.segments.len() <= 1 && !is_module {
+            // Avoid collecting single-segment paths unless they explicitly point to a module, which might be a crate.
+            // This prevents false positives from free functions and other local items.
             return;
         }
         let Some(path_segment) = path.segments.first() else { return };
@@ -68,7 +70,7 @@ impl ImportCollector {
     // `let _: <foo::bar>`
     fn collect_type_path(&mut self, type_path: &syn::TypePath) {
         let path = &type_path.path;
-        self.collect_path(path);
+        self.collect_path(path, false);
     }
 
     // `println!("{}", foo::bar);`
@@ -89,11 +91,33 @@ impl ImportCollector {
             .collect::<Vec<_>>();
         self.deps.extend(idents);
     }
+
+    // #[serde(with = "foo")]
+    fn collect_known_attribute(&mut self, attr: &syn::Attribute) {
+        // Many serde attributes are already caught by `collect_tokens` because they use the `::` pattern.
+        // However, the `with` and `crate` attributes are special cases since they directly reference modules or crates.
+        if attr.path().is_ident("serde") {
+            attr.parse_nested_meta(|meta| {
+                // #[serde(with = "foo")]
+                // #[serde(crate = "foo")]
+                if meta.path.is_ident("with") || meta.path.is_ident("crate") {
+                    let _eq = meta.input.parse::<syn::Token![=]>()?;
+                    let lit = meta.input.parse::<syn::LitStr>()?;
+                    let path = syn::parse_str(&lit.value())?;
+                    self.collect_path(&path, true);
+                }
+                // ignore unknown args
+                Ok(())
+            })
+            // Ignore invalid serde attributes.
+            .ok();
+        }
+    }
 }
 
 impl<'a> syn::visit::Visit<'a> for ImportCollector {
     fn visit_path(&mut self, i: &'a syn::Path) {
-        self.collect_path(i);
+        self.collect_path(i, false);
         syn::visit::visit_path(self, i);
     }
 
@@ -110,7 +134,7 @@ impl<'a> syn::visit::Visit<'a> for ImportCollector {
 
     /// A structured list within an attribute, like derive(Copy, Clone).
     fn visit_meta_list(&mut self, m: &'a syn::MetaList) {
-        self.collect_path(&m.path);
+        self.collect_path(&m.path, false);
         self.collect_tokens(&m.tokens);
     }
 
@@ -120,7 +144,7 @@ impl<'a> syn::visit::Visit<'a> for ImportCollector {
     }
 
     fn visit_macro(&mut self, m: &'a syn::Macro) {
-        self.collect_path(&m.path);
+        self.collect_path(&m.path, false);
         self.collect_tokens(&m.tokens);
     }
 
@@ -130,5 +154,10 @@ impl<'a> syn::visit::Visit<'a> for ImportCollector {
             self.collect_tokens(tokens);
         }
         syn::visit::visit_item(self, i);
+    }
+
+    fn visit_attribute(&mut self, attr: &'a syn::Attribute) {
+        self.collect_known_attribute(attr);
+        syn::visit::visit_attribute(self, attr);
     }
 }

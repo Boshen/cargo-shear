@@ -5,6 +5,7 @@ use crate::{CargoShear, CargoShearOptions, default_path};
 
 use super::collect_imports;
 
+#[track_caller]
 fn test(source_text: &str) {
     let deps = collect_imports(source_text).unwrap();
     let expected = HashSet::from_iter(["foo".to_owned()]);
@@ -59,6 +60,18 @@ fn macro_on_struct() {
 #[test]
 fn macro_on_verbatim() {
     test("#[foo::ext(name = ParserExt)] pub impl Parser {}");
+}
+
+#[test]
+fn serde_with_on_field() {
+    test("struct Foo { #[serde(with = \"foo\")] foo: () }");
+    // should also work combined with other attributes
+    test("struct Foo { #[serde(default, with = \"foo\")] bar: () }");
+}
+
+#[test]
+fn serde_crate_on_type() {
+    test("#[serde(crate = \"foo\")] struct Foo { bar: () }");
 }
 
 #[test]
