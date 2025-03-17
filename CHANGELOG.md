@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.11](https://github.com/Boshen/cargo-shear/compare/v1.1.10...v1.1.11) - 2025-03-17
+
+### Other
+
+- trigger CI when workflow file changes
+- *(deps)* lock file maintenance rust crates ([#138](https://github.com/Boshen/cargo-shear/pull/138))
+- *(deps)* update github-actions ([#135](https://github.com/Boshen/cargo-shear/pull/135))
+- *(deps)* lock file maintenance rust crates ([#136](https://github.com/Boshen/cargo-shear/pull/136))
+- *(deps)* update github-actions ([#131](https://github.com/Boshen/cargo-shear/pull/131))
+- *(deps)* lock file maintenance rust crates ([#132](https://github.com/Boshen/cargo-shear/pull/132))
+- improve tests & add more lints ([#130](https://github.com/Boshen/cargo-shear/pull/130))
+- *(deps)* update github-actions ([#127](https://github.com/Boshen/cargo-shear/pull/127))
+- update trigger
+
 ## [1.1.10](https://github.com/Boshen/cargo-shear/compare/v1.1.9...v1.1.10) - 2025-02-21
 
 ### Other
