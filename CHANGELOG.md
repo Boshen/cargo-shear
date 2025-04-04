@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.12](https://github.com/Boshen/cargo-shear/compare/v1.1.11...v1.1.12) - 2025-04-04
+
+### Other
+
+- use regex-lite
+- `cargo upgrade -i`
+- *(deps)* update dependency rust to v1.86.0 ([#146](https://github.com/Boshen/cargo-shear/pull/146))
+- *(deps)* update github-actions ([#144](https://github.com/Boshen/cargo-shear/pull/144))
+- *(deps)* lock file maintenance ([#145](https://github.com/Boshen/cargo-shear/pull/145))
+- *(deps)* update github-actions ([#142](https://github.com/Boshen/cargo-shear/pull/142))
+- *(deps)* update dependency rust to v1.85.1 ([#140](https://github.com/Boshen/cargo-shear/pull/140))
+
 ## [1.1.11](https://github.com/Boshen/cargo-shear/compare/v1.1.10...v1.1.11) - 2025-03-18
 
 ### Other
