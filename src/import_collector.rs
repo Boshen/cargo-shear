@@ -1,6 +1,6 @@
 use std::sync::OnceLock;
 
-use regex::Regex;
+use regex_lite::Regex;
 use syn::{self, spanned::Spanned};
 
 use crate::Deps;
