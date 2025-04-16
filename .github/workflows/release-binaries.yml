@@ -34,7 +34,7 @@ jobs:
           - target: x86_64-unknown-freebsd
           - target: universal-apple-darwin
             os: macos-13
-    runs-on: ${{ matrix.os || 'ubuntu-20.04' }}
+    runs-on: ${{ matrix.os || 'ubuntu-latest' }}
     timeout-minutes: 60
     env:
       SHEAR_VERSION: ${{ github.ref }}
