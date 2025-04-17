@@ -160,9 +160,9 @@ impl CargoShear {
                     .clone()
             })
             .filter(|name| !ignored_package_names.contains(name.as_str()))
-            .collect::<HashSet<String>>();
+            .collect::<HashSet<_>>();
 
-        let unused_deps = workspace_deps.difference(all_pkg_deps).cloned().collect::<Vec<_>>();
+        let unused_deps = workspace_deps.difference(all_pkg_deps).cloned().collect::<HashSet<_>>();
 
         if unused_deps.is_empty() {
             return Ok(());
@@ -240,7 +240,7 @@ impl CargoShear {
         let unused_dependency_names = unused_module_names
             .into_iter()
             .map(|name| package_dependency_names_map[name].clone())
-            .collect::<Vec<_>>();
+            .collect::<HashSet<_>>();
 
         self.try_fix_package(package.manifest_path.as_std_path(), &unused_dependency_names)?;
 
@@ -254,7 +254,7 @@ impl CargoShear {
         }
 
         let package_dependency_names = package_dependency_names
-            .difference(&HashSet::from_iter(unused_dependency_names))
+            .difference(&unused_dependency_names)
             .cloned()
             .collect::<Deps>();
         Ok(package_dependency_names)
@@ -326,7 +326,7 @@ impl CargoShear {
     fn try_fix_package(
         &mut self,
         cargo_toml_path: &Path,
-        unused_dep_names: &[String],
+        unused_dep_names: &HashSet<String>,
     ) -> Result<()> {
         if !self.options.fix {
             return Ok(());
@@ -342,9 +342,7 @@ impl CargoShear {
             .and_then(|table| table.get_mut("dependencies"))
             .and_then(|item| item.as_table_mut())
         {
-            for k in unused_dep_names {
-                dependencies.remove(k);
-            }
+            dependencies.retain(|k, _| !unused_dep_names.contains(k));
         }
 
         // Try `[dependencies]`, `[dev-dependencies]`, `[build-dependencies]`
@@ -352,8 +350,41 @@ impl CargoShear {
             if let Some(dependencies) =
                 manifest.get_mut(table_name).and_then(|item| item.as_table_mut())
             {
-                for k in unused_dep_names {
-                    dependencies.remove(k);
+                dependencies.retain(|k, _| !unused_dep_names.contains(k));
+            }
+        }
+
+        // Fix any features that refer to the removed dependencies.
+        //
+        // Before:
+        //  [features]
+        //  default = ["dep1", "dep2"]
+        //  other-feature = ["dep:dep1", "dep3"]
+
+        // After:
+        //  [features]
+        //  default = ["dep2"]
+        //  other-feature = ["dep3"]
+        if let Some(features) = manifest.get_mut("features").and_then(|item| item.as_table_mut()) {
+            for (_feature_name, dependencies) in features.iter_mut() {
+                if let Some(dependencies) = dependencies.as_array_mut() {
+                    dependencies.retain(|dep| {
+                        match dep.as_str() {
+                            Some(dep) => {
+                                // Check if the dep: prefix is present.
+                                match dep.strip_prefix("dep:") {
+                                    // The dependency has a dep:prefix, so it's an explicit dependency we can remove.
+                                    Some(dep) => !unused_dep_names.contains(dep),
+                                    // This is slightly incorrect, as it will remove any features with the same name as the removed dependency.
+                                    // It's not clear what we should do here, as it maybe we should remove the implicit feature entirely?
+                                    // Or maybe the feature is just poorly named?
+                                    // Either way, do the simple thing and let `cargo check` complain if we goofed.
+                                    None => !unused_dep_names.contains(dep),
+                                }
+                            }
+                            None => true,
+                        }
+                    });
                 }
             }
         }
