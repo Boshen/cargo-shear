@@ -323,6 +323,7 @@ impl CargoShear {
         Ok(imports)
     }
 
+    #[expect(clippy::option_if_let_else, reason = "Current code is more readable.")]
     fn try_fix_package(
         &mut self,
         cargo_toml_path: &Path,
