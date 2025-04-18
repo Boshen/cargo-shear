@@ -19,8 +19,9 @@ cargo shear --fix
 ## Limitation
 
 > [!IMPORTANT]
-> `cargo shear` cannot detect "hidden" imports from macro expansions.
-> This is because `cargo shear` uses `syn` to parse files and does not expand macros.
+> `cargo shear` cannot detect "hidden" imports from macro expansions without the `--expand` flag (nightly only).
+> This is because `cargo shear` uses `syn` to parse files and does not expand macros by default.
+> The `--expand` flag uses `cargo expand` to expand macros instead, which is significantly slower and requires nightly.
 
 ## Ignore false positives
 
@@ -65,6 +66,7 @@ The exit code gives an indication whether unused dependencies have been found:
 1. use the `cargo_metadata` crate to list all dependencies specified in `[workspace.dependencies]` and `[dependencies]`
 2. iterate through all package targets (`lib`, `bin`, `example`, `test` and `bench`) to locate all Rust files
 3. use `syn` to parse these Rust files and extract imports
+  - or use `cargo expand` to expand macros and then parse the expanded code
 4. find the difference between the imports and the package dependencies
 
 ## Prior Arts
