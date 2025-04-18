@@ -4,9 +4,11 @@ mod tests;
 
 use std::{
     collections::{HashMap, HashSet},
-    env, fs,
+    env,
+    ffi::OsString,
+    fs,
     path::{Path, PathBuf},
-    process::ExitCode,
+    process::{Command, ExitCode},
     str::FromStr,
 };
 
@@ -42,6 +44,9 @@ pub struct CargoShearOptions {
 
     #[bpaf(positional("PATH"), fallback_with(default_path))]
     path: PathBuf,
+
+    #[bpaf(long, short)]
+    expand: bool,
 }
 
 pub(crate) fn default_path() -> Result<PathBuf> {
@@ -227,7 +232,10 @@ impl CargoShear {
         let package_dependency_names =
             package_dependency_names_map.values().cloned().collect::<HashSet<_>>();
 
-        let module_names_from_rust_files = Self::get_package_dependencies_from_rust_files(package)?;
+        let module_names_from_rust_files = match self.options.expand {
+            true => Self::get_package_dependencies_from_expand(package)?,
+            false => Self::get_package_dependencies_from_rust_files(package)?,
+        };
 
         let unused_module_names = module_names_from_package_deps
             .difference(&module_names_from_rust_files)
@@ -284,6 +292,56 @@ impl CargoShear {
             .and_then(|ignored| ignored.as_array())
             .map(|ignored| ignored.iter().filter_map(|item| item.as_str()).collect::<HashSet<_>>())
             .unwrap_or_default()
+    }
+
+    fn get_package_dependencies_from_expand(package: &Package) -> Result<Deps> {
+        // Unfortunately, cargo expand alone isn't enough to get all dependencies.
+        // ex. #[async_trait::async_trait] is removed when expanded and looks unused.
+        let mut combined_imports = Self::get_package_dependencies_from_rust_files(package)?;
+
+        for target in &package.targets {
+            let target_arg = match target.kind.first().unwrap() {
+                TargetKind::CustomBuild => continue, // Handled by `get_package_rust_files`
+                TargetKind::Bin => format!("--bin={}", target.name),
+                TargetKind::Example => format!("--example={}", target.name),
+                TargetKind::Test => format!("--test={}", target.name),
+                TargetKind::Bench => format!("--bench={}", target.name),
+                _ => "--lib".to_string(),
+            };
+
+            let cargo = env::var_os("CARGO").unwrap_or_else(|| OsString::from("cargo"));
+
+            // Use `cargo rustc` to invoke rustc directly with -Zunpretty=expanded
+            let mut cmd = Command::new(cargo);
+            cmd.arg("rustc");
+            cmd.arg(&target_arg);
+            cmd.arg("--all-features");
+            cmd.arg("--profile=check"); // or release/test depending on your needs
+            cmd.arg("--color=never");
+            cmd.arg("--");
+            cmd.arg("-Zunpretty=expanded");
+            cmd.current_dir(package.manifest_path.parent().unwrap());
+
+            let output = cmd.output()?;
+            if !output.status.success() {
+                anyhow::bail!(
+                    "cargo expand failed ({})\n{:?}\n{}",
+                    output.status,
+                    cmd,
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+
+            let output_str = String::from_utf8(output.stdout)?;
+            if output_str.is_empty() {
+                anyhow::bail!("cargo expand returned empty output");
+            }
+
+            let imports = collect_imports(&output_str)?;
+            combined_imports.extend(imports);
+        }
+
+        Ok(combined_imports)
     }
 
     fn get_package_dependencies_from_rust_files(package: &Package) -> Result<Deps> {

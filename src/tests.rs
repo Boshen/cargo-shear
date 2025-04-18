@@ -81,6 +81,7 @@ fn test_lib() {
         package: vec![],
         exclude: vec![],
         path: default_path().unwrap(),
+        expand: false,
     });
     let exit_code = shear.run();
     assert_eq!(exit_code, ExitCode::SUCCESS);
