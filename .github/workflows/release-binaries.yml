@@ -47,9 +47,6 @@ jobs:
         with:
           target: ${{ matrix.target }}
 
-      - run: echo "RUSTFLAGS=${RUSTFLAGS} -C target-feature=+crt-static" >>"${GITHUB_ENV}"
-        if: contains(matrix.target, '-windows-msvc')
-
       - run: echo "RUSTFLAGS=${RUSTFLAGS} -C target-feature=+crt-static -C link-self-contained=yes" >>"${GITHUB_ENV}"
         if: contains(matrix.target, '-linux-musl')
 
