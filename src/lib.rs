@@ -4,9 +4,11 @@ mod tests;
 
 use std::{
     collections::{HashMap, HashSet},
-    env, fs,
+    env,
+    ffi::OsString,
+    fs,
     path::{Path, PathBuf},
-    process::ExitCode,
+    process::{Command, ExitCode},
     str::FromStr,
 };
 
@@ -29,8 +31,13 @@ const VERSION: &str = match option_env!("SHEAR_VERSION") {
 #[derive(Debug, Clone, Bpaf)]
 #[bpaf(options("shear"), version(VERSION))]
 pub struct CargoShearOptions {
+    /// Remove unused dependencies.
     #[bpaf(long)]
     fix: bool,
+
+    /// Uses `cargo expand` to expand macros, which requires nightly and is significantly slower.
+    #[bpaf(long)]
+    expand: bool,
 
     /// Package(s) to check
     /// If not specified, all packages are checked by default
@@ -227,7 +234,11 @@ impl CargoShear {
         let package_dependency_names =
             package_dependency_names_map.values().cloned().collect::<HashSet<_>>();
 
-        let module_names_from_rust_files = Self::get_package_dependencies_from_rust_files(package)?;
+        let module_names_from_rust_files = if self.options.expand {
+            Self::get_package_dependencies_from_expand(package)
+        } else {
+            Self::get_package_dependencies_from_rust_files(package)
+        }?;
 
         let unused_module_names = module_names_from_package_deps
             .difference(&module_names_from_rust_files)
@@ -284,6 +295,63 @@ impl CargoShear {
             .and_then(|ignored| ignored.as_array())
             .map(|ignored| ignored.iter().filter_map(|item| item.as_str()).collect::<HashSet<_>>())
             .unwrap_or_default()
+    }
+
+    fn get_package_dependencies_from_expand(package: &Package) -> Result<Deps> {
+        // Unfortunately, cargo expand alone isn't enough to get all dependencies.
+        // ex. #[async_trait::async_trait] is removed when expanded and looks unused.
+        let mut combined_imports = Self::get_package_dependencies_from_rust_files(package)?;
+
+        for target in &package.targets {
+            let target_arg = match target.kind.first().context("Failed to get `target`.")? {
+                TargetKind::CustomBuild => continue, // Handled by `get_package_rust_files`
+                TargetKind::Bin => format!("--bin={}", target.name),
+                TargetKind::Example => format!("--example={}", target.name),
+                TargetKind::Test => format!("--test={}", target.name),
+                TargetKind::Bench => format!("--bench={}", target.name),
+                TargetKind::CDyLib
+                | TargetKind::DyLib
+                | TargetKind::Lib
+                | TargetKind::ProcMacro
+                | TargetKind::RLib
+                | TargetKind::StaticLib
+                | TargetKind::Unknown(_)
+                | _ => "--lib".to_owned(),
+            };
+
+            let cargo = env::var_os("CARGO").unwrap_or_else(|| OsString::from("cargo"));
+
+            // Use `cargo rustc` to invoke rustc directly with -Zunpretty=expanded
+            let mut cmd = Command::new(cargo);
+            cmd.arg("rustc");
+            cmd.arg(&target_arg);
+            cmd.arg("--all-features");
+            cmd.arg("--profile=check"); // or release/test depending on your needs
+            cmd.arg("--color=never");
+            cmd.arg("--");
+            cmd.arg("-Zunpretty=expanded");
+            cmd.current_dir(package.manifest_path.parent().context("Failed to get parent dir.")?);
+
+            let output = cmd.output()?;
+            if !output.status.success() {
+                anyhow::bail!(
+                    "cargo expand failed ({})\n{:?}\n{}",
+                    output.status,
+                    cmd,
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+
+            let output_str = String::from_utf8(output.stdout)?;
+            if output_str.is_empty() {
+                anyhow::bail!("cargo expand returned empty output");
+            }
+
+            let imports = collect_imports(&output_str)?;
+            combined_imports.extend(imports);
+        }
+
+        Ok(combined_imports)
     }
 
     fn get_package_dependencies_from_rust_files(package: &Package) -> Result<Deps> {
