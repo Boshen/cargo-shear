@@ -31,8 +31,13 @@ const VERSION: &str = match option_env!("SHEAR_VERSION") {
 #[derive(Debug, Clone, Bpaf)]
 #[bpaf(options("shear"), version(VERSION))]
 pub struct CargoShearOptions {
+    /// Remove unused dependencies.
     #[bpaf(long)]
     fix: bool,
+
+    /// Uses `cargo expand` to expand macros, which requires nightly and is significantly slower.
+    #[bpaf(long)]
+    expand: bool,
 
     /// Package(s) to check
     /// If not specified, all packages are checked by default
@@ -44,9 +49,6 @@ pub struct CargoShearOptions {
 
     #[bpaf(positional("PATH"), fallback_with(default_path))]
     path: PathBuf,
-
-    #[bpaf(long, short)]
-    expand: bool,
 }
 
 pub(crate) fn default_path() -> Result<PathBuf> {
@@ -232,10 +234,11 @@ impl CargoShear {
         let package_dependency_names =
             package_dependency_names_map.values().cloned().collect::<HashSet<_>>();
 
-        let module_names_from_rust_files = match self.options.expand {
-            true => Self::get_package_dependencies_from_expand(package)?,
-            false => Self::get_package_dependencies_from_rust_files(package)?,
-        };
+        let module_names_from_rust_files = if self.options.expand {
+            Self::get_package_dependencies_from_expand(package)
+        } else {
+            Self::get_package_dependencies_from_rust_files(package)
+        }?;
 
         let unused_module_names = module_names_from_package_deps
             .difference(&module_names_from_rust_files)
@@ -300,13 +303,20 @@ impl CargoShear {
         let mut combined_imports = Self::get_package_dependencies_from_rust_files(package)?;
 
         for target in &package.targets {
-            let target_arg = match target.kind.first().unwrap() {
+            let target_arg = match target.kind.first().context("Failed to get `target`.")? {
                 TargetKind::CustomBuild => continue, // Handled by `get_package_rust_files`
                 TargetKind::Bin => format!("--bin={}", target.name),
                 TargetKind::Example => format!("--example={}", target.name),
                 TargetKind::Test => format!("--test={}", target.name),
                 TargetKind::Bench => format!("--bench={}", target.name),
-                _ => "--lib".to_string(),
+                TargetKind::CDyLib
+                | TargetKind::DyLib
+                | TargetKind::Lib
+                | TargetKind::ProcMacro
+                | TargetKind::RLib
+                | TargetKind::StaticLib
+                | TargetKind::Unknown(_)
+                | _ => "--lib".to_owned(),
             };
 
             let cargo = env::var_os("CARGO").unwrap_or_else(|| OsString::from("cargo"));
@@ -320,7 +330,7 @@ impl CargoShear {
             cmd.arg("--color=never");
             cmd.arg("--");
             cmd.arg("-Zunpretty=expanded");
-            cmd.current_dir(package.manifest_path.parent().unwrap());
+            cmd.current_dir(package.manifest_path.parent().context("Failed to get parent dir.")?);
 
             let output = cmd.output()?;
             if !output.status.success() {
