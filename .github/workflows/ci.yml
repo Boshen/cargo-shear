@@ -37,6 +37,6 @@ jobs:
           cargo fmt --all -- --check
           cargo run .
 
-      - uses: crate-ci/typos@master
+      - uses: crate-ci/typos@b1a1ef3893ff35ade0cfa71523852a49bfd05d19 # v1.31.1
         with:
           files: .
