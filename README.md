@@ -7,6 +7,9 @@ Detect and remove unused dependencies from `Cargo.toml` in Rust projects.
 ```bash
 cargo binstall cargo-shear
 # OR
+brew install cargo-shear
+
+# Build from source
 cargo install cargo-shear
 ```
 
