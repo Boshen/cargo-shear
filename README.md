@@ -5,12 +5,14 @@ Detect and remove unused dependencies from `Cargo.toml` in Rust projects.
 ## Installation
 
 ```bash
+# Install from pre-built binaries.
 cargo binstall cargo-shear
-# OR
-brew install cargo-shear
 
-# Build from source
+# Build from source.
 cargo install cargo-shear
+
+# Install from brew.
+brew install cargo-shear
 ```
 
 ## Usage
