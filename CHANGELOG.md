@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.6](https://github.com/Boshen/cargo-shear/compare/v1.2.5...v1.2.6) - 2025-04-25
+
+### Other
+
+- use `ubuntu-22.04` instead of `ubuntu-latest` to build
+- Reapply "perf: Use mimalloc on pre-built binaries. " ([#171](https://github.com/Boshen/cargo-shear/pull/171))
+
 ## [1.2.5](https://github.com/Boshen/cargo-shear/compare/v1.2.4...v1.2.5) - 2025-04-25
 
 ### Other
