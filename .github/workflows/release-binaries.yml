@@ -51,9 +51,12 @@ jobs:
         if: contains(matrix.target, '-linux-musl')
 
       - uses: taiki-e/upload-rust-binary-action@e7953b6078194a4ae5f5619632e3715db6275561 # v1.24.0
+        env:
+          CC: clang # for mimalloc
         with:
           bin: cargo-shear
           target: ${{ matrix.target }}
           tar: all
           zip: windows
+          features: allocator
           token: ${{ secrets.GITHUB_TOKEN }}
