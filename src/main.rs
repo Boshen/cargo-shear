@@ -1,7 +1,3 @@
-#[cfg(feature = "allocator")]
-#[global_allocator]
-static GLOBAL: mimalloc_safe::MiMalloc = mimalloc_safe::MiMalloc;
-
 use std::process::ExitCode;
 
 use cargo_shear::{CargoShear, cargo_shear_options};
