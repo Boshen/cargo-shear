@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.5](https://github.com/Boshen/cargo-shear/compare/v1.2.4...v1.2.5) - 2025-04-25
+
+### Other
+
+- Revert "perf: Use mimalloc on pre-built binaries. " ([#171](https://github.com/Boshen/cargo-shear/pull/171))
+- update README
+- *(README.md)* document how to install cargo-shear using homebrew ([#168](https://github.com/Boshen/cargo-shear/pull/168))
+- *(deps)* update github-actions ([#166](https://github.com/Boshen/cargo-shear/pull/166))
+
 ## [1.2.4](https://github.com/Boshen/cargo-shear/compare/v1.2.3...v1.2.4) - 2025-04-20
 
 ### Other
