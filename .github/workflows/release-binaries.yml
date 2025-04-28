@@ -65,7 +65,7 @@ jobs:
       - run: echo "RUSTFLAGS=${RUSTFLAGS} -C target-feature=+crt-static -C link-self-contained=yes" >>"${GITHUB_ENV}"
         if: contains(matrix.target, '-linux-musl')
 
-      - uses: taiki-e/upload-rust-binary-action@e7953b6078194a4ae5f5619632e3715db6275561 # v1.24.0
+      - uses: taiki-e/upload-rust-binary-action@31389c348ad0130069bed8448bf507fe8617f67f # v1.25.0
         env:
           CC: clang # for mimalloc
         with:
