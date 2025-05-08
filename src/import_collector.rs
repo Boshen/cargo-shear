@@ -80,7 +80,7 @@ impl ImportCollector {
         let Some(source_text) = tokens.span().source_text() else { return };
         let idents = MACRO_RE
             .get_or_init(|| {
-                Regex::new(r"(\w+)::(\w+)")
+                Regex::new(r"(\w+)[\s]*::[\s]*(\w+)")
                     .unwrap_or_else(|e| panic!("Failed to parse regex {e:?}"))
             })
             .captures_iter(&source_text)
