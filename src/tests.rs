@@ -35,6 +35,10 @@ fn use_group() {
 #[test]
 fn meta_list() {
     test("#[derive(foo::Deserialize, foo::Serialize)] struct Foo;");
+    test("#[derive(foo :: Deserialize, Debug)] struct Foo;");
+    test("#[derive(foo:: Deserialize, Debug)] struct Foo;");
+    test("#[derive(foo ::Deserialize, Debug)] struct Foo;");
+    test("#[derive(foo        ::       Deserialize, Debug)] struct Foo;");
 }
 
 #[test]
