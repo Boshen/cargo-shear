@@ -368,7 +368,7 @@ impl CargoShear {
             .targets
             .iter()
             .flat_map(|target| {
-                if target.kind.iter().any(|s| *s == TargetKind::CustomBuild) {
+                if target.kind.contains(&TargetKind::CustomBuild) {
                     vec![target.src_path.clone().into_std_path_buf()]
                 } else {
                     let target_dir = target.src_path.parent().unwrap_or_else(|| {
