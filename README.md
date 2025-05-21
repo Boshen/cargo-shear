@@ -41,14 +41,14 @@ False positives can be ignored by adding them to the package's `Cargo.toml`:
 
 ```toml
 [package.metadata.cargo-shear]
-ignored = ["crate"]
+ignored = ["crate-name"]
 ```
 
-or in workspace's `Cargo.toml`:
+or in the workspace `Cargo.toml`:
 
 ```toml
 [workspace.metadata.cargo-shear]
-ignored = ["crate"]
+ignored = ["crate-name"]
 ```
 
 Otherwise please report the issue as a bug.

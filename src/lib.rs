@@ -89,14 +89,13 @@ impl CargoShear {
                 if has_deps {
                     println!(
                         "\n\
-                        If you believe cargo-shear has detected an unused dependency incorrectly,\n\
-                        you can add the dependency to the list of dependencies to ignore in the\n\
-                        `[package.metadata.cargo-shear]` section of the appropriate Cargo.toml.\n\
-                        \n\
-                        For example:\n\
-                        \n\
+                        cargo-shear may have detected unused dependencies incorrectly due to its limitations.\n\
+                        They can be ignored by adding the crate name to the package's Cargo.toml:\n\n\
                         [package.metadata.cargo-shear]\n\
-                        ignored = [\"crate-name\"]"
+                        ignored = [\"crate-name\"]\n\n\
+                        or in the workspace Cargo.toml:\n\n\
+                        [workspace.metadata.cargo-shear]\n\
+                        ignored = [\"crate-name\"]\n"
                     );
                 } else {
                     println!("No unused dependencies!");
