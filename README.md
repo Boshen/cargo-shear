@@ -73,6 +73,11 @@ The exit code gives an indication whether unused dependencies have been found:
 * 1 if it found at least one unused dependency,
 * 2 if there was an error during processing (in which case there's no indication whether any unused dependency was found or not).
 
+With `--fix`:
+
+* 0 if found no unused dependencies so no fixes were performed,
+* 1 if removed some unused dependencies. Useful for running `cargo check` after `cargo-shear` changed `Cargo.toml`.
+
 ## Technique
 
 1. use the `cargo_metadata` crate to list all dependencies specified in `[workspace.dependencies]` and `[dependencies]`

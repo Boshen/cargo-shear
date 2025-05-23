@@ -81,7 +81,11 @@ impl CargoShear {
                 let has_fixed = self.fixed_dependencies > 0;
 
                 if has_fixed {
-                    println!("Fixed {} dependencies!", self.fixed_dependencies);
+                    println!(
+                        "Fixed {} {}.\n",
+                        self.fixed_dependencies,
+                        if self.fixed_dependencies == 1 { "dependency" } else { "dependencies" }
+                    );
                 }
 
                 let has_deps = (self.unused_dependencies - self.fixed_dependencies) > 0;
@@ -101,8 +105,7 @@ impl CargoShear {
                     println!("No unused dependencies!");
                 }
 
-                // returns 0 if no deps, 1 if has deps
-                ExitCode::from(u8::from(has_deps))
+                ExitCode::from(u8::from(if self.options.fix { has_fixed } else { has_deps }))
             }
             Err(err) => {
                 println!("{err}");
