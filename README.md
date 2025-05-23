@@ -78,6 +78,17 @@ With `--fix`:
 * 0 if found no unused dependencies so no fixes were performed,
 * 1 if removed some unused dependencies. Useful for running `cargo check` after `cargo-shear` changed `Cargo.toml`.
 
+GitHub Actions Job Example:
+
+```
+- name: cargo-shear
+  shell: bash
+  run: |
+    if ! cargo shear --fix; then
+      cargo check
+    fi
+```
+
 ## Technique
 
 1. use the `cargo_metadata` crate to list all dependencies specified in `[workspace.dependencies]` and `[dependencies]`
