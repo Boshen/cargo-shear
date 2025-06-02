@@ -123,13 +123,13 @@ impl CargoShear {
         let mut package_dependencies = HashSet::new();
         for package in metadata.workspace_packages() {
             // Skip if package is in the exclude list
-            if self.options.exclude.iter().any(|name| name == &package.name) {
+            if self.options.exclude.iter().any(|name| name == package.name.as_str()) {
                 continue;
             }
 
             // Skip if specific packages are specified and this package is not in the list
             if !self.options.package.is_empty()
-                && !self.options.package.iter().any(|name| name == &package.name)
+                && !self.options.package.iter().any(|name| name == package.name.as_str())
             {
                 continue;
             }
@@ -223,7 +223,7 @@ impl CargoShear {
             .iter()
             .map(|node_dep| {
                 Self::parse_package_id(&node_dep.pkg.repr)
-                    .map(|package_name| (node_dep.name.clone(), package_name))
+                    .map(|package_name| (node_dep.name.clone().into_inner(), package_name))
             })
             .collect::<Result<Vec<_>>>()?
             .into_iter()
