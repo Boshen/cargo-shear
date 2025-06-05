@@ -120,6 +120,7 @@ GitHub Actions Job Example:
 * -66 lines [biome](https://github.com/biomejs/biome/pull/2153)
 * -164 lines [astral-sh/uv](https://github.com/astral-sh/uv/pull/3527)
 * -86 lines [reqsign](https://github.com/Xuanwo/reqsign/pull/481)
+* -184 lines from [turbopack](https://github.com/vercel/next.js/pull/80121)
 
 ## [Sponsored By](https://github.com/sponsors/Boshen)
 
