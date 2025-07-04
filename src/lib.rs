@@ -379,7 +379,10 @@ impl CargoShear {
                     WalkDir::new(target_dir)
                         .into_iter()
                         .filter_map(Result::ok)
-                        .filter(|e| e.path().extension().is_some_and(|ext| ext == "rs"))
+                        .filter(|e| {
+                            e.file_type().is_file()
+                                && e.path().extension().is_some_and(|ext| ext == "rs")
+                        })
                         .map(DirEntry::into_path)
                         .collect::<Vec<_>>()
                 }
