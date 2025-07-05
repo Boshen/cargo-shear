@@ -3,6 +3,7 @@ mod import_collector;
 mod tests;
 
 use std::{
+    backtrace::BacktraceStatus,
     collections::{HashMap, HashSet},
     env,
     ffi::OsString,
@@ -108,7 +109,12 @@ impl CargoShear {
                 ExitCode::from(u8::from(if self.options.fix { has_fixed } else { has_deps }))
             }
             Err(err) => {
-                println!("{err}");
+                println!("{err:?}");
+                if err.backtrace().status() == BacktraceStatus::Disabled {
+                    println!(
+                        "note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace"
+                    );
+                }
                 ExitCode::from(2)
             }
         }
