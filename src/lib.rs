@@ -229,7 +229,7 @@ impl CargoShear {
             .iter()
             .map(|node_dep| {
                 Self::parse_package_id(&node_dep.pkg.repr)
-                    .map(|package_name| (node_dep.name.clone().into_inner(), package_name))
+                    .map(|package_name| (node_dep.name.clone(), package_name))
             })
             .collect::<Result<Vec<_>>>()?
             .into_iter()
