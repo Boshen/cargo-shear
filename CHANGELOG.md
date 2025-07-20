@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.1](https://github.com/Boshen/cargo-shear/compare/v1.4.0...v1.4.1) - 2025-07-20
+
+### Other
+
+- *(deps)* lock file maintenance rust crates ([#223](https://github.com/Boshen/cargo-shear/pull/223))
+- *(deps)* update github-actions ([#222](https://github.com/Boshen/cargo-shear/pull/222))
+
 ## [1.4.0](https://github.com/Boshen/cargo-shear/compare/v1.3.3...v1.4.0) - 2025-07-14
 
 ### Added
