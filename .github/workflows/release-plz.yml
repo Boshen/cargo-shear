@@ -27,7 +27,7 @@ jobs:
           cache-key: release
 
       - name: Run release-plz
-        uses: MarcoIeni/release-plz-action@068d76d2aa32d3c9cd0b1ccdd9ac921e28ba2be9 # v0.5.109
+        uses: MarcoIeni/release-plz-action@ccf6dd998441f26020f4315f1ebe95d9e2e42600 # v0.5.110
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
