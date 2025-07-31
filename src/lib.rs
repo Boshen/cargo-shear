@@ -18,6 +18,7 @@ use bpaf::Bpaf;
 use cargo_metadata::{CargoOpt, Metadata, MetadataCommand, Package, TargetKind};
 use cargo_util_schemas::core::PackageIdSpec;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use serde::{Deserialize, Serialize};
 use walkdir::{DirEntry, WalkDir};
 
 use crate::import_collector::collect_imports;
@@ -26,6 +27,38 @@ const VERSION: &str = match option_env!("SHEAR_VERSION") {
     Some(v) => v,
     None => "dev",
 };
+
+/// Represents the result for a single package
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PackageResult {
+    pub name: String,
+    pub manifest_path: String,
+    pub unused_dependencies: Vec<String>,
+    pub fixed_dependencies: Vec<String>,
+}
+
+/// Represents the result for the workspace
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkspaceResult {
+    pub manifest_path: String,
+    pub unused_dependencies: Vec<String>,
+    pub fixed_dependencies: Vec<String>,
+}
+
+/// Represents the overall analysis result
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ShearResult {
+    pub packages: Vec<PackageResult>,
+    pub workspace: Option<WorkspaceResult>,
+    pub summary: SummaryResult,
+}
+
+/// Summary statistics
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SummaryResult {
+    pub total_unused: usize,
+    pub total_fixed: usize,
+}
 
 // options("shear") + the "batteries" feature will strip name using `bpaf::cargo_helper` from `cargo shear"
 // See <https://docs.rs/bpaf/latest/bpaf/batteries/fn.cargo_helper.html>
@@ -39,6 +72,10 @@ pub struct CargoShearOptions {
     /// Uses `cargo expand` to expand macros, which requires nightly and is significantly slower.
     #[bpaf(long)]
     expand: bool,
+
+    /// Output results in JSON format.
+    #[bpaf(long)]
+    json: bool,
 
     /// Package(s) to check
     /// If not specified, all packages are checked by default
@@ -58,9 +95,11 @@ pub(crate) fn default_path() -> Result<PathBuf> {
 
 pub struct CargoShear {
     options: CargoShearOptions,
-
+    
+    package_results: Vec<PackageResult>,
+    workspace_result: Option<WorkspaceResult>,
+    
     unused_dependencies: usize,
-
     fixed_dependencies: usize,
 }
 
@@ -68,56 +107,110 @@ type Deps = HashSet<String>;
 
 impl CargoShear {
     #[must_use]
-    pub const fn new(options: CargoShearOptions) -> Self {
-        Self { options, unused_dependencies: 0, fixed_dependencies: 0 }
+    pub fn new(options: CargoShearOptions) -> Self {
+        Self { 
+            options, 
+            package_results: Vec::new(),
+            workspace_result: None,
+            unused_dependencies: 0, 
+            fixed_dependencies: 0 
+        }
     }
 
     #[must_use]
     pub fn run(mut self) -> ExitCode {
-        println!("Analyzing {}", self.options.path.to_string_lossy());
-        println!();
+        if !self.options.json {
+            println!("Analyzing {}", self.options.path.to_string_lossy());
+            println!();
+        }
 
         match self.shear() {
             Ok(()) => {
-                let has_fixed = self.fixed_dependencies > 0;
-
-                if has_fixed {
-                    println!(
-                        "Fixed {} {}.\n",
-                        self.fixed_dependencies,
-                        if self.fixed_dependencies == 1 { "dependency" } else { "dependencies" }
-                    );
-                }
-
-                let has_deps = (self.unused_dependencies - self.fixed_dependencies) > 0;
-
-                if has_deps {
-                    println!(
-                        "\n\
-                        cargo-shear may have detected unused dependencies incorrectly due to its limitations.\n\
-                        They can be ignored by adding the crate name to the package's Cargo.toml:\n\n\
-                        [package.metadata.cargo-shear]\n\
-                        ignored = [\"crate-name\"]\n\n\
-                        or in the workspace Cargo.toml:\n\n\
-                        [workspace.metadata.cargo-shear]\n\
-                        ignored = [\"crate-name\"]\n"
-                    );
+                if self.options.json {
+                    self.output_json()
                 } else {
-                    println!("No unused dependencies!");
+                    self.output_text()
                 }
-
-                ExitCode::from(u8::from(if self.options.fix { has_fixed } else { has_deps }))
             }
             Err(err) => {
-                println!("{err:?}");
-                if err.backtrace().status() == BacktraceStatus::Disabled {
-                    println!(
-                        "note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace"
-                    );
+                if self.options.json {
+                    // For JSON output, output error as JSON
+                    let error_result = serde_json::json!({
+                        "error": format!("{err:?}"),
+                        "packages": Vec::<PackageResult>::new(),
+                        "workspace": Option::<WorkspaceResult>::None,
+                        "summary": {
+                            "total_unused": 0,
+                            "total_fixed": 0
+                        }
+                    });
+                    println!("{}", serde_json::to_string(&error_result).unwrap_or_else(|_| "{}".to_string()));
+                } else {
+                    println!("{err:?}");
+                    if err.backtrace().status() == BacktraceStatus::Disabled {
+                        println!(
+                            "note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace"
+                        );
+                    }
                 }
                 ExitCode::from(2)
             }
         }
+    }
+
+    fn output_json(&self) -> ExitCode {
+        let result = ShearResult {
+            packages: self.package_results.clone(),
+            workspace: self.workspace_result.clone(),
+            summary: SummaryResult {
+                total_unused: self.unused_dependencies,
+                total_fixed: self.fixed_dependencies,
+            },
+        };
+
+        match serde_json::to_string_pretty(&result) {
+            Ok(json) => {
+                println!("{json}");
+                let has_fixed = self.fixed_dependencies > 0;
+                let has_deps = (self.unused_dependencies - self.fixed_dependencies) > 0;
+                ExitCode::from(u8::from(if self.options.fix { has_fixed } else { has_deps }))
+            }
+            Err(err) => {
+                eprintln!("Error serializing JSON: {err}");
+                ExitCode::from(2)
+            }
+        }
+    }
+
+    fn output_text(&self) -> ExitCode {
+        let has_fixed = self.fixed_dependencies > 0;
+
+        if has_fixed {
+            println!(
+                "Fixed {} {}.\n",
+                self.fixed_dependencies,
+                if self.fixed_dependencies == 1 { "dependency" } else { "dependencies" }
+            );
+        }
+
+        let has_deps = (self.unused_dependencies - self.fixed_dependencies) > 0;
+
+        if has_deps {
+            println!(
+                "\n\
+                cargo-shear may have detected unused dependencies incorrectly due to its limitations.\n\
+                They can be ignored by adding the crate name to the package's Cargo.toml:\n\n\
+                [package.metadata.cargo-shear]\n\
+                ignored = [\"crate-name\"]\n\n\
+                or in the workspace Cargo.toml:\n\n\
+                [workspace.metadata.cargo-shear]\n\
+                ignored = [\"crate-name\"]\n"
+            );
+        } else {
+            println!("No unused dependencies!");
+        }
+
+        ExitCode::from(u8::from(if self.options.fix { has_fixed } else { has_deps }))
     }
 
     fn shear(&mut self) -> Result<()> {
@@ -187,13 +280,38 @@ impl CargoShear {
             .strip_prefix(env::current_dir()?)
             .unwrap_or(&cargo_toml_path)
             .to_string_lossy();
-        println!("root -- {path}:",);
-        for unused_dep in &unused_deps {
-            println!("  {unused_dep}");
+
+        // Track pre-fix state
+        let unused_deps_vec: Vec<String> = unused_deps.iter().cloned().collect();
+        let fixed_deps_count_before = self.fixed_dependencies;
+
+        // Only print for text output
+        if !self.options.json {
+            println!("root -- {path}:");
+            for unused_dep in &unused_deps {
+                println!("  {unused_dep}");
+            }
+            println!();
         }
-        println!();
+
         self.try_fix_package(&cargo_toml_path, &unused_deps)?;
         self.unused_dependencies += unused_deps.len();
+
+        // Calculate how many dependencies were actually fixed for this workspace
+        let fixed_deps_count = self.fixed_dependencies - fixed_deps_count_before;
+        let fixed_deps_vec: Vec<String> = if self.options.fix {
+            unused_deps_vec.iter().take(fixed_deps_count).cloned().collect()
+        } else {
+            Vec::new()
+        };
+
+        // Store workspace result
+        self.workspace_result = Some(WorkspaceResult {
+            manifest_path: path.to_string(),
+            unused_dependencies: unused_deps_vec,
+            fixed_dependencies: fixed_deps_vec,
+        });
+
         Ok(())
     }
 
@@ -253,6 +371,13 @@ impl CargoShear {
             .collect::<Vec<_>>();
 
         if unused_module_names.is_empty() {
+            // Even when there are no unused dependencies, we still want to record this package
+            self.package_results.push(PackageResult {
+                name: package.name.to_string(),
+                manifest_path: relative_path.to_string(),
+                unused_dependencies: Vec::new(),
+                fixed_dependencies: Vec::new(),
+            });
             return Ok(package_dependency_names);
         }
 
@@ -261,16 +386,40 @@ impl CargoShear {
             .map(|name| package_dependency_names_map[name].clone())
             .collect::<HashSet<_>>();
 
+        // Track pre-fix state
+        let unused_deps_vec: Vec<String> = unused_dependency_names.iter().cloned().collect();
+        let fixed_deps_count_before = self.fixed_dependencies;
+
         self.try_fix_package(package.manifest_path.as_std_path(), &unused_dependency_names)?;
 
         if !unused_dependency_names.is_empty() {
             self.unused_dependencies += unused_dependency_names.len();
-            println!("{} -- {relative_path}:", package.name);
-            for unused_dep in &unused_dependency_names {
-                println!("  {unused_dep}");
+            
+            // Only print for text output
+            if !self.options.json {
+                println!("{} -- {relative_path}:", package.name);
+                for unused_dep in &unused_dependency_names {
+                    println!("  {unused_dep}");
+                }
+                println!();
             }
-            println!();
         }
+
+        // Calculate how many dependencies were actually fixed for this package
+        let fixed_deps_count = self.fixed_dependencies - fixed_deps_count_before;
+        let fixed_deps_vec: Vec<String> = if self.options.fix {
+            unused_deps_vec.iter().take(fixed_deps_count).cloned().collect()
+        } else {
+            Vec::new()
+        };
+
+        // Store package result
+        self.package_results.push(PackageResult {
+            name: package.name.to_string(),
+            manifest_path: relative_path.to_string(),
+            unused_dependencies: unused_deps_vec,
+            fixed_dependencies: fixed_deps_vec,
+        });
 
         let package_dependency_names = package_dependency_names
             .difference(&unused_dependency_names)
