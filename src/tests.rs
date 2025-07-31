@@ -82,6 +82,21 @@ fn serde_crate_on_type() {
 fn test_lib() {
     let shear = CargoShear::new(CargoShearOptions {
         fix: false,
+        json: false,
+        package: vec![],
+        exclude: vec![],
+        path: default_path().unwrap(),
+        expand: false,
+    });
+    let exit_code = shear.run();
+    assert_eq!(exit_code, ExitCode::SUCCESS);
+}
+
+#[test]
+fn test_json_output() {
+    let shear = CargoShear::new(CargoShearOptions {
+        fix: false,
+        json: true,
         package: vec![],
         exclude: vec![],
         path: default_path().unwrap(),
