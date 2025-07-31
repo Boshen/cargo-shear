@@ -1,4 +1,5 @@
 mod import_collector;
+mod file_collector;
 #[cfg(test)]
 mod tests;
 
@@ -21,6 +22,7 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use walkdir::{DirEntry, WalkDir};
 
 use crate::import_collector::collect_imports;
+use crate::file_collector::collect_file_references;
 
 const VERSION: &str = match option_env!("SHEAR_VERSION") {
     Some(v) => v,
@@ -39,6 +41,10 @@ pub struct CargoShearOptions {
     /// Uses `cargo expand` to expand macros, which requires nightly and is significantly slower.
     #[bpaf(long)]
     expand: bool,
+
+    /// Find unused Rust files in addition to unused dependencies.
+    #[bpaf(long)]
+    unused_files: bool,
 
     /// Package(s) to check
     /// If not specified, all packages are checked by default
@@ -62,6 +68,8 @@ pub struct CargoShear {
     unused_dependencies: usize,
 
     fixed_dependencies: usize,
+
+    unused_files: usize,
 }
 
 type Deps = HashSet<String>;
@@ -69,7 +77,7 @@ type Deps = HashSet<String>;
 impl CargoShear {
     #[must_use]
     pub const fn new(options: CargoShearOptions) -> Self {
-        Self { options, unused_dependencies: 0, fixed_dependencies: 0 }
+        Self { options, unused_dependencies: 0, fixed_dependencies: 0, unused_files: 0 }
     }
 
     #[must_use]
@@ -102,8 +110,18 @@ impl CargoShear {
                         [workspace.metadata.cargo-shear]\n\
                         ignored = [\"crate-name\"]\n"
                     );
+                } else if self.unused_files == 0 {
+                    println!("No unused dependencies or files!");
                 } else {
                     println!("No unused dependencies!");
+                }
+
+                if self.unused_files > 0 {
+                    println!(
+                        "Found {} unused {}.\n",
+                        self.unused_files,
+                        if self.unused_files == 1 { "file" } else { "files" }
+                    );
                 }
 
                 ExitCode::from(u8::from(if self.options.fix { has_fixed } else { has_deps }))
@@ -142,6 +160,11 @@ impl CargoShear {
 
             let deps = self.shear_package(&metadata, package)?;
             package_dependencies.extend(deps);
+
+            // Find unused files if requested
+            if self.options.unused_files {
+                self.find_unused_files_in_package(package)?;
+            }
         }
 
         self.shear_workspace(&metadata, &package_dependencies)
@@ -473,5 +496,86 @@ impl CargoShear {
         let serialized = manifest.to_string();
         fs::write(cargo_toml_path, serialized)?;
         Ok(())
+    }
+
+    fn find_unused_files_in_package(&mut self, package: &Package) -> Result<()> {
+        let package_dir = package
+            .manifest_path
+            .parent()
+            .ok_or_else(|| anyhow::anyhow!("failed to get parent path {}", &package.manifest_path))?
+            .as_std_path();
+
+        // Get all .rs files in the package directory
+        let all_rust_files: HashSet<PathBuf> = Self::get_all_rust_files_in_package(package_dir)
+            .into_iter()
+            .filter_map(|path| path.canonicalize().ok())
+            .collect();
+        
+        // Get files that are entry points (from cargo targets)
+        let target_files: HashSet<PathBuf> = package
+            .targets
+            .iter()
+            .filter_map(|target| target.src_path.as_std_path().canonicalize().ok())
+            .collect();
+
+        // Collect all referenced files by walking from entry points
+        let mut referenced_files = target_files.clone();
+        let mut to_process: Vec<PathBuf> = target_files.into_iter().collect();
+
+        while let Some(file_path) = to_process.pop() {
+            if let Ok(source_text) = fs::read_to_string(&file_path) {
+                if let Ok(file_refs) = collect_file_references(&source_text, &file_path) {
+                    for referenced_file in file_refs {
+                        if referenced_files.insert(referenced_file.clone()) {
+                            // New file found, add it to processing queue
+                            to_process.push(referenced_file);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Find unused files
+        let unused_files: Vec<PathBuf> = all_rust_files
+            .difference(&referenced_files)
+            .cloned()
+            .collect();
+
+        if !unused_files.is_empty() {
+            let relative_path = package
+                .manifest_path
+                .as_std_path()
+                .parent()
+                .unwrap_or_else(|| Path::new("."))
+                .strip_prefix(env::current_dir()?)
+                .unwrap_or_else(|_| Path::new("."))
+                .to_string_lossy();
+
+            println!("{} -- {} (unused files):", package.name, relative_path);
+            for unused_file in &unused_files {
+                let file_relative_path = unused_file
+                    .strip_prefix(package_dir)
+                    .or_else(|_| unused_file.strip_prefix(package_dir.canonicalize()?))
+                    .unwrap_or(unused_file)
+                    .to_string_lossy();
+                println!("  {}", file_relative_path);
+            }
+            println!();
+            self.unused_files += unused_files.len();
+        }
+
+        Ok(())
+    }
+
+    fn get_all_rust_files_in_package(package_dir: &Path) -> Vec<PathBuf> {
+        WalkDir::new(package_dir)
+            .into_iter()
+            .filter_map(Result::ok)
+            .filter(|e| {
+                e.file_type().is_file()
+                    && e.path().extension().is_some_and(|ext| ext == "rs")
+            })
+            .map(DirEntry::into_path)
+            .collect()
     }
 }
