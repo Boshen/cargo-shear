@@ -1,6 +1,6 @@
 # Cargo Shear ✂️ 🐑
 
-Detect and remove unused dependencies from `Cargo.toml` in Rust projects.
+Detect and remove unused dependencies from `Cargo.toml` and find unused Rust files in Rust projects.
 
 ## Installation
 
@@ -17,8 +17,22 @@ brew install cargo-shear
 
 ## Usage
 
+### Find and remove unused dependencies
+
 ```bash
 cargo shear --fix
+```
+
+### Find unused Rust files
+
+```bash
+cargo shear --unused-files
+```
+
+### Find both unused dependencies and files
+
+```bash
+cargo shear --fix --unused-files
 ```
 
 ## Limitation
@@ -91,11 +105,20 @@ GitHub Actions Job Example:
 
 ## Technique
 
+### Unused Dependencies Detection
+
 1. use the `cargo_metadata` crate to list all dependencies specified in `[workspace.dependencies]` and `[dependencies]`
 2. iterate through all package targets (`lib`, `bin`, `example`, `test` and `bench`) to locate all Rust files
 3. use `syn` to parse these Rust files and extract imports
   - alternatively, use the `--expand` option with `cargo expand` to first expand macros and then parse the expanded code (though this is significantly slower).
 4. find the difference between the imports and the package dependencies
+
+### Unused Files Detection
+
+1. use the `cargo_metadata` crate to find all package targets and their entry points
+2. recursively parse Rust files starting from entry points using `syn` to collect all `mod` statements
+3. walk through all `.rs` files in the package directory
+4. find files that exist but are never referenced through `mod` statements or used as cargo targets
 
 ## Prior Arts
 
