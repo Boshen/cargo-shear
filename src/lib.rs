@@ -553,11 +553,15 @@ impl CargoShear {
 
             println!("{} -- {} (unused files):", package.name, relative_path);
             for unused_file in &unused_files {
-                let file_relative_path = unused_file
-                    .strip_prefix(package_dir)
-                    .or_else(|_| unused_file.strip_prefix(package_dir.canonicalize()?))
-                    .unwrap_or(unused_file)
-                    .to_string_lossy();
+                let file_relative_path = if let Ok(relative) = unused_file.strip_prefix(package_dir) {
+                    relative.to_string_lossy().to_string()
+                } else if let Ok(canonical_dir) = package_dir.canonicalize() {
+                    unused_file.strip_prefix(canonical_dir)
+                        .map(|p| p.to_string_lossy().to_string())
+                        .unwrap_or_else(|_| unused_file.to_string_lossy().to_string())
+                } else {
+                    unused_file.to_string_lossy().to_string()
+                };
                 println!("  {}", file_relative_path);
             }
             println!();
