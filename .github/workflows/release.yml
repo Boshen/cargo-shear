@@ -16,6 +16,6 @@ jobs:
       contents: write
       id-token: write
     steps:
-      - uses: oxc-project/release-plz@v1.0.1
+      - uses: oxc-project/release-plz@ebe11c7eb0739c6ed55be27d9c5c0644bd0cc51a # v1.0.1
         with:
           PAT: ${{ secrets.RELEASE_PLZ_TOKEN }}
