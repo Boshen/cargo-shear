@@ -65,6 +65,7 @@ dependencies = [
  "proc-macro2",
  "rayon",
  "regex-lite",
+ "serde",
  "serde_json",
  "syn",
  "toml_edit 0.23.2",
