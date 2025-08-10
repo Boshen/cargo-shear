@@ -33,7 +33,7 @@ regex-lite = "0.1.6"
 rayon = "1.10.0"
 toml_edit = { version = "0.23.0", features = ["parse"] }
 anyhow = "1.0.97"
-cargo-util-schemas = "0.8.0"
+cargo-util-schemas = "0.9.0"
 serde_json = "1.0.140"
 
 [target.'cfg(all(not(target_os = "linux"), not(target_os = "freebsd"), not(target_family = "wasm")))'.dependencies]
