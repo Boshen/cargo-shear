@@ -397,8 +397,10 @@ impl CargoShear {
     }
 
     fn process_rust_source(path: &Path) -> Result<Deps> {
-        let source_text = fs::read_to_string(path)?;
-        let imports = collect_imports(&source_text)?;
+        let source_text = fs::read_to_string(path)
+            .map_err(|e| anyhow::anyhow!("Failed to read {}: {e}", path.to_string_lossy()))?;
+        let imports = collect_imports(&source_text)
+            .map_err(|e| anyhow::anyhow!("Failed to parse {}: {e}", path.to_string_lossy()))?;
         Ok(imports)
     }
 
