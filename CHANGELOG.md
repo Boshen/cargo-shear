@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0](https://github.com/Boshen/cargo-shear/compare/v1.4.1...v1.5.0) - 2025-08-11
+
+### Added
+
+- improve logging for file read and parse ([#240](https://github.com/Boshen/cargo-shear/pull/240))
+
+### Other
+
+- *(deps)* lock file maintenance rust crates ([#239](https://github.com/Boshen/cargo-shear/pull/239))
+- *(deps)* lock file maintenance rust crates ([#238](https://github.com/Boshen/cargo-shear/pull/238))
+- *(deps)* update github-actions ([#237](https://github.com/Boshen/cargo-shear/pull/237))
+- *(deps)* update crate-ci/typos action to v1.35.3 ([#235](https://github.com/Boshen/cargo-shear/pull/235))
+- *(deps)* update crate-ci/typos action to v1.35.2 ([#234](https://github.com/Boshen/cargo-shear/pull/234))
+- *(deps)* update dependency rust to v1.89.0 ([#233](https://github.com/Boshen/cargo-shear/pull/233))
+- *(deps)* update crate-ci/typos action to v1.35.1 ([#232](https://github.com/Boshen/cargo-shear/pull/232))
+- *(deps)* lock file maintenance rust crates ([#230](https://github.com/Boshen/cargo-shear/pull/230))
+- *(deps)* update github-actions ([#229](https://github.com/Boshen/cargo-shear/pull/229))
+
 ## [1.4.1](https://github.com/Boshen/cargo-shear/compare/v1.4.0...v1.4.1) - 2025-07-28
 
 ### Other
