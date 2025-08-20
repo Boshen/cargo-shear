@@ -1,0 +1,10 @@
+[workspace]
+members = ["app", "lib"]
+
+[workspace.dependencies]
+# Used by lib
+serde = "1.0"
+# Not used by anyone - should be detected as unused
+unused-crate = "0.1"
+# Used by app
+clap = "4.0"
