@@ -56,13 +56,7 @@ impl CargoShearOptions {
     /// Create a new `CargoShearOptions` for testing purposes
     #[must_use]
     pub const fn new_for_test(path: PathBuf, fix: bool) -> Self {
-        Self {
-            fix,
-            expand: false,
-            package: vec![],
-            exclude: vec![],
-            path,
-        }
+        Self { fix, expand: false, package: vec![], exclude: vec![], path }
     }
 }
 
