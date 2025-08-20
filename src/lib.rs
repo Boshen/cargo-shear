@@ -53,9 +53,9 @@ pub struct CargoShearOptions {
 }
 
 impl CargoShearOptions {
-    /// Create a new CargoShearOptions for testing purposes
+    /// Create a new `CargoShearOptions` for testing purposes
     #[must_use]
-    pub fn new_for_test(path: PathBuf, fix: bool) -> Self {
+    pub const fn new_for_test(path: PathBuf, fix: bool) -> Self {
         Self {
             fix,
             expand: false,
