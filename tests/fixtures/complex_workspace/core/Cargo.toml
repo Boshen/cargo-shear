@@ -1,0 +1,14 @@
+[package]
+name = "core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { workspace = true }
+uuid = { workspace = true }
+# This dep is only used in this package
+rand = "0.8"
+
+[dev-dependencies]
+# This dev dep is not used
+tempdir = "0.3"
