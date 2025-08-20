@@ -115,10 +115,10 @@ fn std_imports_not_collected() {
 fn self_super_crate_not_collected() {
     let deps = collect_imports("use self::module;").unwrap();
     assert!(deps.is_empty());
-    
+
     let deps = collect_imports("use super::module;").unwrap();
     assert!(deps.is_empty());
-    
+
     let deps = collect_imports("use crate::module;").unwrap();
     assert!(deps.is_empty());
 }
@@ -307,7 +307,7 @@ fn cargo_shear_with_different_options() {
     assert_eq!(exit_code, ExitCode::SUCCESS);
 }
 
-#[test] 
+#[test]
 fn cargo_shear_with_package_filter() {
     // Test with specific package filtering
     let shear = CargoShear::new(CargoShearOptions {
@@ -345,7 +345,7 @@ fn cargo_shear_options_creation() {
         path: std::path::PathBuf::from("/tmp"),
         expand: true,
     };
-    
+
     let shear = CargoShear::new(options.clone());
     // Verify the shear instance was created successfully
     assert_eq!(format!("{:?}", shear.options.fix), format!("{:?}", options.fix));
@@ -393,7 +393,7 @@ fn test_no_deps(source_text: &str) {
     assert!(deps.is_empty(), "Expected no dependencies for: {source_text}");
 }
 
-#[track_caller] 
+#[track_caller]
 fn test_multiple_deps(source_text: &str, expected_deps: &[&str]) {
     let deps = collect_imports(source_text).unwrap();
     let expected = HashSet::from_iter(expected_deps.iter().map(|s| s.to_string()));
@@ -402,15 +402,9 @@ fn test_multiple_deps(source_text: &str, expected_deps: &[&str]) {
 
 #[test]
 fn test_multiple_crates() {
-    test_multiple_deps(
-        "use foo::bar; use baz::qux;",
-        &["foo", "baz"]
-    );
-    
-    test_multiple_deps(
-        "fn main() { foo::func(); bar::other(); }",
-        &["foo", "bar"]
-    );
+    test_multiple_deps("use foo::bar; use baz::qux;", &["foo", "baz"]);
+
+    test_multiple_deps("fn main() { foo::func(); bar::other(); }", &["foo", "bar"]);
 }
 
 #[test]
@@ -433,7 +427,7 @@ fn large_file_simulation() {
         source.push_str(&format!("use foo::module{};\n", i));
         source.push_str(&format!("fn func{}() {{ foo::call{}(); }}\n", i, i));
     }
-    
+
     let deps = collect_imports(&source).unwrap();
     let expected = HashSet::from_iter(["foo".to_owned()]);
     assert_eq!(deps, expected);
@@ -494,7 +488,7 @@ fn test_default_path() {
     assert!(path.exists(), "Default path should exist");
 }
 
-#[test] 
+#[test]
 fn test_cargo_shear_new() {
     let options = CargoShearOptions {
         fix: false,
@@ -585,7 +579,9 @@ fn web_framework_style() {
 
 #[test]
 fn database_integration() {
-    test("async fn query() -> foo::Result<Vec<User>> { foo::query(\"SELECT * FROM users\").await }");
+    test(
+        "async fn query() -> foo::Result<Vec<User>> { foo::query(\"SELECT * FROM users\").await }",
+    );
     test("#[foo::table_name = \"users\"] struct User { id: i32 }");
 }
 
