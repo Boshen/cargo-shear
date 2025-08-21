@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.1](https://github.com/Boshen/cargo-shear/compare/v1.5.0...v1.5.1) - 2025-08-21
+
+### Fixed
+
+- imports with r# ([#250](https://github.com/Boshen/cargo-shear/pull/250))
+
+### Other
+
+- Add comprehensive test suite with 84 tests covering all aspects of cargo-shear ([#247](https://github.com/Boshen/cargo-shear/pull/247))
+- *(deps)* update crate-ci/typos action to v1.35.5 ([#246](https://github.com/Boshen/cargo-shear/pull/246))
+- *(deps)* lock file maintenance rust crates ([#245](https://github.com/Boshen/cargo-shear/pull/245))
+- *(deps)* update github-actions ([#244](https://github.com/Boshen/cargo-shear/pull/244))
+- *(deps)* update crate-ci/typos action to v1.35.4 ([#241](https://github.com/Boshen/cargo-shear/pull/241))
+
 ## [1.5.0](https://github.com/Boshen/cargo-shear/compare/v1.4.1...v1.5.0) - 2025-08-11
 
 ### Added
