@@ -269,6 +269,14 @@ fn macro_rules() {
     test("foo::my_macro!();");
 }
 
+#[test]
+fn raw_string_inside_macro() {
+    test(r##"fn main() { foo::my_macro!(r#"this mentions foo::bar inside a raw string"#); }"##);
+    test(
+        r###"fn main() { foo::my_macro!(r##"this mentions foo::baz inside a double-hash raw string"##); }"###,
+    );
+}
+
 // Tests for different import patterns
 
 #[test]

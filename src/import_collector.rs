@@ -33,8 +33,12 @@ impl ImportCollector {
         }
     }
 
+    fn unraw_string(ident: &syn::Ident) -> String {
+        ident.unraw().to_string()
+    }
+
     fn add_ident(&mut self, ident: &syn::Ident) {
-        self.add_import(ident.unraw().to_string());
+        self.add_import(Self::unraw_string(ident));
     }
 
     fn collect_use_tree(&mut self, i: &syn::UseTree) {
@@ -60,7 +64,7 @@ impl ImportCollector {
             return;
         }
         let Some(path_segment) = path.segments.first() else { return };
-        let ident = path_segment.ident.unraw().to_string();
+        let ident = Self::unraw_string(&path_segment.ident);
         if ident.chars().next().is_some_and(char::is_uppercase) {
             return;
         }
