@@ -1,7 +1,7 @@
 use std::sync::OnceLock;
 
 use regex_lite::Regex;
-use syn::{self, spanned::Spanned};
+use syn::{self, ext::IdentExt, spanned::Spanned};
 
 use crate::Deps;
 
@@ -33,8 +33,12 @@ impl ImportCollector {
         }
     }
 
+    fn unraw_string(ident: &syn::Ident) -> String {
+        ident.unraw().to_string()
+    }
+
     fn add_ident(&mut self, ident: &syn::Ident) {
-        self.add_import(ident.to_string());
+        self.add_import(Self::unraw_string(ident));
     }
 
     fn collect_use_tree(&mut self, i: &syn::UseTree) {
@@ -60,7 +64,7 @@ impl ImportCollector {
             return;
         }
         let Some(path_segment) = path.segments.first() else { return };
-        let ident = path_segment.ident.to_string();
+        let ident = Self::unraw_string(&path_segment.ident);
         if ident.chars().next().is_some_and(char::is_uppercase) {
             return;
         }
@@ -80,7 +84,7 @@ impl ImportCollector {
         let Some(source_text) = tokens.span().source_text() else { return };
         let idents = MACRO_RE
             .get_or_init(|| {
-                Regex::new(r"(\w+)[\s]*::[\s]*(\w+)")
+                Regex::new(r"(?:r#)?([A-Za-z_]\w*)[\s]*::[\s]*(?:r#)?([A-Za-z_]\w*)")
                     .unwrap_or_else(|e| panic!("Failed to parse regex {e:?}"))
             })
             .captures_iter(&source_text)

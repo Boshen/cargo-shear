@@ -269,6 +269,14 @@ fn macro_rules() {
     test("foo::my_macro!();");
 }
 
+#[test]
+fn raw_string_inside_macro() {
+    test(r##"fn main() { foo::my_macro!(r#"this mentions foo::bar inside a raw string"#); }"##);
+    test(
+        r###"fn main() { foo::my_macro!(r##"this mentions foo::baz inside a double-hash raw string"##); }"###,
+    );
+}
+
 // Tests for different import patterns
 
 #[test]
@@ -468,6 +476,12 @@ fn raw_identifiers() {
 }
 
 #[test]
+fn raw_identifier_crate_name() {
+    let deps = collect_imports("use r#continue::thing;").unwrap();
+    assert!(deps.contains("continue"));
+}
+
+#[test]
 fn visibility_modifiers() {
     test("pub use foo::public;");
     test("pub(crate) use foo::crate_public;");
@@ -631,8 +645,8 @@ fn higher_kinded_types() {
 #[test]
 fn complex_where_clauses() {
     let source = r#"
-    fn complex<T, U, V>() 
-    where 
+    fn complex<T, U, V>()
+    where
         T: foo::Clone + foo::Debug,
         U: foo::Into<T> + foo::Send,
         V: for<'a> foo::Fn(&'a T) -> U
