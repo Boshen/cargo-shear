@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.2](https://github.com/Boshen/cargo-shear/compare/v1.5.1...v1.5.2) - 2025-08-24
+
+### Other
+
+- *(deps)* lock file maintenance rust crates ([#252](https://github.com/Boshen/cargo-shear/pull/252))
+- *(deps)* update github-actions ([#251](https://github.com/Boshen/cargo-shear/pull/251))
+
 ## [1.5.1](https://github.com/Boshen/cargo-shear/compare/v1.5.0...v1.5.1) - 2025-08-21
 
 ### Fixed
