@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.2](https://github.com/Boshen/cargo-shear/compare/v1.5.1...v1.5.2) - 2025-09-18
+
+### Other
+
+- *(deps)* update dependency rust to v1.90.0 ([#268](https://github.com/Boshen/cargo-shear/pull/268))
+- *(deps)* update github-actions ([#267](https://github.com/Boshen/cargo-shear/pull/267))
+- renovate ignore tests
+- *(deps)* lock file maintenance ([#266](https://github.com/Boshen/cargo-shear/pull/266))
+- *(deps)* lock file maintenance rust crates ([#265](https://github.com/Boshen/cargo-shear/pull/265))
+- *(deps)* lock file maintenance rust crates ([#264](https://github.com/Boshen/cargo-shear/pull/264))
+- *(deps)* update github-actions ([#263](https://github.com/Boshen/cargo-shear/pull/263))
+- *(deps)* lock file maintenance rust crates ([#262](https://github.com/Boshen/cargo-shear/pull/262))
+- *(deps)* update github-actions ([#261](https://github.com/Boshen/cargo-shear/pull/261))
+- *(deps)* update crate-ci/typos action to v1.36.2 ([#260](https://github.com/Boshen/cargo-shear/pull/260))
+- *(deps)* update crate-ci/typos action to v1.36.1 ([#259](https://github.com/Boshen/cargo-shear/pull/259))
+- *(deps)* update crate-ci/typos action to v1.36.0 ([#258](https://github.com/Boshen/cargo-shear/pull/258))
+- *(deps)* update crate-ci/typos action to v1.35.8 ([#257](https://github.com/Boshen/cargo-shear/pull/257))
+- *(deps)* lock file maintenance rust crates ([#256](https://github.com/Boshen/cargo-shear/pull/256))
+- *(deps)* update github-actions ([#255](https://github.com/Boshen/cargo-shear/pull/255))
+- *(deps)* update crate-ci/typos action to v1.35.7 ([#254](https://github.com/Boshen/cargo-shear/pull/254))
+- Add integration tests with real Rust workspace fixtures ([#248](https://github.com/Boshen/cargo-shear/pull/248))
+- *(deps)* lock file maintenance rust crates ([#252](https://github.com/Boshen/cargo-shear/pull/252))
+- *(deps)* update github-actions ([#251](https://github.com/Boshen/cargo-shear/pull/251))
+
 ## [1.5.1](https://github.com/Boshen/cargo-shear/compare/v1.5.0...v1.5.1) - 2025-08-21
 
 ### Fixed
