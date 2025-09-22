@@ -1,5 +1,6 @@
 #![expect(clippy::unwrap_used, reason = "This is a test module, panicking is fine")]
-use std::{collections::HashSet, process::ExitCode};
+use std::process::ExitCode;
+use rustc_hash::FxHashSet as HashSet;
 
 use crate::{CargoShear, CargoShearOptions, default_path};
 

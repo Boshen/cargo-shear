@@ -5,7 +5,7 @@
 //! cargo with the actual usage analysis to determine which dependencies
 //! can be safely removed.
 
-use std::collections::{HashMap, HashSet};
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::env;
 use std::path::{Path, PathBuf};
 
@@ -90,7 +90,7 @@ impl PackageProcessor {
 
         if unused_module_names.is_empty() {
             return Ok(ProcessResult {
-                unused_dependencies: HashSet::new(),
+                unused_dependencies: HashSet::default(),
                 remaining_dependencies: package_dependency_names,
             });
         }
@@ -111,7 +111,7 @@ impl PackageProcessor {
         all_package_deps: &Dependencies,
     ) -> Result<HashSet<String>> {
         if metadata.workspace_packages().len() <= 1 {
-            return Ok(HashSet::new());
+            return Ok(HashSet::default());
         }
 
         let metadata_path = metadata.workspace_root.as_std_path();
@@ -119,7 +119,7 @@ impl PackageProcessor {
         let manifest = cargo_toml::Manifest::from_path(&cargo_toml_path)?;
 
         let Some(workspace) = &manifest.workspace else {
-            return Ok(HashSet::new());
+            return Ok(HashSet::default());
         };
 
         let ignored_names =

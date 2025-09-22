@@ -8,7 +8,7 @@
 //! - Workspace dependencies (`[workspace.dependencies]`)
 //! - Feature flags that reference removed dependencies
 
-use std::collections::HashSet;
+use rustc_hash::FxHashSet as HashSet;
 use std::fs;
 use std::path::Path;
 use std::str::FromStr;

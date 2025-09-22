@@ -9,7 +9,7 @@
 //! The analyzer walks through all source files in a package, collects import
 //! statements, and builds a set of used dependency names.
 
-use std::collections::HashSet;
+use rustc_hash::FxHashSet as HashSet;
 use std::env;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -74,7 +74,7 @@ impl DependencyAnalyzer {
             .map(|path| Self::process_rust_source(path))
             .collect::<Result<Vec<_>>>()?;
 
-        Ok(deps_vec.into_iter().fold(HashSet::new(), |a, b| a.union(&b).cloned().collect()))
+        Ok(deps_vec.into_iter().fold(HashSet::default(), |a, b| a.union(&b).cloned().collect()))
     }
 
     fn analyze_with_expansion(package: &Package) -> Result<Dependencies> {
