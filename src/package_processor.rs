@@ -13,7 +13,7 @@ use cargo_metadata::{Metadata, Package};
 
 use crate::dependency_analyzer::{Dependencies, DependencyAnalyzer};
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
 /// Processes packages to identify unused dependencies.
 ///
@@ -66,7 +66,9 @@ impl PackageProcessor {
         let this_package = metadata
             .resolve
             .as_ref()
-            .ok_or_else(|| anyhow!("`cargo_metadata::MetadataCommand::no_deps` should not be called."))?
+            .ok_or_else(|| {
+                anyhow!("`cargo_metadata::MetadataCommand::no_deps` should not be called.")
+            })?
             .nodes
             .iter()
             .find(|node| node.id == package.id)

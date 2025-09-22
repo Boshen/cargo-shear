@@ -207,7 +207,7 @@ impl CargoShear {
             .features(CargoOpt::AllFeatures)
             .current_dir(&self.options.path)
             .exec()
-            .map_err(|e| anyhow::anyhow!("Metadata error: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Metadata error: {e}"))?;
 
         let processor = PackageProcessor::new(self.options.expand);
         let mut package_dependencies = HashSet::new();

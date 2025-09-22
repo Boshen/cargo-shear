@@ -20,8 +20,8 @@ use cargo_util_schemas::core::PackageIdSpec;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use walkdir::{DirEntry, WalkDir};
 
-use anyhow::{anyhow, Result};
 use crate::import_collector::collect_imports;
+use anyhow::{Result, anyhow};
 
 /// A set of dependency names (crate names).
 pub type Dependencies = HashSet<String>;
@@ -81,21 +81,22 @@ impl DependencyAnalyzer {
         let mut combined_imports = Self::analyze_from_files(package)?;
 
         for target in &package.targets {
-            let target_arg = match target.kind.first().ok_or_else(|| anyhow!("Failed to get target kind"))? {
-                TargetKind::CustomBuild => continue,
-                TargetKind::Bin => format!("--bin={}", target.name),
-                TargetKind::Example => format!("--example={}", target.name),
-                TargetKind::Test => format!("--test={}", target.name),
-                TargetKind::Bench => format!("--bench={}", target.name),
-                TargetKind::CDyLib
-                | TargetKind::DyLib
-                | TargetKind::Lib
-                | TargetKind::ProcMacro
-                | TargetKind::RLib
-                | TargetKind::StaticLib
-                | TargetKind::Unknown(_)
-                | _ => "--lib".to_owned(),
-            };
+            let target_arg =
+                match target.kind.first().ok_or_else(|| anyhow!("Failed to get target kind"))? {
+                    TargetKind::CustomBuild => continue,
+                    TargetKind::Bin => format!("--bin={}", target.name),
+                    TargetKind::Example => format!("--example={}", target.name),
+                    TargetKind::Test => format!("--test={}", target.name),
+                    TargetKind::Bench => format!("--bench={}", target.name),
+                    TargetKind::CDyLib
+                    | TargetKind::DyLib
+                    | TargetKind::Lib
+                    | TargetKind::ProcMacro
+                    | TargetKind::RLib
+                    | TargetKind::StaticLib
+                    | TargetKind::Unknown(_)
+                    | _ => "--lib".to_owned(),
+                };
 
             let cargo = env::var_os("CARGO").unwrap_or_else(|| OsString::from("cargo"));
 
@@ -128,8 +129,7 @@ impl DependencyAnalyzer {
                 ));
             }
 
-            let imports = collect_imports(&output_str)
-                .map_err(|e| anyhow!("Syntax error: {}", e))?;
+            let imports = collect_imports(&output_str).map_err(|e| anyhow!("Syntax error: {e}"))?;
             combined_imports.extend(imports);
         }
 
@@ -164,7 +164,7 @@ impl DependencyAnalyzer {
 
     fn process_rust_source(path: &Path) -> Result<Dependencies> {
         let source_text = std::fs::read_to_string(path)?;
-        collect_imports(&source_text).map_err(|e| anyhow!("Syntax error: {}", e))
+        collect_imports(&source_text).map_err(|e| anyhow!("Syntax error: {e}"))
     }
 
     /// Parse a package ID string to extract the package name.
@@ -189,7 +189,7 @@ impl DependencyAnalyzer {
         } else {
             PackageIdSpec::parse(s)
                 .map(|id| id.name().to_owned())
-                .map_err(|e| anyhow!("Parse error: {}", e))
+                .map_err(|e| anyhow!("Parse error: {e}"))
         }
     }
 
