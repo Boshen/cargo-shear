@@ -4,7 +4,6 @@ mod tests;
 
 use std::{
     backtrace::BacktraceStatus,
-    collections::{HashMap, HashSet},
     env,
     ffi::OsString,
     fs,
@@ -18,6 +17,7 @@ use bpaf::Bpaf;
 use cargo_metadata::{CargoOpt, Metadata, MetadataCommand, Package, TargetKind};
 use cargo_util_schemas::core::PackageIdSpec;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use rustc_hash::{FxHashMap, FxHashSet};
 use walkdir::{DirEntry, WalkDir};
 
 use crate::import_collector::collect_imports;
@@ -72,7 +72,7 @@ pub struct CargoShear {
     fixed_dependencies: usize,
 }
 
-type Deps = HashSet<String>;
+type Deps = FxHashSet<String>;
 
 impl CargoShear {
     #[must_use]
@@ -134,7 +134,7 @@ impl CargoShear {
             .current_dir(&self.options.path)
             .exec()?;
 
-        let mut package_dependencies = HashSet::new();
+        let mut package_dependencies = FxHashSet::default();
         for package in metadata.workspace_packages() {
             // Skip if package is in the exclude list
             if self.options.exclude.iter().any(|name| name == package.name.as_str()) {
@@ -183,9 +183,9 @@ impl CargoShear {
                     .clone()
             })
             .filter(|name| !ignored_package_names.contains(name.as_str()))
-            .collect::<HashSet<_>>();
+            .collect::<FxHashSet<_>>();
 
-        let unused_deps = workspace_deps.difference(all_pkg_deps).cloned().collect::<HashSet<_>>();
+        let unused_deps = workspace_deps.difference(all_pkg_deps).cloned().collect::<FxHashSet<_>>();
 
         if unused_deps.is_empty() {
             return Ok(());
@@ -242,13 +242,13 @@ impl CargoShear {
             .collect::<Result<Vec<_>>>()?
             .into_iter()
             .filter(|(_, name)| !ignored_package_names.contains(name.as_str()))
-            .collect::<HashMap<String, String>>();
+            .collect::<FxHashMap<String, String>>();
 
         let module_names_from_package_deps =
-            package_dependency_names_map.keys().cloned().collect::<HashSet<_>>();
+            package_dependency_names_map.keys().cloned().collect::<FxHashSet<_>>();
 
         let package_dependency_names =
-            package_dependency_names_map.values().cloned().collect::<HashSet<_>>();
+            package_dependency_names_map.values().cloned().collect::<FxHashSet<_>>();
 
         let module_names_from_rust_files = if self.options.expand {
             Self::get_package_dependencies_from_expand(package)
@@ -267,7 +267,7 @@ impl CargoShear {
         let unused_dependency_names = unused_module_names
             .into_iter()
             .map(|name| package_dependency_names_map[name].clone())
-            .collect::<HashSet<_>>();
+            .collect::<FxHashSet<_>>();
 
         self.try_fix_package(package.manifest_path.as_std_path(), &unused_dependency_names)?;
 
@@ -303,13 +303,13 @@ impl CargoShear {
         }
     }
 
-    fn get_ignored_package_names(value: &serde_json::Value) -> HashSet<&str> {
+    fn get_ignored_package_names(value: &serde_json::Value) -> FxHashSet<&str> {
         value
             .as_object()
             .and_then(|object| object.get("cargo-shear"))
             .and_then(|object| object.get("ignored"))
             .and_then(|ignored| ignored.as_array())
-            .map(|ignored| ignored.iter().filter_map(|item| item.as_str()).collect::<HashSet<_>>())
+            .map(|ignored| ignored.iter().filter_map(|item| item.as_str()).collect::<FxHashSet<_>>())
             .unwrap_or_default()
     }
 
@@ -376,7 +376,7 @@ impl CargoShear {
             .map(|path| Self::process_rust_source(path))
             .collect::<Result<Vec<Deps>>>()?
             .into_iter()
-            .fold(HashSet::new(), |a, b| a.union(&b).cloned().collect()))
+            .fold(FxHashSet::default(), |a, b| a.union(&b).cloned().collect()))
     }
 
     fn get_package_rust_files(package: &Package) -> Vec<PathBuf> {
@@ -416,7 +416,7 @@ impl CargoShear {
     fn try_fix_package(
         &mut self,
         cargo_toml_path: &Path,
-        unused_dep_names: &HashSet<String>,
+        unused_dep_names: &FxHashSet<String>,
     ) -> Result<()> {
         if !self.options.fix {
             return Ok(());
