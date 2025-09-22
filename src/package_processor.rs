@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use cargo_metadata::{Metadata, Package};
 
 use crate::dependency_analyzer::{Dependencies, DependencyAnalyzer};
-use crate::error::{Error, Result};
+type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
 /// Processes packages to identify unused dependencies.
 ///
@@ -65,15 +65,21 @@ impl PackageProcessor {
         let this_package = metadata
             .resolve
             .as_ref()
-            .ok_or_else(|| {
-                Error::metadata(
-                    "`cargo_metadata::MetadataCommand::no_deps` should not be called.".to_owned(),
-                )
+            .ok_or_else(|| -> Box<dyn std::error::Error + Send + Sync> {
+                Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "`cargo_metadata::MetadataCommand::no_deps` should not be called.",
+                ))
             })?
             .nodes
             .iter()
             .find(|node| node.id == package.id)
-            .ok_or_else(|| Error::package_not_found(package.name.to_string()))?;
+            .ok_or_else(|| -> Box<dyn std::error::Error + Send + Sync> {
+                Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Package not found: {}", package.name),
+                ))
+            })?;
 
         let package_dependency_names_map =
             Self::build_dependency_map(&this_package.deps, &ignored_names)?;

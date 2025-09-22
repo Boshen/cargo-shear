@@ -32,22 +32,20 @@
 
 mod cargo_toml_editor;
 mod dependency_analyzer;
-mod error;
 mod import_collector;
 mod package_processor;
 #[cfg(test)]
 mod tests;
 
-use std::{
-    backtrace::BacktraceStatus, collections::HashSet, env, path::PathBuf, process::ExitCode,
-};
+use std::{collections::HashSet, env, path::PathBuf, process::ExitCode};
 
 use bpaf::Bpaf;
 use cargo_metadata::{CargoOpt, MetadataCommand};
 
 use crate::cargo_toml_editor::CargoTomlEditor;
-use crate::error::{Error, Result};
 use crate::package_processor::PackageProcessor;
+
+type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
 const VERSION: &str = match option_env!("SHEAR_VERSION") {
     Some(v) => v,
@@ -105,7 +103,7 @@ impl CargoShearOptions {
 }
 
 pub(crate) fn default_path() -> Result<PathBuf> {
-    env::current_dir().map_err(Error::io)
+    env::current_dir().map_err(|e| e.into())
 }
 
 /// The main struct that orchestrates the dependency analysis and removal process.
@@ -196,11 +194,9 @@ impl CargoShear {
             }
             Err(err) => {
                 println!("{err:?}");
-                if err.backtrace().status() == BacktraceStatus::Disabled {
-                    println!(
-                        "note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace"
-                    );
-                }
+                println!(
+                    "note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace"
+                );
                 ExitCode::from(2)
             }
         }
@@ -211,7 +207,12 @@ impl CargoShear {
             .features(CargoOpt::AllFeatures)
             .current_dir(&self.options.path)
             .exec()
-            .map_err(|e| Error::metadata(e.to_string()))?;
+            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
+                Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Metadata error: {}", e),
+                ))
+            })?;
 
         let processor = PackageProcessor::new(self.options.expand);
         let mut package_dependencies = HashSet::new();
