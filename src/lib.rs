@@ -39,11 +39,7 @@ mod package_processor;
 mod tests;
 
 use std::{
-    backtrace::BacktraceStatus,
-    collections::HashSet,
-    env,
-    path::PathBuf,
-    process::ExitCode,
+    backtrace::BacktraceStatus, collections::HashSet, env, path::PathBuf, process::ExitCode,
 };
 
 use bpaf::Bpaf;
@@ -262,7 +258,8 @@ impl CargoShear {
         }
 
         // Process workspace dependencies
-        let workspace_unused = PackageProcessor::process_workspace(&metadata, &package_dependencies)?;
+        let workspace_unused =
+            PackageProcessor::process_workspace(&metadata, &package_dependencies)?;
 
         if !workspace_unused.is_empty() {
             let cargo_toml_path = metadata.workspace_root.as_std_path().join("Cargo.toml");
@@ -280,10 +277,8 @@ impl CargoShear {
             self.unused_dependencies += workspace_unused.len();
 
             if self.options.fix {
-                let fixed = CargoTomlEditor::remove_dependencies(
-                    &cargo_toml_path,
-                    &workspace_unused,
-                )?;
+                let fixed =
+                    CargoTomlEditor::remove_dependencies(&cargo_toml_path, &workspace_unused)?;
                 self.fixed_dependencies += fixed;
             }
         }

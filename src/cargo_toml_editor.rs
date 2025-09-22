@@ -70,9 +70,8 @@ impl CargoTomlEditor {
 
     fn remove_package_dependencies(manifest: &mut DocumentMut, unused_deps: &HashSet<String>) {
         for table_name in ["dependencies", "dev-dependencies", "build-dependencies"] {
-            if let Some(dependencies) = manifest
-                .get_mut(table_name)
-                .and_then(|item| item.as_table_mut())
+            if let Some(dependencies) =
+                manifest.get_mut(table_name).and_then(|item| item.as_table_mut())
             {
                 dependencies.retain(|k, _| !unused_deps.contains(k));
             }
@@ -80,16 +79,15 @@ impl CargoTomlEditor {
     }
 
     fn fix_features(manifest: &mut DocumentMut, unused_deps: &HashSet<String>) {
-        if let Some(features) = manifest
-            .get_mut("features")
-            .and_then(|item| item.as_table_mut())
-        {
+        if let Some(features) = manifest.get_mut("features").and_then(|item| item.as_table_mut()) {
             for (_feature_name, dependencies) in features.iter_mut() {
                 if let Some(dependencies) = dependencies.as_array_mut() {
                     dependencies.retain(|dep| {
                         dep.as_str().is_none_or(|dep_str| {
-                            dep_str.strip_prefix("dep:")
-                                .map_or_else(|| !unused_deps.contains(dep_str), |dep_name| !unused_deps.contains(dep_name))
+                            dep_str.strip_prefix("dep:").map_or_else(
+                                || !unused_deps.contains(dep_str),
+                                |dep_name| !unused_deps.contains(dep_name),
+                            )
                         })
                     });
                 }

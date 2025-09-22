@@ -10,8 +10,8 @@
 //! statements, and builds a set of used dependency names.
 
 use std::collections::HashSet;
-use std::ffi::OsString;
 use std::env;
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -74,18 +74,18 @@ impl DependencyAnalyzer {
             .map(|path| Self::process_rust_source(path))
             .collect::<Result<Vec<_>>>()?;
 
-        Ok(deps_vec.into_iter().fold(HashSet::new(), |a, b| {
-            a.union(&b).cloned().collect()
-        }))
+        Ok(deps_vec.into_iter().fold(HashSet::new(), |a, b| a.union(&b).cloned().collect()))
     }
 
     fn analyze_with_expansion(package: &Package) -> Result<Dependencies> {
         let mut combined_imports = Self::analyze_from_files(package)?;
 
         for target in &package.targets {
-            let target_arg = match target.kind.first().ok_or_else(|| {
-                Error::metadata("Failed to get target kind".to_owned())
-            })? {
+            let target_arg = match target
+                .kind
+                .first()
+                .ok_or_else(|| Error::metadata("Failed to get target kind".to_owned()))?
+            {
                 TargetKind::CustomBuild => continue,
                 TargetKind::Bin => format!("--bin={}", target.name),
                 TargetKind::Example => format!("--example={}", target.name),
@@ -112,8 +112,9 @@ impl DependencyAnalyzer {
                 .arg("--")
                 .arg("-Zunpretty=expanded")
                 .current_dir(
-                    package.manifest_path.parent()
-                        .ok_or_else(|| Error::missing_parent(package.manifest_path.clone().into()))?
+                    package.manifest_path.parent().ok_or_else(|| {
+                        Error::missing_parent(package.manifest_path.clone().into())
+                    })?,
                 );
 
             let output = cmd.output()?;
@@ -140,14 +141,16 @@ impl DependencyAnalyzer {
     }
 
     fn get_package_rust_files(package: &Package) -> Vec<PathBuf> {
-        package.targets
+        package
+            .targets
             .iter()
             .flat_map(|target| {
                 if target.kind.contains(&TargetKind::CustomBuild) {
                     vec![target.src_path.clone().into_std_path_buf()]
                 } else {
-                    let target_dir = target.src_path.parent()
-                        .unwrap_or_else(|| panic!("Failed to get parent path {}", &target.src_path));
+                    let target_dir = target.src_path.parent().unwrap_or_else(|| {
+                        panic!("Failed to get parent path {}", &target.src_path)
+                    });
 
                     WalkDir::new(target_dir)
                         .into_iter()
@@ -164,11 +167,9 @@ impl DependencyAnalyzer {
     }
 
     fn process_rust_source(path: &Path) -> Result<Dependencies> {
-        let source_text = std::fs::read_to_string(path)
-            .map_err(Error::io)?;
+        let source_text = std::fs::read_to_string(path).map_err(Error::io)?;
 
-        collect_imports(&source_text)
-            .map_err(std::convert::Into::into)
+        collect_imports(&source_text).map_err(std::convert::Into::into)
     }
 
     /// Parse a package ID string to extract the package name.
@@ -215,11 +216,7 @@ impl DependencyAnalyzer {
             .and_then(|object| object.get("cargo-shear"))
             .and_then(|object| object.get("ignored"))
             .and_then(|ignored| ignored.as_array())
-            .map(|ignored| {
-                ignored.iter()
-                    .filter_map(|item| item.as_str())
-                    .collect::<HashSet<_>>()
-            })
+            .map(|ignored| ignored.iter().filter_map(|item| item.as_str()).collect::<HashSet<_>>())
             .unwrap_or_default()
     }
 }

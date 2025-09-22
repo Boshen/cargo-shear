@@ -4,10 +4,10 @@
 //! about failures during dependency analysis. All errors are boxed to reduce
 //! the size of `Result` types throughout the codebase.
 
+use std::backtrace::Backtrace;
 use std::fmt;
 use std::io;
 use std::path::PathBuf;
-use std::backtrace::Backtrace;
 
 /// The main error type for cargo-shear operations.
 ///
@@ -30,10 +30,7 @@ impl Error {
 
     /// Create a new error with the given kind.
     fn new(kind: ErrorKind) -> Self {
-        Self {
-            kind,
-            backtrace: Backtrace::capture(),
-        }
+        Self { kind, backtrace: Backtrace::capture() }
     }
 
     /// Create an I/O error.
@@ -81,7 +78,7 @@ pub enum ErrorKind {
         /// The target that failed to expand
         target: String,
         /// The error message from cargo expand
-        message: String
+        message: String,
     },
     /// Failed to get parent path of a file
     MissingParent(PathBuf),
