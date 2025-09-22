@@ -45,7 +45,7 @@ use cargo_metadata::{CargoOpt, MetadataCommand};
 use crate::cargo_toml_editor::CargoTomlEditor;
 use crate::package_processor::PackageProcessor;
 
-type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
+use anyhow::Result;
 
 const VERSION: &str = match option_env!("SHEAR_VERSION") {
     Some(v) => v,
@@ -103,7 +103,7 @@ impl CargoShearOptions {
 }
 
 pub(crate) fn default_path() -> Result<PathBuf> {
-    env::current_dir().map_err(|e| e.into())
+    Ok(env::current_dir()?)
 }
 
 /// The main struct that orchestrates the dependency analysis and removal process.
@@ -207,12 +207,7 @@ impl CargoShear {
             .features(CargoOpt::AllFeatures)
             .current_dir(&self.options.path)
             .exec()
-            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
-                Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("Metadata error: {}", e),
-                ))
-            })?;
+            .map_err(|e| anyhow::anyhow!("Metadata error: {}", e))?;
 
         let processor = PackageProcessor::new(self.options.expand);
         let mut package_dependencies = HashSet::new();

@@ -15,7 +15,7 @@ use std::str::FromStr;
 
 use toml_edit::DocumentMut;
 
-type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
+use anyhow::Result;
 
 /// Provides methods to edit Cargo.toml files and remove unused dependencies.
 pub struct CargoTomlEditor;

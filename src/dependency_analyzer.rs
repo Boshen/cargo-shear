@@ -20,7 +20,7 @@ use cargo_util_schemas::core::PackageIdSpec;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use walkdir::{DirEntry, WalkDir};
 
-type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
+use anyhow::{anyhow, Result};
 use crate::import_collector::collect_imports;
 
 /// A set of dependency names (crate names).
@@ -81,7 +81,7 @@ impl DependencyAnalyzer {
         let mut combined_imports = Self::analyze_from_files(package)?;
 
         for target in &package.targets {
-            let target_arg = match target.kind.first().ok_or_else(|| "Failed to get target kind")? {
+            let target_arg = match target.kind.first().ok_or_else(|| anyhow!("Failed to get target kind"))? {
                 TargetKind::CustomBuild => continue,
                 TargetKind::Bin => format!("--bin={}", target.name),
                 TargetKind::Example => format!("--example={}", target.name),
@@ -107,46 +107,29 @@ impl DependencyAnalyzer {
                 .arg("--color=never")
                 .arg("--")
                 .arg("-Zunpretty=expanded")
-                .current_dir(package.manifest_path.parent().ok_or_else(
-                    || -> Box<dyn std::error::Error + Send + Sync> {
-                        Box::new(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("Failed to get parent path: {}", package.manifest_path),
-                        ))
-                    },
-                )?);
+                .current_dir(package.manifest_path.parent().ok_or_else(|| {
+                    anyhow!("Failed to get parent path: {}", package.manifest_path)
+                })?);
 
             let output = cmd.output()?;
             if !output.status.success() {
-                return Err(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!(
-                        "Cargo expand failed for {}: {}",
-                        target.name,
-                        String::from_utf8_lossy(&output.stderr)
-                    ),
-                )));
+                return Err(anyhow!(
+                    "Cargo expand failed for {}: {}",
+                    target.name,
+                    String::from_utf8_lossy(&output.stderr)
+                ));
             }
 
             let output_str = String::from_utf8(output.stdout)?;
             if output_str.is_empty() {
-                return Err(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!(
-                        "Cargo expand failed for {}: Empty output from cargo expand",
-                        target.name
-                    ),
-                )));
+                return Err(anyhow!(
+                    "Cargo expand failed for {}: Empty output from cargo expand",
+                    target.name
+                ));
             }
 
-            let imports = collect_imports(&output_str).map_err(
-                |e| -> Box<dyn std::error::Error + Send + Sync> {
-                    Box::new(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        format!("Syntax error: {}", e),
-                    ))
-                },
-            )?;
+            let imports = collect_imports(&output_str)
+                .map_err(|e| anyhow!("Syntax error: {}", e))?;
             combined_imports.extend(imports);
         }
 
@@ -181,9 +164,7 @@ impl DependencyAnalyzer {
 
     fn process_rust_source(path: &Path) -> Result<Dependencies> {
         let source_text = std::fs::read_to_string(path)?;
-        collect_imports(&source_text).map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
-            Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("Syntax error: {}", e)))
-        })
+        collect_imports(&source_text).map_err(|e| anyhow!("Syntax error: {}", e))
     }
 
     /// Parse a package ID string to extract the package name.
@@ -201,23 +182,14 @@ impl DependencyAnalyzer {
     /// The extracted package name
     pub fn parse_package_id(s: &str) -> Result<String> {
         if s.contains(' ') {
-            s.split(' ').next().map(ToString::to_string).ok_or_else(
-                || -> Box<dyn std::error::Error + Send + Sync> {
-                    Box::new(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        format!("Parse error: {s} should have a space"),
-                    ))
-                },
-            )
+            s.split(' ')
+                .next()
+                .map(ToString::to_string)
+                .ok_or_else(|| anyhow!("Parse error: {s} should have a space"))
         } else {
-            PackageIdSpec::parse(s).map(|id| id.name().to_owned()).map_err(
-                |e| -> Box<dyn std::error::Error + Send + Sync> {
-                    Box::new(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        format!("Parse error: {}", e),
-                    ))
-                },
-            )
+            PackageIdSpec::parse(s)
+                .map(|id| id.name().to_owned())
+                .map_err(|e| anyhow!("Parse error: {}", e))
         }
     }
 
