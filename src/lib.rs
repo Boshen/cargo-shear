@@ -37,8 +37,8 @@ mod package_processor;
 #[cfg(test)]
 mod tests;
 
+use rustc_hash::FxHashSet;
 use std::{env, path::PathBuf, process::ExitCode};
-use rustc_hash::FxHashSet as HashSet;
 
 use bpaf::Bpaf;
 use cargo_metadata::{CargoOpt, MetadataCommand};
@@ -211,7 +211,7 @@ impl CargoShear {
             .map_err(|e| anyhow::anyhow!("Metadata error: {e}"))?;
 
         let processor = PackageProcessor::new(self.options.expand);
-        let mut package_dependencies = HashSet::default();
+        let mut package_dependencies = FxHashSet::default();
 
         for package in metadata.workspace_packages() {
             // Skip if package is in the exclude list

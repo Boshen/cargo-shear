@@ -1,6 +1,6 @@
 #![expect(clippy::unwrap_used, reason = "This is a test module, panicking is fine")]
+use rustc_hash::FxHashSet;
 use std::process::ExitCode;
-use rustc_hash::FxHashSet as HashSet;
 
 use crate::{CargoShear, CargoShearOptions, default_path};
 
@@ -9,7 +9,7 @@ use crate::import_collector::collect_imports;
 #[track_caller]
 fn test(source_text: &str) {
     let deps = collect_imports(source_text).unwrap();
-    let expected = HashSet::from_iter(["foo".to_owned()]);
+    let expected = FxHashSet::from_iter(["foo".to_owned()]);
     assert_eq!(deps, expected, "{source_text}");
 }
 
@@ -134,7 +134,7 @@ fn multiple_imports_same_crate() {
         }
     "#;
     let deps = collect_imports(source).unwrap();
-    let expected = HashSet::from_iter(["foo".to_owned()]);
+    let expected = FxHashSet::from_iter(["foo".to_owned()]);
     assert_eq!(deps, expected);
 }
 
@@ -253,14 +253,14 @@ fn very_long_path() {
     let long_path = "foo::".repeat(100) + "bar";
     let source = format!("use {};", long_path);
     let deps = collect_imports(&source).unwrap();
-    let expected = HashSet::from_iter(["foo".to_owned()]);
+    let expected = FxHashSet::from_iter(["foo".to_owned()]);
     assert_eq!(deps, expected);
 }
 
 #[test]
 fn unicode_identifiers() {
     let deps = collect_imports("use foo::数据;").unwrap();
-    let expected = HashSet::from_iter(["foo".to_owned()]);
+    let expected = FxHashSet::from_iter(["foo".to_owned()]);
     assert_eq!(deps, expected);
 }
 
@@ -283,7 +283,7 @@ fn raw_string_inside_macro() {
 #[test]
 fn glob_imports() {
     let deps = collect_imports("use foo::*;").unwrap();
-    let expected = HashSet::from_iter(["foo".to_owned()]);
+    let expected = FxHashSet::from_iter(["foo".to_owned()]);
     assert_eq!(deps, expected);
 }
 
@@ -390,7 +390,7 @@ fn mixed_valid_invalid_imports() {
         use foo::baz::qux;  // valid, same crate as first
     "#;
     let deps = collect_imports(source).unwrap();
-    let expected = HashSet::from_iter(["foo".to_owned()]);
+    let expected = FxHashSet::from_iter(["foo".to_owned()]);
     assert_eq!(deps, expected);
 }
 
@@ -405,7 +405,7 @@ fn test_no_deps(source_text: &str) {
 #[track_caller]
 fn test_multiple_deps(source_text: &str, expected_deps: &[&str]) {
     let deps = collect_imports(source_text).unwrap();
-    let expected = HashSet::from_iter(expected_deps.iter().map(|s| s.to_string()));
+    let expected = FxHashSet::from_iter(expected_deps.iter().map(|s| s.to_string()));
     assert_eq!(deps, expected, "Dependencies mismatch for: {source_text}");
 }
 
@@ -438,7 +438,7 @@ fn large_file_simulation() {
     }
 
     let deps = collect_imports(&source).unwrap();
-    let expected = HashSet::from_iter(["foo".to_owned()]);
+    let expected = FxHashSet::from_iter(["foo".to_owned()]);
     assert_eq!(deps, expected);
 }
 
@@ -447,7 +447,7 @@ fn deeply_nested_paths() {
     let nested_path = (0..20).map(|i| format!("level{}", i)).collect::<Vec<_>>().join("::");
     let source = format!("use foo::{};", nested_path);
     let deps = collect_imports(&source).unwrap();
-    let expected = HashSet::from_iter(["foo".to_owned()]);
+    let expected = FxHashSet::from_iter(["foo".to_owned()]);
     assert_eq!(deps, expected);
 }
 
@@ -665,7 +665,7 @@ fn many_small_imports() {
         source.push_str(&format!("use foo::item{};\n", i));
     }
     let deps = collect_imports(&source).unwrap();
-    let expected = HashSet::from_iter(["foo".to_owned()]);
+    let expected = FxHashSet::from_iter(["foo".to_owned()]);
     assert_eq!(deps, expected);
 }
 
@@ -676,6 +676,6 @@ fn deeply_nested_modules() {
         source.push_str(&format!("mod level{} {{ use foo::item{}; }}\n", i, i));
     }
     let deps = collect_imports(&source).unwrap();
-    let expected = HashSet::from_iter(["foo".to_owned()]);
+    let expected = FxHashSet::from_iter(["foo".to_owned()]);
     assert_eq!(deps, expected);
 }
