@@ -3,7 +3,7 @@ use std::{collections::HashSet, process::ExitCode};
 
 use crate::{CargoShear, CargoShearOptions, default_path};
 
-use super::collect_imports;
+use crate::import_collector::collect_imports;
 
 #[track_caller]
 fn test(source_text: &str) {

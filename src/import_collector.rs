@@ -1,10 +1,34 @@
+//! Import statement collector for cargo-shear.
+//!
+//! This module parses Rust source code using `syn` to extract all import
+//! statements and references to external crates. It handles various forms
+//! of imports including:
+//!
+//! - `use` statements
+//! - `extern crate` declarations
+//! - Path references in code (e.g., `std::collections::HashMap`)
+//! - Macro invocations
+//! - Attribute references (e.g., `#[derive(...)]`)
+
 use std::sync::OnceLock;
 
 use regex_lite::Regex;
 use syn::{self, ext::IdentExt, spanned::Spanned};
 
-use crate::Deps;
+use crate::dependency_analyzer::Dependencies as Deps;
 
+/// Collect all import statements and crate references from Rust source code.
+///
+/// This function parses the source text and extracts all references to external
+/// crates, whether they come from use statements, macro invocations, or inline paths.
+///
+/// # Arguments
+///
+/// * `source_text` - The Rust source code to analyze
+///
+/// # Returns
+///
+/// A set of crate names that are referenced in the source code
 pub fn collect_imports(source_text: &str) -> syn::Result<Deps> {
     let syntax = syn::parse_str::<syn::File>(source_text)?;
     let mut collector = ImportCollector::default();
