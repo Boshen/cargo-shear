@@ -3,7 +3,7 @@ use std::sync::OnceLock;
 use regex_lite::Regex;
 use syn::{self, ext::IdentExt, spanned::Spanned};
 
-use crate::Deps;
+use crate::dependency_analyzer::Dependencies as Deps;
 
 pub fn collect_imports(source_text: &str) -> syn::Result<Deps> {
     let syntax = syn::parse_str::<syn::File>(source_text)?;
