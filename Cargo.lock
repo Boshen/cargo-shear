@@ -70,7 +70,6 @@ dependencies = [
  "mimalloc-safe",
  "proc-macro2",
  "rayon",
- "regex-lite",
  "rustc-hash",
  "serde_json",
  "syn",
@@ -518,12 +517,6 @@ dependencies = [
  "crossbeam-deque",
  "crossbeam-utils",
 ]
-
-[[package]]
-name = "regex-lite"
-version = "0.1.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "943f41321c63ef1c92fd763bfe054d2668f7f225a5c29f0105903dc2fc04ba30"
 
 [[package]]
 name = "rustc-hash"

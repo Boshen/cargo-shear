@@ -10,9 +10,6 @@
 //! - Macro invocations
 //! - Attribute references (e.g., `#[derive(...)]`)
 
-use std::sync::OnceLock;
-
-use regex_lite::Regex;
 use syn::{self, ext::IdentExt, spanned::Spanned};
 
 use crate::dependency_analyzer::Dependencies as Deps;
@@ -104,20 +101,71 @@ impl ImportCollector {
     // `println!("{}", foo::bar);`
     //                 ^^^^^^^^ search for the `::` pattern
     fn collect_tokens(&mut self, tokens: &proc_macro2::TokenStream) {
-        static MACRO_RE: OnceLock<Regex> = OnceLock::new();
         let Some(source_text) = tokens.span().source_text() else { return };
-        let idents = MACRO_RE
-            .get_or_init(|| {
-                Regex::new(r"(?:r#)?([A-Za-z_]\w*)[\s]*::[\s]*(?:r#)?([A-Za-z_]\w*)")
-                    .unwrap_or_else(|e| panic!("Failed to parse regex {e:?}"))
-            })
-            .captures_iter(&source_text)
-            .filter_map(|c| c.get(1))
-            .map(|m| m.as_str())
-            .filter(|s| !Self::is_known_import(s))
-            .map(ToString::to_string)
-            .collect::<Vec<_>>();
+
+        let idents = source_text
+            .match_indices("::")
+            .filter_map(|(pos, _)| Self::extract_identifier_before(&source_text, pos))
+            .filter(|ident| !Self::is_known_import(ident));
+
         self.deps.extend(idents);
+    }
+
+    // Helper function to extract identifier before a given position
+    fn extract_identifier_before(text: &str, pos: usize) -> Option<String> {
+        let bytes = text.as_bytes();
+        let mut end = pos;
+
+        // Skip any whitespace before ::
+        while end > 0 && bytes[end - 1].is_ascii_whitespace() {
+            end -= 1;
+        }
+
+        if end == 0 {
+            return None;
+        }
+
+        // Check for raw identifier (r#)
+        let is_raw = end >= 2 && &bytes[end - 2..end] == b"r#";
+        let ident_end = if is_raw { end - 2 } else { end };
+
+        // Find the start of the identifier
+        let mut start = ident_end;
+        while start > 0 {
+            let prev = start - 1;
+            let ch = bytes[prev];
+            if ch.is_ascii_alphabetic() || ch == b'_' || (start < ident_end && ch.is_ascii_digit())
+            {
+                start = prev;
+            } else {
+                break;
+            }
+        }
+
+        // If we're looking at a raw identifier, adjust the start
+        if is_raw && start >= 2 && &bytes[start - 2..start] == b"r#" {
+            start -= 2;
+        }
+
+        // Check if there's another :: before this identifier (i.e., this is part of a longer path)
+        // We only want to capture the first segment of paths like foo::bar::baz
+        if start >= 2 && bytes[start - 2] == b':' && bytes[start - 1] == b':' {
+            return None;
+        }
+
+        if start < ident_end {
+            let full_ident = &text[start..end];
+            // Remove r# prefix if present for the actual identifier
+            let ident =
+                full_ident.strip_prefix("r#").map_or_else(|| full_ident.to_owned(), str::to_owned);
+
+            // Validate it's a proper identifier
+            if ident.chars().next()?.is_ascii_alphabetic() || ident.starts_with('_') {
+                return Some(ident);
+            }
+        }
+
+        None
     }
 
     // #[serde(with = "foo")]
