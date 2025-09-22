@@ -103,25 +103,10 @@ impl ImportCollector {
     fn collect_tokens(&mut self, tokens: &proc_macro2::TokenStream) {
         let Some(source_text) = tokens.span().source_text() else { return };
 
-        let mut idents = Vec::new();
-        let bytes = source_text.as_bytes();
-        let mut i = 0;
-
-        while i < bytes.len().saturating_sub(1) {
-            // Find "::" pattern
-            if bytes[i] == b':' && bytes[i + 1] == b':' {
-                // Extract the identifier before "::"
-                if let Some(ident) = Self::extract_identifier_before(&source_text, i)
-                    && ident.chars().next().is_some_and(|c| !c.is_uppercase())
-                    && !Self::is_known_import(&ident)
-                {
-                    idents.push(ident);
-                }
-                i += 2; // Skip past ::
-            } else {
-                i += 1;
-            }
-        }
+        let idents = source_text
+            .match_indices("::")
+            .filter_map(|(pos, _)| Self::extract_identifier_before(&source_text, pos))
+            .filter(|ident| !Self::is_known_import(ident));
 
         self.deps.extend(idents);
     }
