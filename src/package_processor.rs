@@ -17,7 +17,7 @@ pub struct ProcessResult {
 }
 
 impl PackageProcessor {
-    pub fn new(expand_macros: bool) -> Self {
+    pub const fn new(expand_macros: bool) -> Self {
         Self {
             analyzer: DependencyAnalyzer::new(expand_macros),
         }
@@ -40,7 +40,7 @@ impl PackageProcessor {
             .as_ref()
             .ok_or_else(|| {
                 Error::metadata(
-                    "`cargo_metadata::MetadataCommand::no_deps` should not be called.".to_string(),
+                    "`cargo_metadata::MetadataCommand::no_deps` should not be called.".to_owned(),
                 )
             })?
             .nodes
@@ -48,7 +48,7 @@ impl PackageProcessor {
             .find(|node| node.id == package.id)
             .ok_or_else(|| Error::package_not_found(package.name.to_string()))?;
 
-        let package_dependency_names_map = self.build_dependency_map(
+        let package_dependency_names_map = Self::build_dependency_map(
             &this_package.deps,
             &ignored_names,
         )?;
@@ -93,7 +93,6 @@ impl PackageProcessor {
     }
 
     pub fn process_workspace(
-        &self,
         metadata: &Metadata,
         all_package_deps: &Dependencies,
     ) -> Result<HashSet<String>> {
@@ -129,7 +128,7 @@ impl PackageProcessor {
         Ok(workspace_deps.difference(all_package_deps).cloned().collect())
     }
 
-    pub fn get_relative_path(&self, manifest_path: &Path, workspace_root: &Path) -> PathBuf {
+    pub fn get_relative_path(manifest_path: &Path, workspace_root: &Path) -> PathBuf {
         let dir = manifest_path
             .parent()
             .unwrap_or(manifest_path);
@@ -144,7 +143,6 @@ impl PackageProcessor {
     }
 
     fn build_dependency_map(
-        &self,
         deps: &[cargo_metadata::NodeDep],
         ignored_names: &HashSet<&str>,
     ) -> Result<HashMap<String, String>> {

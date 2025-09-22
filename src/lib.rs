@@ -151,7 +151,7 @@ impl CargoShear {
             let result = processor.process_package(&metadata, package)?;
 
             if !result.unused_dependencies.is_empty() {
-                let relative_path = processor.get_relative_path(
+                let relative_path = PackageProcessor::get_relative_path(
                     package.manifest_path.as_std_path(),
                     metadata.workspace_root.as_std_path(),
                 );
@@ -177,7 +177,7 @@ impl CargoShear {
         }
 
         // Process workspace dependencies
-        let workspace_unused = processor.process_workspace(&metadata, &package_dependencies)?;
+        let workspace_unused = PackageProcessor::process_workspace(&metadata, &package_dependencies)?;
 
         if !workspace_unused.is_empty() {
             let cargo_toml_path = metadata.workspace_root.as_std_path().join("Cargo.toml");

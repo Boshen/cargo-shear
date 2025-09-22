@@ -61,15 +61,10 @@ impl CargoTomlEditor {
             for (_feature_name, dependencies) in features.iter_mut() {
                 if let Some(dependencies) = dependencies.as_array_mut() {
                     dependencies.retain(|dep| {
-                        match dep.as_str() {
-                            Some(dep_str) => {
-                                match dep_str.strip_prefix("dep:") {
-                                    Some(dep_name) => !unused_deps.contains(dep_name),
-                                    None => !unused_deps.contains(dep_str),
-                                }
-                            }
-                            None => true,
-                        }
+                        dep.as_str().is_none_or(|dep_str| {
+                            dep_str.strip_prefix("dep:")
+                                .map_or_else(|| !unused_deps.contains(dep_str), |dep_name| !unused_deps.contains(dep_name))
+                        })
                     });
                 }
             }

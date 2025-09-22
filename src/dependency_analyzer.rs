@@ -19,24 +19,24 @@ pub struct DependencyAnalyzer {
 }
 
 impl DependencyAnalyzer {
-    pub fn new(expand_macros: bool) -> Self {
+    pub const fn new(expand_macros: bool) -> Self {
         Self { expand_macros }
     }
 
     pub fn analyze_package(&self, package: &Package) -> Result<Dependencies> {
         if self.expand_macros {
-            self.analyze_with_expansion(package)
+            Self::analyze_with_expansion(package)
         } else {
-            self.analyze_from_files(package)
+            Self::analyze_from_files(package)
         }
     }
 
-    fn analyze_from_files(&self, package: &Package) -> Result<Dependencies> {
-        let rust_files = self.get_package_rust_files(package);
+    fn analyze_from_files(package: &Package) -> Result<Dependencies> {
+        let rust_files = Self::get_package_rust_files(package);
 
         let deps_vec: Vec<Dependencies> = rust_files
             .par_iter()
-            .map(|path| self.process_rust_source(path))
+            .map(|path| Self::process_rust_source(path))
             .collect::<Result<Vec<_>>>()?;
 
         Ok(deps_vec.into_iter().fold(HashSet::new(), |a, b| {
@@ -44,19 +44,26 @@ impl DependencyAnalyzer {
         }))
     }
 
-    fn analyze_with_expansion(&self, package: &Package) -> Result<Dependencies> {
-        let mut combined_imports = self.analyze_from_files(package)?;
+    fn analyze_with_expansion(package: &Package) -> Result<Dependencies> {
+        let mut combined_imports = Self::analyze_from_files(package)?;
 
         for target in &package.targets {
             let target_arg = match target.kind.first().ok_or_else(|| {
-                Error::metadata("Failed to get target kind".to_string())
+                Error::metadata("Failed to get target kind".to_owned())
             })? {
                 TargetKind::CustomBuild => continue,
                 TargetKind::Bin => format!("--bin={}", target.name),
                 TargetKind::Example => format!("--example={}", target.name),
                 TargetKind::Test => format!("--test={}", target.name),
                 TargetKind::Bench => format!("--bench={}", target.name),
-                _ => "--lib".to_owned(),
+                TargetKind::CDyLib
+                | TargetKind::DyLib
+                | TargetKind::Lib
+                | TargetKind::ProcMacro
+                | TargetKind::RLib
+                | TargetKind::StaticLib
+                | TargetKind::Unknown(_)
+                | _ => "--lib".to_owned(),
             };
 
             let cargo = env::var_os("CARGO").unwrap_or_else(|| OsString::from("cargo"));
@@ -86,7 +93,7 @@ impl DependencyAnalyzer {
             if output_str.is_empty() {
                 return Err(Error::expand(
                     target.name.clone(),
-                    "Empty output from cargo expand".to_string(),
+                    "Empty output from cargo expand".to_owned(),
                 ));
             }
 
@@ -97,7 +104,7 @@ impl DependencyAnalyzer {
         Ok(combined_imports)
     }
 
-    fn get_package_rust_files(&self, package: &Package) -> Vec<PathBuf> {
+    fn get_package_rust_files(package: &Package) -> Vec<PathBuf> {
         package.targets
             .iter()
             .flat_map(|target| {
@@ -105,7 +112,7 @@ impl DependencyAnalyzer {
                     vec![target.src_path.clone().into_std_path_buf()]
                 } else {
                     let target_dir = target.src_path.parent()
-                        .expect(&format!("Failed to get parent path {}", &target.src_path));
+                        .unwrap_or_else(|| panic!("Failed to get parent path {}", &target.src_path));
 
                     WalkDir::new(target_dir)
                         .into_iter()
@@ -121,12 +128,12 @@ impl DependencyAnalyzer {
             .collect()
     }
 
-    fn process_rust_source(&self, path: &Path) -> Result<Dependencies> {
+    fn process_rust_source(path: &Path) -> Result<Dependencies> {
         let source_text = std::fs::read_to_string(path)
-            .map_err(|e| Error::io(e))?;
+            .map_err(Error::io)?;
 
         collect_imports(&source_text)
-            .map_err(|e| e.into())
+            .map_err(std::convert::Into::into)
     }
 
     pub fn parse_package_id(s: &str) -> Result<String> {
@@ -134,7 +141,7 @@ impl DependencyAnalyzer {
             s.split(' ')
                 .next()
                 .map(ToString::to_string)
-                .ok_or_else(|| Error::parse(format!("{} should have a space", s)))
+                .ok_or_else(|| Error::parse(format!("{s} should have a space")))
         } else {
             PackageIdSpec::parse(s)
                 .map(|id| id.name().to_owned())
