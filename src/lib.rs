@@ -1,3 +1,35 @@
+//! # cargo-shear
+//!
+//! A tool for detecting and removing unused dependencies from Rust projects.
+//!
+//! ## Overview
+//!
+//! `cargo-shear` analyzes your Rust codebase to identify dependencies that are declared
+//! in `Cargo.toml` but never actually used in the code. It can automatically remove
+//! these unused dependencies with the `--fix` flag.
+//!
+//! ## Architecture
+//!
+//! The codebase is organized into several focused modules:
+//!
+//! - `cargo_toml_editor` - Handles modifications to Cargo.toml files
+//! - `dependency_analyzer` - Analyzes code to find used dependencies
+//! - `package_processor` - Processes packages and detects unused dependencies
+//! - `import_collector` - Parses Rust source to collect import statements
+//! - `error` - Custom error types with detailed context
+//!
+//! ## Usage
+//!
+//! ```no_run
+//! use cargo_shear::{CargoShear, CargoShearOptions};
+//!
+//! let options = CargoShearOptions::new_for_test(
+//!     std::path::PathBuf::from("."),
+//!     false, // fix
+//! );
+//! let exit_code = CargoShear::new(options).run();
+//! ```
+
 mod cargo_toml_editor;
 mod dependency_analyzer;
 mod error;
@@ -26,27 +58,44 @@ const VERSION: &str = match option_env!("SHEAR_VERSION") {
     None => "dev",
 };
 
-// options("shear") + the "batteries" feature will strip name using `bpaf::cargo_helper` from `cargo shear"
-// See <https://docs.rs/bpaf/latest/bpaf/batteries/fn.cargo_helper.html>
+/// Command-line options for cargo-shear.
+///
+/// This struct is parsed from command-line arguments using `bpaf`.
+/// The "batteries" feature strips the binary name using `bpaf::cargo_helper`.
+///
+/// See <https://docs.rs/bpaf/latest/bpaf/batteries/fn.cargo_helper.html>
 #[derive(Debug, Clone, Bpaf)]
 #[bpaf(options("shear"), version(VERSION))]
 pub struct CargoShearOptions {
     /// Remove unused dependencies.
+    ///
+    /// When set, cargo-shear will automatically remove detected unused
+    /// dependencies from Cargo.toml files.
     #[bpaf(long)]
     fix: bool,
 
     /// Uses `cargo expand` to expand macros, which requires nightly and is significantly slower.
+    ///
+    /// This option provides more accurate detection by expanding proc macros
+    /// and attribute macros, but requires a nightly Rust toolchain.
     #[bpaf(long)]
     expand: bool,
 
-    /// Package(s) to check
-    /// If not specified, all packages are checked by default
+    /// Package(s) to check.
+    ///
+    /// If not specified, all packages in the workspace are checked.
+    /// Can be specified multiple times to check specific packages.
     #[bpaf(long, short, argument("SPEC"))]
     package: Vec<String>,
 
-    /// Exclude packages from the check
+    /// Exclude packages from the check.
+    ///
+    /// Can be specified multiple times to exclude multiple packages.
     exclude: Vec<String>,
 
+    /// Path to the project directory.
+    ///
+    /// Defaults to the current directory if not specified.
     #[bpaf(positional("PATH"), fallback_with(default_path))]
     path: PathBuf,
 }
@@ -63,20 +112,56 @@ pub(crate) fn default_path() -> Result<PathBuf> {
     env::current_dir().map_err(Error::io)
 }
 
+/// The main struct that orchestrates the dependency analysis and removal process.
+///
+/// `CargoShear` coordinates the analysis of a Rust project to find unused dependencies
+/// and optionally removes them from Cargo.toml files.
 pub struct CargoShear {
+    /// Configuration options for the analysis
     options: CargoShearOptions,
 
+    /// Counter for total unused dependencies found
     unused_dependencies: usize,
 
+    /// Counter for dependencies that were fixed (removed)
     fixed_dependencies: usize,
 }
 
 impl CargoShear {
+    /// Create a new `CargoShear` instance with the given options.
+    ///
+    /// # Arguments
+    ///
+    /// * `options` - Configuration options for the analysis
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use cargo_shear::{CargoShear, CargoShearOptions};
+    /// use std::path::PathBuf;
+    ///
+    /// let options = CargoShearOptions::new_for_test(PathBuf::from("."), false);
+    /// let shear = CargoShear::new(options);
+    /// ```
     #[must_use]
     pub const fn new(options: CargoShearOptions) -> Self {
         Self { options, unused_dependencies: 0, fixed_dependencies: 0 }
     }
 
+    /// Run the dependency analysis and optionally fix unused dependencies.
+    ///
+    /// This method performs the complete analysis workflow:
+    /// 1. Analyzes all packages in the workspace
+    /// 2. Detects unused dependencies
+    /// 3. Optionally removes them if `--fix` is enabled
+    /// 4. Reports results to stdout
+    ///
+    /// # Returns
+    ///
+    /// Returns an `ExitCode` indicating success or failure:
+    /// - `0` if no issues were found or all issues were fixed
+    /// - `1` if unused dependencies were found (without `--fix`)
+    /// - `2` if an error occurred
     #[must_use]
     pub fn run(mut self) -> ExitCode {
         println!("Analyzing {}", self.options.path.to_string_lossy());

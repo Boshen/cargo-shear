@@ -1,3 +1,14 @@
+//! Dependency analysis module for cargo-shear.
+//!
+//! This module is responsible for analyzing Rust source code to determine
+//! which dependencies are actually used. It supports two modes:
+//!
+//! 1. **Normal mode**: Parses Rust source files directly using `syn`
+//! 2. **Expand mode**: Uses `cargo expand` to expand macros for more accurate detection
+//!
+//! The analyzer walks through all source files in a package, collects import
+//! statements, and builds a set of used dependency names.
+
 use std::collections::HashSet;
 use std::ffi::OsString;
 use std::env;
@@ -12,17 +23,41 @@ use walkdir::{DirEntry, WalkDir};
 use crate::error::{Error, Result};
 use crate::import_collector::collect_imports;
 
+/// A set of dependency names (crate names).
 pub type Dependencies = HashSet<String>;
 
+/// Analyzes Rust source code to find used dependencies.
+///
+/// The analyzer can operate in two modes:
+/// - Normal: Parses source files directly (faster but may miss macro-generated imports)
+/// - Expand: Uses cargo expand to expand macros first (slower but more accurate)
 pub struct DependencyAnalyzer {
+    /// Whether to use cargo expand to expand macros
     expand_macros: bool,
 }
 
 impl DependencyAnalyzer {
+    /// Create a new dependency analyzer.
+    ///
+    /// # Arguments
+    ///
+    /// * `expand_macros` - If true, use `cargo expand` for more accurate analysis
     pub const fn new(expand_macros: bool) -> Self {
         Self { expand_macros }
     }
 
+    /// Analyze a package to find all used dependencies.
+    ///
+    /// This method will either parse source files directly or use cargo expand
+    /// based on the `expand_macros` setting.
+    ///
+    /// # Arguments
+    ///
+    /// * `package` - The package to analyze
+    ///
+    /// # Returns
+    ///
+    /// A set of dependency names that are used in the package's source code
     pub fn analyze_package(&self, package: &Package) -> Result<Dependencies> {
         if self.expand_macros {
             Self::analyze_with_expansion(package)
@@ -136,6 +171,19 @@ impl DependencyAnalyzer {
             .map_err(std::convert::Into::into)
     }
 
+    /// Parse a package ID string to extract the package name.
+    ///
+    /// Package IDs can have different formats depending on the Rust version:
+    /// - Pre-1.77: `memchr 2.7.1 (registry+https://github.com/rust-lang/crates.io-index)`
+    /// - 1.77+: `registry+https://github.com/rust-lang/crates.io-index#memchr@2.7.1`
+    ///
+    /// # Arguments
+    ///
+    /// * `s` - The package ID string to parse
+    ///
+    /// # Returns
+    ///
+    /// The extracted package name
     pub fn parse_package_id(s: &str) -> Result<String> {
         if s.contains(' ') {
             s.split(' ')
@@ -149,6 +197,18 @@ impl DependencyAnalyzer {
         }
     }
 
+    /// Extract the list of ignored package names from metadata.
+    ///
+    /// Looks for package names in the `cargo-shear.ignored` field of the metadata JSON.
+    /// These packages will be excluded from unused dependency detection.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` - The metadata JSON value (usually from package or workspace metadata)
+    ///
+    /// # Returns
+    ///
+    /// A set of package names to ignore
     pub fn get_ignored_package_names(value: &serde_json::Value) -> HashSet<&str> {
         value
             .as_object()

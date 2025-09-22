@@ -1,3 +1,13 @@
+//! Cargo.toml editing module for cargo-shear.
+//!
+//! This module provides functionality to safely remove unused dependencies
+//! from Cargo.toml files while preserving formatting and other content.
+//! It handles:
+//!
+//! - Package-level dependencies (`[dependencies]`, `[dev-dependencies]`, etc.)
+//! - Workspace dependencies (`[workspace.dependencies]`)
+//! - Feature flags that reference removed dependencies
+
 use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
@@ -7,9 +17,25 @@ use toml_edit::DocumentMut;
 
 use crate::error::Result;
 
+/// Provides methods to edit Cargo.toml files and remove unused dependencies.
 pub struct CargoTomlEditor;
 
 impl CargoTomlEditor {
+    /// Remove unused dependencies from a Cargo.toml file.
+    ///
+    /// This method will:
+    /// 1. Remove dependencies from `[dependencies]`, `[dev-dependencies]`, and `[build-dependencies]`
+    /// 2. Remove dependencies from `[workspace.dependencies]` if in a workspace root
+    /// 3. Update feature flags to remove references to removed dependencies
+    ///
+    /// # Arguments
+    ///
+    /// * `cargo_toml_path` - Path to the Cargo.toml file to edit
+    /// * `unused_deps` - Set of dependency names to remove
+    ///
+    /// # Returns
+    ///
+    /// The number of dependencies that were removed
     pub fn remove_dependencies(
         cargo_toml_path: &Path,
         unused_deps: &HashSet<String>,

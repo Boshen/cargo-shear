@@ -1,3 +1,10 @@
+//! Package processing module for cargo-shear.
+//!
+//! This module coordinates the analysis of individual packages and workspaces
+//! to identify unused dependencies. It combines dependency metadata from
+//! cargo with the actual usage analysis to determine which dependencies
+//! can be safely removed.
+
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::path::{Path, PathBuf};
@@ -7,22 +14,51 @@ use cargo_metadata::{Metadata, Package};
 use crate::dependency_analyzer::{Dependencies, DependencyAnalyzer};
 use crate::error::{Error, Result};
 
+/// Processes packages to identify unused dependencies.
+///
+/// The processor uses a `DependencyAnalyzer` to determine which dependencies
+/// are actually used, then compares with the declared dependencies to find
+/// unused ones.
 pub struct PackageProcessor {
+    /// The analyzer used to find used dependencies in source code
     analyzer: DependencyAnalyzer,
 }
 
+/// Result of processing a single package.
 pub struct ProcessResult {
+    /// Dependencies that are declared but not used
     pub unused_dependencies: HashSet<String>,
+    /// Dependencies that are both declared and used
     pub remaining_dependencies: Dependencies,
 }
 
 impl PackageProcessor {
+    /// Create a new package processor.
+    ///
+    /// # Arguments
+    ///
+    /// * `expand_macros` - Whether to use cargo expand for more accurate analysis
     pub const fn new(expand_macros: bool) -> Self {
         Self {
             analyzer: DependencyAnalyzer::new(expand_macros),
         }
     }
 
+    /// Process a single package to find unused dependencies.
+    ///
+    /// This method:
+    /// 1. Gets the declared dependencies from cargo metadata
+    /// 2. Analyzes the source code to find used dependencies
+    /// 3. Compares the two to identify unused dependencies
+    ///
+    /// # Arguments
+    ///
+    /// * `metadata` - The workspace metadata from cargo
+    /// * `package` - The package to process
+    ///
+    /// # Returns
+    ///
+    /// A `ProcessResult` containing unused and remaining dependencies
     pub fn process_package(
         &self,
         metadata: &Metadata,
