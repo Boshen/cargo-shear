@@ -5,7 +5,7 @@
 //! cargo with the actual usage analysis to determine which dependencies
 //! can be safely removed.
 
-use std::collections::{HashMap, HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::env;
 use std::path::{Path, PathBuf};
 
@@ -28,7 +28,7 @@ pub struct PackageProcessor {
 /// Result of processing a single package.
 pub struct ProcessResult {
     /// Dependencies that are declared but not used
-    pub unused_dependencies: HashSet<String>,
+    pub unused_dependencies: FxHashSet<String>,
     /// Dependencies that are both declared and used
     pub remaining_dependencies: Dependencies,
 }
@@ -77,10 +77,10 @@ impl PackageProcessor {
         let package_dependency_names_map =
             Self::build_dependency_map(&this_package.deps, &ignored_names)?;
 
-        let module_names_from_package_deps: HashSet<String> =
+        let module_names_from_package_deps: FxHashSet<String> =
             package_dependency_names_map.keys().cloned().collect();
 
-        let package_dependency_names: HashSet<String> =
+        let package_dependency_names: FxHashSet<String> =
             package_dependency_names_map.values().cloned().collect();
 
         let module_names_from_rust_files = self.analyzer.analyze_package(package)?;
@@ -90,12 +90,12 @@ impl PackageProcessor {
 
         if unused_module_names.is_empty() {
             return Ok(ProcessResult {
-                unused_dependencies: HashSet::new(),
+                unused_dependencies: FxHashSet::default(),
                 remaining_dependencies: package_dependency_names,
             });
         }
 
-        let unused_dependency_names: HashSet<String> = unused_module_names
+        let unused_dependency_names: FxHashSet<String> = unused_module_names
             .into_iter()
             .map(|name| package_dependency_names_map[name].clone())
             .collect();
@@ -109,9 +109,9 @@ impl PackageProcessor {
     pub fn process_workspace(
         metadata: &Metadata,
         all_package_deps: &Dependencies,
-    ) -> Result<HashSet<String>> {
+    ) -> Result<FxHashSet<String>> {
         if metadata.workspace_packages().len() <= 1 {
-            return Ok(HashSet::new());
+            return Ok(FxHashSet::default());
         }
 
         let metadata_path = metadata.workspace_root.as_std_path();
@@ -119,13 +119,13 @@ impl PackageProcessor {
         let manifest = cargo_toml::Manifest::from_path(&cargo_toml_path)?;
 
         let Some(workspace) = &manifest.workspace else {
-            return Ok(HashSet::new());
+            return Ok(FxHashSet::default());
         };
 
         let ignored_names =
             DependencyAnalyzer::get_ignored_package_names(&metadata.workspace_metadata);
 
-        let workspace_deps: HashSet<String> = workspace
+        let workspace_deps: FxHashSet<String> = workspace
             .dependencies
             .iter()
             .map(|(key, dependency)| {
@@ -155,8 +155,8 @@ impl PackageProcessor {
 
     fn build_dependency_map(
         deps: &[cargo_metadata::NodeDep],
-        ignored_names: &HashSet<&str>,
-    ) -> Result<HashMap<String, String>> {
+        ignored_names: &FxHashSet<&str>,
+    ) -> Result<FxHashMap<String, String>> {
         Ok(deps
             .iter()
             .map(|node_dep| {
@@ -166,6 +166,6 @@ impl PackageProcessor {
             .collect::<Result<Vec<_>>>()?
             .into_iter()
             .filter(|(_, name)| !ignored_names.contains(name.as_str()))
-            .collect::<HashMap<_, _>>())
+            .collect::<FxHashMap<_, _>>())
     }
 }

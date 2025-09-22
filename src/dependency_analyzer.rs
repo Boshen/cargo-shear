@@ -9,7 +9,7 @@
 //! The analyzer walks through all source files in a package, collects import
 //! statements, and builds a set of used dependency names.
 
-use std::collections::HashSet;
+use rustc_hash::FxHashSet;
 use std::env;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -24,7 +24,7 @@ use crate::import_collector::collect_imports;
 use anyhow::{Result, anyhow};
 
 /// A set of dependency names (crate names).
-pub type Dependencies = HashSet<String>;
+pub type Dependencies = FxHashSet<String>;
 
 /// Analyzes Rust source code to find used dependencies.
 ///
@@ -74,7 +74,7 @@ impl DependencyAnalyzer {
             .map(|path| Self::process_rust_source(path))
             .collect::<Result<Vec<_>>>()?;
 
-        Ok(deps_vec.into_iter().fold(HashSet::new(), |a, b| a.union(&b).cloned().collect()))
+        Ok(deps_vec.into_iter().fold(FxHashSet::default(), |a, b| a.union(&b).cloned().collect()))
     }
 
     fn analyze_with_expansion(package: &Package) -> Result<Dependencies> {
@@ -205,13 +205,15 @@ impl DependencyAnalyzer {
     /// # Returns
     ///
     /// A set of package names to ignore
-    pub fn get_ignored_package_names(value: &serde_json::Value) -> HashSet<&str> {
+    pub fn get_ignored_package_names(value: &serde_json::Value) -> FxHashSet<&str> {
         value
             .as_object()
             .and_then(|object| object.get("cargo-shear"))
             .and_then(|object| object.get("ignored"))
             .and_then(|ignored| ignored.as_array())
-            .map(|ignored| ignored.iter().filter_map(|item| item.as_str()).collect::<HashSet<_>>())
+            .map(|ignored| {
+                ignored.iter().filter_map(|item| item.as_str()).collect::<FxHashSet<_>>()
+            })
             .unwrap_or_default()
     }
 }
