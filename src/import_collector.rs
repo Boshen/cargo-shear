@@ -112,7 +112,7 @@ impl ImportCollector {
             if bytes[i] == b':' && bytes[i + 1] == b':' {
                 // Extract the identifier before "::"
                 if let Some(ident) = Self::extract_identifier_before(&source_text, i)
-                    && !ident.chars().next().unwrap_or('A').is_uppercase()
+                    && ident.chars().next().is_some_and(|c| !c.is_uppercase())
                     && !Self::is_known_import(&ident)
                 {
                     idents.push(ident);
