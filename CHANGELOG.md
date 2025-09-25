@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.3](https://github.com/Boshen/cargo-shear/compare/v1.5.2...v1.5.3) - 2025-09-25
+
+### Other
+
+- *(deps)* update crate-ci/typos action to v1.36.3 ([#275](https://github.com/Boshen/cargo-shear/pull/275))
+
 ## [1.5.2](https://github.com/Boshen/cargo-shear/compare/v1.5.1...v1.5.2) - 2025-09-22
 
 ### Other
