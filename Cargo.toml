@@ -20,7 +20,7 @@ test = false
 
 [dependencies]
 walkdir = "2.5.0"
-cargo_metadata = "0.22.0"
+cargo_metadata = "0.23.0"
 cargo_toml = "0.22.1"
 bpaf = { version = "0.9.19", features = ["derive", "batteries"] }
 proc-macro2 = { version = "1.0.94", features = ["span-locations"] }
