@@ -59,9 +59,13 @@ impl PackageProcessor {
     ///
     /// A `ProcessResult` containing unused and remaining dependencies
     pub fn process_package(&self, metadata: &Metadata, package: &Package) -> Result<ProcessResult> {
-        let mut ignored_names = DependencyAnalyzer::get_ignored_package_names(&package.metadata);
-        ignored_names
-            .extend(DependencyAnalyzer::get_ignored_package_names(&metadata.workspace_metadata));
+        let package_ignored_names =
+            DependencyAnalyzer::get_ignored_package_names(&package.metadata);
+        let workspace_ignored_names =
+            DependencyAnalyzer::get_ignored_package_names(&metadata.workspace_metadata);
+
+        let mut ignored_names = package_ignored_names.clone();
+        ignored_names.extend(workspace_ignored_names.clone());
 
         let this_package = metadata
             .resolve
@@ -73,6 +77,26 @@ impl PackageProcessor {
             .iter()
             .find(|node| node.id == package.id)
             .ok_or_else(|| anyhow!("Package not found: {}", package.name))?;
+
+        // Get all actual package dependency names (before filtering by ignored)
+        let all_package_dep_names: FxHashSet<String> = this_package
+            .deps
+            .iter()
+            .map(|node_dep| {
+                DependencyAnalyzer::parse_package_id(&node_dep.pkg.repr)
+                    .unwrap_or_else(|_| node_dep.name.clone())
+            })
+            .collect();
+
+        // Warn about package-level ignored dependencies that don't exist in package dependencies
+        for ignored in &package_ignored_names {
+            if !all_package_dep_names.contains(*ignored) {
+                println!(
+                    "warning: '{ignored}' is redundant in [package.metadata.cargo-shear] for package '{}'.\n",
+                    package.name
+                );
+            }
+        }
 
         let package_dependency_names_map =
             Self::build_dependency_map(&this_package.deps, &ignored_names)?;
@@ -125,7 +149,8 @@ impl PackageProcessor {
         let ignored_names =
             DependencyAnalyzer::get_ignored_package_names(&metadata.workspace_metadata);
 
-        let workspace_deps: FxHashSet<String> = workspace
+        // Get all actual workspace dependency names (before filtering by ignored)
+        let all_workspace_dep_names: FxHashSet<String> = workspace
             .dependencies
             .iter()
             .map(|(key, dependency)| {
@@ -135,6 +160,19 @@ impl PackageProcessor {
                     .unwrap_or(key)
                     .clone()
             })
+            .collect();
+
+        // Warn about workspace-level ignored dependencies that don't exist in workspace dependencies
+        for ignored in &ignored_names {
+            if !all_workspace_dep_names.contains(*ignored) {
+                println!(
+                    "warning: '{ignored}' is redundant in [workspace.metadata.cargo-shear].\n"
+                );
+            }
+        }
+
+        let workspace_deps: FxHashSet<String> = all_workspace_dep_names
+            .into_iter()
             .filter(|name| !ignored_names.contains(name.as_str()))
             .collect();
 

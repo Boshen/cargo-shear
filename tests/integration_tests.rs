@@ -209,3 +209,35 @@ fn test_complex_workspace_unused_deps_fix() {
     assert!(!tools_toml.contains("clap"), "Unused dependency should be removed from tools");
     assert!(!tools_toml.contains("regex"), "Unused dependency should be removed from tools");
 }
+
+#[test]
+fn test_invalid_ignored_package_warning() {
+    // This test verifies that a warning is printed when a package-level ignored
+    // dependency doesn't exist in the package's dependencies.
+    // The warning will appear during test execution:
+    // "warning: 'nonexistent-crate' is redundant in [package.metadata.cargo-shear] for package 'invalid-ignored-test'."
+    let (exit_code, _temp_dir) = run_cargo_shear_on_fixture("invalid_ignored", false);
+
+    // Should succeed since all actual dependencies are used
+    assert_eq!(
+        exit_code,
+        ExitCode::SUCCESS,
+        "Should succeed when all actual dependencies are used"
+    );
+}
+
+#[test]
+fn test_invalid_ignored_workspace_warning() {
+    // This test verifies that a warning is printed when a workspace-level ignored
+    // dependency doesn't exist in the workspace dependencies.
+    // The warning will appear during test execution:
+    // "warning: 'workspace-nonexistent' is redundant in [workspace.metadata.cargo-shear]."
+    let (exit_code, _temp_dir) = run_cargo_shear_on_fixture("invalid_ignored_workspace", false);
+
+    // Should succeed since all actual dependencies are used
+    assert_eq!(
+        exit_code,
+        ExitCode::SUCCESS,
+        "Should succeed when all actual dependencies are used"
+    );
+}

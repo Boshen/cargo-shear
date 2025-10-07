@@ -1,0 +1,11 @@
+[package]
+name = "invalid-ignored-test"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = "1.0"
+
+[package.metadata.cargo-shear]
+# "nonexistent-crate" does not exist in dependencies - should trigger a warning
+ignored = ["nonexistent-crate"]
