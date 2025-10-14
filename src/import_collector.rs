@@ -1,4 +1,3 @@
-
 //! Import statement collector for cargo-shear.
 //!
 //! This module parses Rust source code using `syn` to extract all import
@@ -62,9 +61,9 @@ fn collect_imports_from_snippet(code: &str) -> Option<Deps> {
         return Some(collect_from_syntax(&syntax, false));
     }
 
-     // If that fails, wrap in a main function (like doc tests do)
-     let wrapped = format!("fn main() {{\n{code}\n}}");
-     let syntax = syn::parse_file(&wrapped).ok()?;
+    // If that fails, wrap in a main function (like doc tests do)
+    let wrapped = format!("fn main() {{\n{code}\n}}");
+    let syntax = syn::parse_file(&wrapped).ok()?;
     Some(collect_from_syntax(&syntax, false))
 }
 
@@ -320,10 +319,10 @@ fn gather_doc_blocks(source_text: &str) -> Vec<String> {
     blocks
 }
 
- fn extract_line_doc(line: &str) -> Option<&str> {
-     let trimmed = line.trim_start();
-     trimmed.strip_prefix("///").map_or_else(|| trimmed.strip_prefix("//!"), Some)
- }
+fn extract_line_doc(line: &str) -> Option<&str> {
+    let trimmed = line.trim_start();
+    trimmed.strip_prefix("///").map_or_else(|| trimmed.strip_prefix("//!"), Some)
+}
 
 fn find_next_block_doc(slice: &str) -> Option<(usize, usize)> {
     let star = slice.find("/**");
@@ -423,12 +422,17 @@ fn normalize_doc_block(code: &str) -> String {
 fn strip_hidden_prefix(line: &str) -> String {
     let leading = line.bytes().take_while(|b| *b == b' ' || *b == b'\t').count();
     let rest = &line[leading..];
-    rest.strip_prefix('#').map_or_else(|| line.to_owned(), |stripped| {
-        let stripped =
-            stripped.strip_prefix(' ').or_else(|| stripped.strip_prefix('\t')).unwrap_or(stripped);
-        let prefix = &line[..leading];
-        format!("{prefix}{stripped}")
-    })
+    rest.strip_prefix('#').map_or_else(
+        || line.to_owned(),
+        |stripped| {
+            let stripped = stripped
+                .strip_prefix(' ')
+                .or_else(|| stripped.strip_prefix('\t'))
+                .unwrap_or(stripped);
+            let prefix = &line[..leading];
+            format!("{prefix}{stripped}")
+        },
+    )
 }
 
 fn leading_whitespace(line: &str) -> usize {
@@ -473,5 +477,28 @@ mod tests {
 
         let deps = collect_imports(source).expect("failed to collect imports from doc block");
         assert!(deps.contains("url"), "doc-test rust blocks should count as dependency usage");
+    }
+
+    #[test]
+    fn collects_imports_from_statement_based_doctest() {
+        // Regression test: doctest snippets often contain bare statements (let bindings, expressions)
+        // that aren't valid at module scope. The parser should wrap them in `fn main() {}`.
+        let source = r#"
+        /// Demonstrates usage with statement-based doctest.
+        ///
+        /// ```rust
+        /// let value = serde_json::json!({"key": "value"});
+        /// let serialized = serde_json::to_string(&value).unwrap();
+        /// assert!(!serialized.is_empty());
+        /// ```
+        fn example() {}
+        "#;
+
+        let deps = collect_imports(source)
+            .expect("failed to collect imports from statement-based doctest");
+        assert!(
+            deps.contains("serde_json"),
+            "statement-based doctests should be wrapped and parsed correctly"
+        );
     }
 }
