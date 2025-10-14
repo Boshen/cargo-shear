@@ -1,3 +1,4 @@
+
 //! Import statement collector for cargo-shear.
 //!
 //! This module parses Rust source code using `syn` to extract all import
@@ -27,18 +28,56 @@ use crate::dependency_analyzer::Dependencies as Deps;
 ///
 /// A set of crate names that are referenced in the source code
 pub fn collect_imports(source_text: &str) -> syn::Result<Deps> {
-    let syntax = syn::parse_str::<syn::File>(source_text)?;
-    let mut collector = ImportCollector::default();
-    collector.visit(&syntax);
-    Ok(collector.deps)
+    collect_imports_internal(source_text, true)
 }
 
-#[derive(Default)]
+fn collect_imports_internal(source_text: &str, include_doc_code: bool) -> syn::Result<Deps> {
+    let syntax = syn::parse_str::<syn::File>(source_text)?;
+    let mut deps = collect_from_syntax(&syntax, include_doc_code);
+
+    if include_doc_code {
+        for block in gather_doc_blocks(source_text) {
+            let normalized = normalize_doc_block(&block);
+            if normalized.trim().is_empty() {
+                continue;
+            }
+            if let Some(snippet_deps) = collect_imports_from_snippet(&normalized) {
+                deps.extend(snippet_deps);
+            }
+        }
+    }
+
+    Ok(deps)
+}
+
+fn collect_from_syntax(syntax: &syn::File, include_doc_code: bool) -> Deps {
+    let mut collector = ImportCollector::new(include_doc_code);
+    collector.visit(syntax);
+    collector.deps
+}
+
+fn collect_imports_from_snippet(code: &str) -> Option<Deps> {
+    // Try parsing as a complete file first
+    if let Ok(syntax) = syn::parse_file(code) {
+        return Some(collect_from_syntax(&syntax, false));
+    }
+
+     // If that fails, wrap in a main function (like doc tests do)
+     let wrapped = format!("fn main() {{\n{code}\n}}");
+     let syntax = syn::parse_file(&wrapped).ok()?;
+    Some(collect_from_syntax(&syntax, false))
+}
+
 struct ImportCollector {
     deps: Deps,
+    include_doc_code: bool,
 }
 
 impl ImportCollector {
+    fn new(include_doc_code: bool) -> Self {
+        Self { deps: Deps::default(), include_doc_code }
+    }
+
     fn visit(&mut self, syntax: &syn::File) {
         use syn::visit::Visit;
         self.visit_file(syntax);
@@ -233,7 +272,206 @@ impl<'a> syn::visit::Visit<'a> for ImportCollector {
     }
 
     fn visit_attribute(&mut self, attr: &'a syn::Attribute) {
+        if !self.include_doc_code && attr.path().is_ident("doc") {
+            return;
+        }
         self.collect_known_attribute(attr);
         syn::visit::visit_attribute(self, attr);
+    }
+}
+
+fn gather_doc_blocks(source_text: &str) -> Vec<String> {
+    let mut blocks = Vec::new();
+    let mut current_doc = Vec::new();
+
+    for line in source_text.lines() {
+        if let Some(content) = extract_line_doc(line) {
+            current_doc.push(content.to_owned());
+        } else if !current_doc.is_empty() {
+            let doc_text = current_doc.join("\n");
+            blocks.extend(extract_fenced_code_blocks(&doc_text));
+            current_doc.clear();
+        }
+    }
+
+    if !current_doc.is_empty() {
+        let doc_text = current_doc.join("\n");
+        blocks.extend(extract_fenced_code_blocks(&doc_text));
+    }
+
+    let mut search_start = 0;
+    while search_start < source_text.len() {
+        let slice = &source_text[search_start..];
+        let Some((relative_start, marker_len)) = find_next_block_doc(slice) else {
+            break;
+        };
+        let absolute_start = search_start + relative_start;
+        let content_start = absolute_start + marker_len;
+        let remainder = &source_text[content_start..];
+        let Some(end) = remainder.find("*/") else {
+            break;
+        };
+        let raw_block = &remainder[..end];
+        let doc_text = extract_block_doc_text(raw_block);
+        blocks.extend(extract_fenced_code_blocks(&doc_text));
+        search_start = content_start + end + 2;
+    }
+
+    blocks
+}
+
+ fn extract_line_doc(line: &str) -> Option<&str> {
+     let trimmed = line.trim_start();
+     trimmed.strip_prefix("///").map_or_else(|| trimmed.strip_prefix("//!"), Some)
+ }
+
+fn find_next_block_doc(slice: &str) -> Option<(usize, usize)> {
+    let star = slice.find("/**");
+    let bang = slice.find("/*!");
+    match (star, bang) {
+        (Some(a), Some(b)) => {
+            if a <= b {
+                Some((a, 3))
+            } else {
+                Some((b, 3))
+            }
+        }
+        (Some(a), None) => Some((a, 3)),
+        (None, Some(b)) => Some((b, 3)),
+        (None, None) => None,
+    }
+}
+
+fn extract_block_doc_text(raw: &str) -> String {
+    raw.lines()
+        .map(|line| {
+            let trimmed = line.trim_start();
+            let without_star = trimmed.strip_prefix('*').map_or(trimmed, |rest| {
+                rest.strip_prefix(' ').or_else(|| rest.strip_prefix('\t')).unwrap_or(rest)
+            });
+            without_star.to_owned()
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn extract_fenced_code_blocks(doc_text: &str) -> Vec<String> {
+    let mut blocks = Vec::new();
+    let lines: Vec<&str> = doc_text.lines().collect();
+    let mut idx = 0;
+
+    while idx < lines.len() {
+        let line = lines[idx];
+        if let Some(info) = line.trim_start().strip_prefix("```") {
+            let include = should_include_info(info.trim());
+            idx += 1;
+            let mut snippet_lines = Vec::new();
+            while idx < lines.len() && !lines[idx].trim_start().starts_with("```") {
+                snippet_lines.push(lines[idx].to_owned());
+                idx += 1;
+            }
+            if include {
+                blocks.push(snippet_lines.join("\n"));
+            }
+            if idx < lines.len() {
+                idx += 1;
+            }
+        } else {
+            idx += 1;
+        }
+    }
+
+    blocks
+}
+
+fn should_include_info(info: &str) -> bool {
+    if info.is_empty() {
+        return true;
+    }
+    let lower = info.to_ascii_lowercase();
+    lower
+        .split(|c: char| c.is_ascii_whitespace() || c == ',')
+        .filter(|part| !part.is_empty())
+        .any(|part| matches!(part, "rust" | "ignore" | "no_run" | "should_panic"))
+}
+
+/// Doc-test snippets hide setup lines with `#`; strip those markers and normalize indentation before parsing.
+fn normalize_doc_block(code: &str) -> String {
+    let mut lines: Vec<String> = code.lines().map(strip_hidden_prefix).collect();
+
+    let indent = lines
+        .iter()
+        .filter_map(
+            |line| {
+                if line.trim().is_empty() { None } else { Some(leading_whitespace(line)) }
+            },
+        )
+        .min()
+        .unwrap_or(0);
+
+    for line in &mut lines {
+        if line.trim().is_empty() {
+            line.clear();
+        } else if indent > 0 {
+            *line = trim_leading_whitespace(line, indent);
+        }
+    }
+
+    lines.join("\n")
+}
+
+fn strip_hidden_prefix(line: &str) -> String {
+    let leading = line.bytes().take_while(|b| *b == b' ' || *b == b'\t').count();
+    let rest = &line[leading..];
+    rest.strip_prefix('#').map_or_else(|| line.to_owned(), |stripped| {
+        let stripped =
+            stripped.strip_prefix(' ').or_else(|| stripped.strip_prefix('\t')).unwrap_or(stripped);
+        let prefix = &line[..leading];
+        format!("{prefix}{stripped}")
+    })
+}
+
+fn leading_whitespace(line: &str) -> usize {
+    line.bytes().take_while(|b| *b == b' ' || *b == b'\t').count()
+}
+
+fn trim_leading_whitespace(line: &str, count: usize) -> String {
+    if count == 0 {
+        return line.to_owned();
+    }
+    let mut idx = 0;
+    let mut removed = 0;
+    let bytes = line.as_bytes();
+    while idx < bytes.len() && removed < count {
+        let b = bytes[idx];
+        if b == b' ' || b == b'\t' {
+            idx += 1;
+            removed += 1;
+        } else {
+            break;
+        }
+    }
+    line[idx..].to_owned()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn collects_imports_from_doc_rust_block() {
+        let source = r#"
+        /// Parses URLs.
+        ///
+        /// ```rust
+        /// # use url::Url;
+        /// let url = Url::parse("https://example.com").unwrap();
+        /// println!("{}", url);
+        /// ```
+        fn demo() {}
+        "#;
+
+        let deps = collect_imports(source).expect("failed to collect imports from doc block");
+        assert!(deps.contains("url"), "doc-test rust blocks should count as dependency usage");
     }
 }
