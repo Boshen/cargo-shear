@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0](https://github.com/Boshen/cargo-shear/compare/v1.5.2...v1.6.0) - 2025-10-15
+
+### Added
+
+- collect imports from documentation code blocks ([#289](https://github.com/Boshen/cargo-shear/pull/289))
+- warn about redundant ignored dependencies in metadata ([#284](https://github.com/Boshen/cargo-shear/pull/284))
+
+### Other
+
+- *(deps)* update github/codeql-action action to v4 ([#287](https://github.com/Boshen/cargo-shear/pull/287))
+- *(deps)* lock file maintenance rust crates ([#288](https://github.com/Boshen/cargo-shear/pull/288))
+- *(deps)* update github-actions ([#286](https://github.com/Boshen/cargo-shear/pull/286))
+- *(deps)* update crate-ci/typos action to v1.38.1 ([#285](https://github.com/Boshen/cargo-shear/pull/285))
+- *(deps)* update crate-ci/typos action to v1.38.0 ([#283](https://github.com/Boshen/cargo-shear/pull/283))
+- *(deps)* lock file maintenance rust crates ([#282](https://github.com/Boshen/cargo-shear/pull/282))
+- *(deps)* update github-actions ([#281](https://github.com/Boshen/cargo-shear/pull/281))
+- *(deps)* update crate-ci/typos action to v1.37.2 ([#280](https://github.com/Boshen/cargo-shear/pull/280))
+- *(deps)* update crate-ci/typos action to v1.37.1 ([#279](https://github.com/Boshen/cargo-shear/pull/279))
+- *(deps)* update crate-ci/typos action to v1.37.0 ([#278](https://github.com/Boshen/cargo-shear/pull/278))
+- *(deps)* update github-actions ([#277](https://github.com/Boshen/cargo-shear/pull/277))
+- *(deps)* update crate-ci/typos action to v1.36.3 ([#275](https://github.com/Boshen/cargo-shear/pull/275))
+
 ## [1.5.2](https://github.com/Boshen/cargo-shear/compare/v1.5.1...v1.5.2) - 2025-09-22
 
 ### Other
