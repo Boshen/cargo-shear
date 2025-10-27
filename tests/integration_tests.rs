@@ -93,6 +93,8 @@ fn test_workspace_unused_deps_fix() {
     // serde and clap should still be there (they're used)
     assert!(cargo_toml.contains("serde"), "Used workspace dependency should remain");
     assert!(cargo_toml.contains("clap"), "Used workspace dependency should remain");
+    // humantime-serde should still be there (it's ignored in app)
+    assert!(cargo_toml.contains("humantime-serde"), "Used workspace dependency should remain");
 
     // unused-crate should be removed (it's not used by anyone)
     assert!(!cargo_toml.contains("unused-crate"), "Unused workspace dependency should be removed");

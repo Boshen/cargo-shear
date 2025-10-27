@@ -3,6 +3,10 @@ name = "app"
 version = "0.1.0"
 edition = "2021"
 
+[package.metadata.cargo-shear]
+ignored = ["humantime-serde"]
+
 [dependencies]
 clap = { workspace = true }
 lib = { path = "../lib" }
+humantime-serde = { workspace = true }
