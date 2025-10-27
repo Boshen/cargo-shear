@@ -8,3 +8,5 @@ serde = "1.0"
 unused-crate = "0.1"
 # Used by app
 clap = "4.0"
+# Ignored by app - should still be considered used
+humantime-serde = "0.1"
