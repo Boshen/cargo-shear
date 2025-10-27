@@ -104,8 +104,12 @@ impl PackageProcessor {
         let module_names_from_package_deps: FxHashSet<String> =
             package_dependency_names_map.keys().cloned().collect();
 
-        let package_dependency_names: FxHashSet<String> =
-            package_dependency_names_map.values().cloned().collect();
+        // Add ignored names to the set of package dependency names to prevent them from being marked unused in the workspace analysis.
+        let package_dependency_names: FxHashSet<String> = package_dependency_names_map
+            .values()
+            .cloned()
+            .chain(package_ignored_names.into_iter().map(str::to_string))
+            .collect();
 
         let module_names_from_rust_files = self.analyzer.analyze_package(package)?;
 
