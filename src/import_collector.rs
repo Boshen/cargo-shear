@@ -422,17 +422,16 @@ fn normalize_doc_block(code: &str) -> String {
 fn strip_hidden_prefix(line: &str) -> String {
     let leading = line.bytes().take_while(|b| *b == b' ' || *b == b'\t').count();
     let rest = &line[leading..];
-    rest.strip_prefix('#').map_or_else(
-        || line.to_owned(),
-        |stripped| {
-            let stripped = stripped
-                .strip_prefix(' ')
-                .or_else(|| stripped.strip_prefix('\t'))
-                .unwrap_or(stripped);
+
+    // Only strip '#' if it's followed by a space/tab
+    match rest.as_bytes() {
+        [b'#', b' ' | b'\t', ..] => {
             let prefix = &line[..leading];
+            let stripped = &rest[2..];
             format!("{prefix}{stripped}")
-        },
-    )
+        }
+        _ => line.to_owned(),
+    }
 }
 
 fn leading_whitespace(line: &str) -> usize {
@@ -477,6 +476,23 @@ mod tests {
 
         let deps = collect_imports(source).expect("failed to collect imports from doc block");
         assert!(deps.contains("url"), "doc-test rust blocks should count as dependency usage");
+    }
+
+    #[test]
+    fn collects_imports_from_doc_block_with_attribute() {
+        let source = r#"
+        /// ```rust
+        /// # use async_trait::async_trait;
+        /// #[async_trait]
+        /// trait HttpClient {
+        ///     async fn send(request: Request);
+        /// }
+        /// ```
+        fn example() {}
+        "#;
+
+        let deps = collect_imports(source).expect("failed to collect imports");
+        assert!(deps.contains("async_trait"), "should detect async_trait");
     }
 
     #[test]
