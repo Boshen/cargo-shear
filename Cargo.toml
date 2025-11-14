@@ -94,6 +94,7 @@ complexity = { level = "warn", priority = -1 }
 perf = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
 nursery = { level = "warn", priority = -1 }
+struct_excessive_bools = "allow"
 
 # Additional lints from https://rust-lang.github.io/rust-clippy/master/index.html?groups=restriction
 allow_attributes = "warn"

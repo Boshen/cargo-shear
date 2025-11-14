@@ -83,6 +83,9 @@ fn serde_crate_on_type() {
 fn test_lib() {
     let shear = CargoShear::new(CargoShearOptions {
         fix: false,
+        locked: false,
+        offline: false,
+        frozen: false,
         package: vec![],
         exclude: vec![],
         path: default_path().unwrap(),
@@ -307,6 +310,9 @@ fn cargo_shear_with_different_options() {
     // Test with fix=true but no unused dependencies (should not change anything)
     let shear = CargoShear::new(CargoShearOptions {
         fix: true,
+        locked: false,
+        offline: false,
+        frozen: false,
         package: vec![],
         exclude: vec![],
         path: default_path().unwrap(),
@@ -321,6 +327,9 @@ fn cargo_shear_with_package_filter() {
     // Test with specific package filtering
     let shear = CargoShear::new(CargoShearOptions {
         fix: false,
+        locked: false,
+        offline: false,
+        frozen: false,
         package: vec!["cargo-shear".to_string()],
         exclude: vec![],
         path: default_path().unwrap(),
@@ -335,6 +344,9 @@ fn cargo_shear_with_exclude_filter() {
     // Test with package exclusion
     let shear = CargoShear::new(CargoShearOptions {
         fix: false,
+        locked: false,
+        offline: false,
+        frozen: false,
         package: vec![],
         exclude: vec!["some-package".to_string()],
         path: default_path().unwrap(),
@@ -349,6 +361,9 @@ fn cargo_shear_options_creation() {
     // Test that we can create options with all combinations
     let options = CargoShearOptions {
         fix: true,
+        locked: false,
+        offline: false,
+        frozen: false,
         package: vec!["test1".to_string(), "test2".to_string()],
         exclude: vec!["exclude1".to_string()],
         path: std::path::PathBuf::from("/tmp"),
@@ -507,6 +522,9 @@ fn test_default_path() {
 fn test_cargo_shear_new() {
     let options = CargoShearOptions {
         fix: false,
+        locked: false,
+        offline: false,
+        frozen: false,
         package: vec![],
         exclude: vec![],
         path: default_path().unwrap(),

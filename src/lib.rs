@@ -76,6 +76,15 @@ pub struct CargoShearOptions {
     #[bpaf(long)]
     expand: bool,
 
+    /// Assert that `Cargo.lock` will remain unchanged.
+    locked: bool,
+
+    /// Run without accessing the network
+    offline: bool,
+
+    /// Equivalent to specifying both --locked and --offline
+    frozen: bool,
+
     /// Package(s) to check.
     ///
     /// If not specified, all packages in the workspace are checked.
@@ -99,7 +108,16 @@ impl CargoShearOptions {
     /// Create a new `CargoShearOptions` for testing purposes
     #[must_use]
     pub const fn new_for_test(path: PathBuf, fix: bool) -> Self {
-        Self { fix, expand: false, package: vec![], exclude: vec![], path }
+        Self {
+            fix,
+            expand: false,
+            locked: false,
+            offline: false,
+            frozen: false,
+            package: vec![],
+            exclude: vec![],
+            path,
+        }
     }
 }
 
@@ -204,9 +222,21 @@ impl CargoShear {
     }
 
     fn shear(&mut self) -> Result<()> {
+        let mut extra_opts = Vec::new();
+        if self.options.locked {
+            extra_opts.push("--locked".to_owned());
+        }
+        if self.options.offline {
+            extra_opts.push("--offline".to_owned());
+        }
+        if self.options.frozen {
+            extra_opts.push("--frozen".to_owned());
+        }
+
         let metadata = MetadataCommand::new()
             .features(CargoOpt::AllFeatures)
             .current_dir(&self.options.path)
+            .other_options(extra_opts)
             .exec()
             .map_err(|e| anyhow::anyhow!("Metadata error: {e}"))?;
 
