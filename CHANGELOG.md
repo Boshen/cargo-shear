@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.3](https://github.com/Boshen/cargo-shear/compare/v1.6.2...v1.6.3) - 2025-11-14
+
+### Other
+
+- Add locked/offline/frozen flags like cargo ([#310](https://github.com/Boshen/cargo-shear/pull/310))
+- *(deps)* update crate-ci/typos action to v1.39.2 ([#309](https://github.com/Boshen/cargo-shear/pull/309))
+- *(deps)* update crate-ci/typos action to v1.39.1 ([#308](https://github.com/Boshen/cargo-shear/pull/308))
+- *(deps)* update dependency rust to v1.91.1 ([#306](https://github.com/Boshen/cargo-shear/pull/306))
+- *(deps)* lock file maintenance ([#304](https://github.com/Boshen/cargo-shear/pull/304))
+- *(deps)* update rust crate syn to v2.0.109 ([#302](https://github.com/Boshen/cargo-shear/pull/302))
+- *(deps)* update taiki-e/install-action action to v2.62.49 ([#303](https://github.com/Boshen/cargo-shear/pull/303))
+
 ## [1.6.2](https://github.com/Boshen/cargo-shear/compare/v1.6.1...v1.6.2) - 2025-11-04
 
 ### Fixed
