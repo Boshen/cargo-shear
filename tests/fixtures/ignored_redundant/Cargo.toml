@@ -1,0 +1,10 @@
+[package]
+name = "ignored_redundant"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0"
+
+[package.metadata.cargo-shear]
+ignored = ["anyhow"]

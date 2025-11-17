@@ -1,10 +1,8 @@
-#![expect(clippy::unwrap_used, reason = "This is a test module, panicking is fine")]
+use std::{fmt::Write, process::ExitCode};
+
 use rustc_hash::FxHashSet;
-use std::process::ExitCode;
 
-use crate::{CargoShear, CargoShearOptions, default_path};
-
-use crate::import_collector::collect_imports;
+use crate::{CargoShear, CargoShearOptions, default_path, import_collector::collect_imports};
 
 #[track_caller]
 fn test(source_text: &str) {
@@ -81,16 +79,19 @@ fn serde_crate_on_type() {
 
 #[test]
 fn test_lib() {
-    let shear = CargoShear::new(CargoShearOptions {
-        fix: false,
-        locked: false,
-        offline: false,
-        frozen: false,
-        package: vec![],
-        exclude: vec![],
-        path: default_path().unwrap(),
-        expand: false,
-    });
+    let shear = CargoShear::new(
+        std::io::sink(),
+        CargoShearOptions {
+            fix: false,
+            locked: false,
+            offline: false,
+            frozen: false,
+            package: vec![],
+            exclude: vec![],
+            path: default_path().unwrap(),
+            expand: false,
+        },
+    );
     let exit_code = shear.run();
     assert_eq!(exit_code, ExitCode::SUCCESS);
 }
@@ -129,13 +130,13 @@ fn self_super_crate_not_collected() {
 
 #[test]
 fn multiple_imports_same_crate() {
-    let source = r#"
+    let source = r"
         use foo::bar;
         use foo::baz;
         fn main() {
             foo::qux();
         }
-    "#;
+    ";
     let deps = collect_imports(source).unwrap();
     let expected = FxHashSet::from_iter(["foo".to_owned()]);
     assert_eq!(deps, expected);
@@ -240,21 +241,18 @@ fn malformed_syntax_recovery() {
     // Test that we can handle some malformed syntax gracefully
     let result = collect_imports("use foo::;"); // Incomplete use statement
     // Should either parse successfully or return an error, but not panic
-    match result {
-        Ok(deps) => {
-            // If it parses, foo should be collected
-            assert!(deps.contains("foo") || deps.is_empty());
-        }
-        Err(_) => {
-            // Parsing error is acceptable for malformed syntax
-        }
+    if let Ok(deps) = result {
+        // If it parses, foo should be collected
+        assert!(deps.contains("foo") || deps.is_empty());
+    } else {
+        // Parsing error is acceptable for malformed syntax
     }
 }
 
 #[test]
 fn very_long_path() {
     let long_path = "foo::".repeat(100) + "bar";
-    let source = format!("use {};", long_path);
+    let source = format!("use {long_path};");
     let deps = collect_imports(&source).unwrap();
     let expected = FxHashSet::from_iter(["foo".to_owned()]);
     assert_eq!(deps, expected);
@@ -308,16 +306,19 @@ fn pub_use_reexports() {
 #[test]
 fn cargo_shear_with_different_options() {
     // Test with fix=true but no unused dependencies (should not change anything)
-    let shear = CargoShear::new(CargoShearOptions {
-        fix: true,
-        locked: false,
-        offline: false,
-        frozen: false,
-        package: vec![],
-        exclude: vec![],
-        path: default_path().unwrap(),
-        expand: false,
-    });
+    let shear = CargoShear::new(
+        std::io::sink(),
+        CargoShearOptions {
+            fix: true,
+            locked: false,
+            offline: false,
+            frozen: false,
+            package: vec![],
+            exclude: vec![],
+            path: default_path().unwrap(),
+            expand: false,
+        },
+    );
     let exit_code = shear.run();
     assert_eq!(exit_code, ExitCode::SUCCESS);
 }
@@ -325,16 +326,19 @@ fn cargo_shear_with_different_options() {
 #[test]
 fn cargo_shear_with_package_filter() {
     // Test with specific package filtering
-    let shear = CargoShear::new(CargoShearOptions {
-        fix: false,
-        locked: false,
-        offline: false,
-        frozen: false,
-        package: vec!["cargo-shear".to_string()],
-        exclude: vec![],
-        path: default_path().unwrap(),
-        expand: false,
-    });
+    let shear = CargoShear::new(
+        std::io::sink(),
+        CargoShearOptions {
+            fix: false,
+            locked: false,
+            offline: false,
+            frozen: false,
+            package: vec!["cargo-shear".to_owned()],
+            exclude: vec![],
+            path: default_path().unwrap(),
+            expand: false,
+        },
+    );
     let exit_code = shear.run();
     assert_eq!(exit_code, ExitCode::SUCCESS);
 }
@@ -342,16 +346,19 @@ fn cargo_shear_with_package_filter() {
 #[test]
 fn cargo_shear_with_exclude_filter() {
     // Test with package exclusion
-    let shear = CargoShear::new(CargoShearOptions {
-        fix: false,
-        locked: false,
-        offline: false,
-        frozen: false,
-        package: vec![],
-        exclude: vec!["some-package".to_string()],
-        path: default_path().unwrap(),
-        expand: false,
-    });
+    let shear = CargoShear::new(
+        std::io::sink(),
+        CargoShearOptions {
+            fix: false,
+            locked: false,
+            offline: false,
+            frozen: false,
+            package: vec![],
+            exclude: vec!["some-package".to_owned()],
+            path: default_path().unwrap(),
+            expand: false,
+        },
+    );
     let exit_code = shear.run();
     assert_eq!(exit_code, ExitCode::SUCCESS);
 }
@@ -364,13 +371,13 @@ fn cargo_shear_options_creation() {
         locked: false,
         offline: false,
         frozen: false,
-        package: vec!["test1".to_string(), "test2".to_string()],
-        exclude: vec!["exclude1".to_string()],
+        package: vec!["test1".to_owned(), "test2".to_owned()],
+        exclude: vec!["exclude1".to_owned()],
         path: std::path::PathBuf::from("/tmp"),
         expand: true,
     };
 
-    let shear = CargoShear::new(options.clone());
+    let shear = CargoShear::new(std::io::sink(), options.clone());
     // Verify the shear instance was created successfully
     assert_eq!(format!("{:?}", shear.options.fix), format!("{:?}", options.fix));
 }
@@ -398,12 +405,12 @@ fn whitespace_only() {
 #[test]
 fn mixed_valid_invalid_imports() {
     // Test a file with some valid and some edge-case imports
-    let source = r#"
+    let source = r"
         use foo::bar;  // valid
         use std::collections::HashMap;  // should be ignored (std)
         use self::local;  // should be ignored (self)
         use foo::baz::qux;  // valid, same crate as first
-    "#;
+    ";
     let deps = collect_imports(source).unwrap();
     let expected = FxHashSet::from_iter(["foo".to_owned()]);
     assert_eq!(deps, expected);
@@ -420,7 +427,7 @@ fn test_no_deps(source_text: &str) {
 #[track_caller]
 fn test_multiple_deps(source_text: &str, expected_deps: &[&str]) {
     let deps = collect_imports(source_text).unwrap();
-    let expected = FxHashSet::from_iter(expected_deps.iter().map(|s| s.to_string()));
+    let expected = expected_deps.iter().map(|s| (*s).to_owned()).collect::<FxHashSet<_>>();
     assert_eq!(deps, expected, "Dependencies mismatch for: {source_text}");
 }
 
@@ -448,8 +455,8 @@ fn large_file_simulation() {
     // Create a moderately large source file to test performance
     let mut source = String::with_capacity(10000);
     for i in 0..100 {
-        source.push_str(&format!("use foo::module{};\n", i));
-        source.push_str(&format!("fn func{}() {{ foo::call{}(); }}\n", i, i));
+        writeln!(source, "use foo::module{i};").unwrap();
+        writeln!(source, "fn func{i}() {{ foo::call{i}(); }}").unwrap();
     }
 
     let deps = collect_imports(&source).unwrap();
@@ -459,8 +466,8 @@ fn large_file_simulation() {
 
 #[test]
 fn deeply_nested_paths() {
-    let nested_path = (0..20).map(|i| format!("level{}", i)).collect::<Vec<_>>().join("::");
-    let source = format!("use foo::{};", nested_path);
+    let nested_path = (0..20).map(|i| format!("level{i}")).collect::<Vec<_>>().join("::");
+    let source = format!("use foo::{nested_path};");
     let deps = collect_imports(&source).unwrap();
     let expected = FxHashSet::from_iter(["foo".to_owned()]);
     assert_eq!(deps, expected);
@@ -530,7 +537,7 @@ fn test_cargo_shear_new() {
         path: default_path().unwrap(),
         expand: false,
     };
-    let _shear = CargoShear::new(options);
+    let _shear = CargoShear::new(std::io::sink(), options);
     // Just verify it can be created without panicking
 }
 
@@ -663,14 +670,14 @@ fn higher_kinded_types() {
 
 #[test]
 fn complex_where_clauses() {
-    let source = r#"
+    let source = r"
     fn complex<T, U, V>()
     where
         T: foo::Clone + foo::Debug,
         U: foo::Into<T> + foo::Send,
         V: for<'a> foo::Fn(&'a T) -> U
     {}
-    "#;
+    ";
     test(source);
 }
 
@@ -680,7 +687,7 @@ fn complex_where_clauses() {
 fn many_small_imports() {
     let mut source = String::new();
     for i in 0..1000 {
-        source.push_str(&format!("use foo::item{};\n", i));
+        writeln!(source, "use foo::item{i};").unwrap();
     }
     let deps = collect_imports(&source).unwrap();
     let expected = FxHashSet::from_iter(["foo".to_owned()]);
@@ -691,7 +698,7 @@ fn many_small_imports() {
 fn deeply_nested_modules() {
     let mut source = String::new();
     for i in 0..100 {
-        source.push_str(&format!("mod level{} {{ use foo::item{}; }}\n", i, i));
+        writeln!(source, "mod level{i} {{ use foo::item{i}; }}").unwrap();
     }
     let deps = collect_imports(&source).unwrap();
     let expected = FxHashSet::from_iter(["foo".to_owned()]);
@@ -725,6 +732,10 @@ fn macro_invocation_complex_patterns() {
 
     // Multiple :: patterns in single macro
     test_multiple_deps(r#"fn main() { println!("{} {}", foo::bar, baz::qux); }"#, &["foo", "baz"]);
+    #[expect(
+        clippy::literal_string_with_formatting_args,
+        reason = "Testing format string handling"
+    )]
     test_multiple_deps(
         r#"fn main() { format!("{:?} {:?}", foo::Debug, bar::Display); }"#,
         &["foo", "bar"],
@@ -935,7 +946,7 @@ fn unsafe_code_with_paths() {
 #[test]
 fn macro_rules_complex() {
     test_multiple_deps(
-        r#"
+        r"
         macro_rules! complex {
             ($t:ty) => {
                 impl foo::Trait for $t {
@@ -945,7 +956,7 @@ fn macro_rules_complex() {
                 }
             };
         }
-    "#,
+    ",
         &["foo", "bar", "baz"],
     );
 }
@@ -1003,14 +1014,14 @@ fn test_helper_paths() {
 #[test]
 fn mixed_import_styles() {
     test_multiple_deps(
-        r#"
+        r"
         extern crate foo;
         use bar::item;
         fn main() {
             baz::function();
             qux::CONSTANT;
         }
-        "#,
+        ",
         &["foo", "bar", "baz", "qux"],
     );
 }

@@ -9,19 +9,21 @@
 //! The analyzer walks through all source files in a package, collects import
 //! statements, and builds a set of used dependency names.
 
-use rustc_hash::FxHashSet;
-use std::env;
-use std::ffi::OsString;
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::{
+    env,
+    ffi::OsString,
+    path::{Path, PathBuf},
+    process::Command,
+};
 
+use anyhow::{Result, anyhow};
 use cargo_metadata::{Package, TargetKind};
 use cargo_util_schemas::core::PackageIdSpec;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use rustc_hash::FxHashSet;
 use walkdir::{DirEntry, WalkDir};
 
 use crate::import_collector::collect_imports;
-use anyhow::{Result, anyhow};
 
 /// A set of dependency names (crate names).
 pub type Dependencies = FxHashSet<String>;

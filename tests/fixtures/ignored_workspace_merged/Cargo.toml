@@ -1,0 +1,11 @@
+[workspace]
+resolver = "3"
+members = ["lib"]
+
+[workspace.dependencies]
+# Unused
+anyhow = "1.0"
+thiserror = "2.0"
+
+[workspace.metadata.cargo-shear]
+ignored = ["anyhow"]

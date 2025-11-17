@@ -38,6 +38,7 @@ rustc-hash = "2.1.1"
 
 [dev-dependencies]
 tempfile = "3.0"
+insta = "1.43"
 
 [target.'cfg(all(not(target_os = "linux"), not(target_os = "freebsd"), not(target_family = "wasm")))'.dependencies]
 mimalloc-safe = { version = "0.1.50", optional = true, features = [

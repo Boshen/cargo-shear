@@ -1,0 +1,6 @@
+[workspace]
+resolver = "3"
+members = ["app", "lib"]
+
+[workspace.dependencies]
+anyhow = "1.0"

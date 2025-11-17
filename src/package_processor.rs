@@ -5,15 +5,17 @@
 //! cargo with the actual usage analysis to determine which dependencies
 //! can be safely removed.
 
-use rustc_hash::{FxHashMap, FxHashSet};
-use std::env;
-use std::path::{Path, PathBuf};
-
-use cargo_metadata::{Metadata, Package};
-
-use crate::dependency_analyzer::{Dependencies, DependencyAnalyzer};
+use std::{
+    env,
+    io::Write,
+    path::{Path, PathBuf},
+};
 
 use anyhow::{Result, anyhow};
+use cargo_metadata::{Metadata, Package};
+use rustc_hash::{FxHashMap, FxHashSet};
+
+use crate::dependency_analyzer::{Dependencies, DependencyAnalyzer};
 
 /// Processes packages to identify unused dependencies.
 ///
@@ -52,13 +54,19 @@ impl PackageProcessor {
     ///
     /// # Arguments
     ///
+    /// * `writer` - Output writer
     /// * `metadata` - The workspace metadata from cargo
     /// * `package` - The package to process
     ///
     /// # Returns
     ///
     /// A `ProcessResult` containing unused and remaining dependencies
-    pub fn process_package(&self, metadata: &Metadata, package: &Package) -> Result<ProcessResult> {
+    pub fn process_package<W: Write>(
+        &self,
+        writer: &mut W,
+        metadata: &Metadata,
+        package: &Package,
+    ) -> Result<ProcessResult> {
         let package_ignored_names =
             DependencyAnalyzer::get_ignored_package_names(&package.metadata);
         let workspace_ignored_names =
@@ -91,10 +99,11 @@ impl PackageProcessor {
         // Warn about package-level ignored dependencies that don't exist in package dependencies
         for ignored in &package_ignored_names {
             if !all_package_dep_names.contains(*ignored) {
-                println!(
+                writeln!(
+                    writer,
                     "warning: '{ignored}' is redundant in [package.metadata.cargo-shear] for package '{}'.\n",
                     package.name
-                );
+                )?;
             }
         }
 
@@ -134,7 +143,8 @@ impl PackageProcessor {
         Ok(ProcessResult { unused_dependencies: unused_dependency_names, remaining_dependencies })
     }
 
-    pub fn process_workspace(
+    pub fn process_workspace<W: Write>(
+        writer: &mut W,
         metadata: &Metadata,
         all_package_deps: &Dependencies,
     ) -> Result<FxHashSet<String>> {
@@ -169,9 +179,10 @@ impl PackageProcessor {
         // Warn about workspace-level ignored dependencies that don't exist in workspace dependencies
         for ignored in &ignored_names {
             if !all_workspace_dep_names.contains(*ignored) {
-                println!(
+                writeln!(
+                    writer,
                     "warning: '{ignored}' is redundant in [workspace.metadata.cargo-shear].\n"
-                );
+                )?;
             }
         }
 

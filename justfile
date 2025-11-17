@@ -6,7 +6,7 @@ _default:
 alias r := ready
 
 init:
-  cargo binstall watchexec-cli taplo-cli typos-cli
+  cargo binstall watchexec-cli taplo-cli typos-cli cargo-insta
 
 watch *args='':
   watchexec {{args}}
@@ -23,6 +23,9 @@ fmt:
 
 lint:
   cargo clippy
+
+snapshots:
+  cargo insta test --accept
 
 ready:
   typos

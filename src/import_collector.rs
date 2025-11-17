@@ -480,7 +480,7 @@ mod tests {
 
     #[test]
     fn collects_imports_from_doc_block_with_attribute() {
-        let source = r#"
+        let source = r"
         /// ```rust
         /// # use async_trait::async_trait;
         /// #[async_trait]
@@ -489,7 +489,7 @@ mod tests {
         /// }
         /// ```
         fn example() {}
-        "#;
+        ";
 
         let deps = collect_imports(source).expect("failed to collect imports");
         assert!(deps.contains("async_trait"), "should detect async_trait");
