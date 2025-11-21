@@ -1,0 +1,10 @@
+[package]
+name = "misplaced_table"
+version = "0.1.0"
+edition = "2024"
+
+# Misplaced
+[dependencies.anyhow]
+version = "1.0"
+default-features = false
+features = ["std"]

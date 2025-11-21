@@ -1,0 +1,8 @@
+[package]
+name = "unused"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Unused
+anyhow = "1.0"

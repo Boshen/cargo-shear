@@ -1,0 +1,8 @@
+[package]
+name = "unused_build"
+version = "0.1.0"
+edition = "2024"
+
+[build-dependencies]
+# Unused
+anyhow = "1.0"

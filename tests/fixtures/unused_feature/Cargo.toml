@@ -1,0 +1,11 @@
+[package]
+name = "unused_feature"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+std = ["anyhow/std"]
+
+[dependencies]
+# Unused
+anyhow = "1.0"

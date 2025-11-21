@@ -27,7 +27,7 @@
 //!     std::path::PathBuf::from("."),
 //!     false, // fix
 //! );
-//! let exit_code = CargoShear::new(options).run();
+//! let exit_code = CargoShear::new(std::io::stdout(), options).run();
 //! ```
 
 mod cargo_toml_editor;
@@ -37,16 +37,14 @@ mod package_processor;
 #[cfg(test)]
 mod tests;
 
-use rustc_hash::FxHashSet;
-use std::{env, path::PathBuf, process::ExitCode};
-
-use bpaf::Bpaf;
-use cargo_metadata::{CargoOpt, MetadataCommand};
-
-use crate::cargo_toml_editor::CargoTomlEditor;
-use crate::package_processor::PackageProcessor;
+use std::{env, io::Write, path::PathBuf, process::ExitCode};
 
 use anyhow::Result;
+use bpaf::Bpaf;
+use cargo_metadata::{CargoOpt, MetadataCommand};
+use rustc_hash::FxHashSet;
+
+use crate::{cargo_toml_editor::CargoTomlEditor, package_processor::PackageProcessor};
 
 const VERSION: &str = match option_env!("SHEAR_VERSION") {
     Some(v) => v,
@@ -129,7 +127,10 @@ pub(crate) fn default_path() -> Result<PathBuf> {
 ///
 /// `CargoShear` coordinates the analysis of a Rust project to find unused dependencies
 /// and optionally removes them from Cargo.toml files.
-pub struct CargoShear {
+pub struct CargoShear<W> {
+    /// Writer for output
+    writer: W,
+
     /// Configuration options for the analysis
     options: CargoShearOptions,
 
@@ -140,11 +141,12 @@ pub struct CargoShear {
     fixed_dependencies: usize,
 }
 
-impl CargoShear {
+impl<W: Write> CargoShear<W> {
     /// Create a new `CargoShear` instance with the given options.
     ///
     /// # Arguments
     ///
+    /// * `writer` - Output writer
     /// * `options` - Configuration options for the analysis
     ///
     /// # Example
@@ -154,11 +156,11 @@ impl CargoShear {
     /// use std::path::PathBuf;
     ///
     /// let options = CargoShearOptions::new_for_test(PathBuf::from("."), false);
-    /// let shear = CargoShear::new(options);
+    /// let shear = CargoShear::new(std::io::stdout(), options);
     /// ```
     #[must_use]
-    pub const fn new(options: CargoShearOptions) -> Self {
-        Self { options, unused_dependencies: 0, fixed_dependencies: 0 }
+    pub const fn new(writer: W, options: CargoShearOptions) -> Self {
+        Self { writer, options, unused_dependencies: 0, fixed_dependencies: 0 }
     }
 
     /// Run the dependency analysis and optionally fix unused dependencies.
@@ -167,7 +169,7 @@ impl CargoShear {
     /// 1. Analyzes all packages in the workspace
     /// 2. Detects unused dependencies
     /// 3. Optionally removes them if `--fix` is enabled
-    /// 4. Reports results to stdout
+    /// 4. Reports results to the writer
     ///
     /// # Returns
     ///
@@ -177,15 +179,16 @@ impl CargoShear {
     /// - `2` if an error occurred
     #[must_use]
     pub fn run(mut self) -> ExitCode {
-        println!("Analyzing {}", self.options.path.to_string_lossy());
-        println!();
+        let _ = writeln!(self.writer, "Analyzing {}", self.options.path.to_string_lossy());
+        let _ = writeln!(self.writer);
 
         match self.shear() {
             Ok(()) => {
                 let has_fixed = self.fixed_dependencies > 0;
 
                 if has_fixed {
-                    println!(
+                    let _ = writeln!(
+                        self.writer,
                         "Fixed {} {}.\n",
                         self.fixed_dependencies,
                         if self.fixed_dependencies == 1 { "dependency" } else { "dependencies" }
@@ -195,7 +198,8 @@ impl CargoShear {
                 let has_deps = (self.unused_dependencies - self.fixed_dependencies) > 0;
 
                 if has_deps {
-                    println!(
+                    let _ = writeln!(
+                        self.writer,
                         "\n\
                         cargo-shear may have detected unused dependencies incorrectly due to its limitations.\n\
                         They can be ignored by adding the crate name to the package's Cargo.toml:\n\n\
@@ -206,14 +210,15 @@ impl CargoShear {
                         ignored = [\"crate-name\"]\n"
                     );
                 } else {
-                    println!("No unused dependencies!");
+                    let _ = writeln!(self.writer, "No unused dependencies!");
                 }
 
                 ExitCode::from(u8::from(if self.options.fix { has_fixed } else { has_deps }))
             }
             Err(err) => {
-                println!("{err:?}");
-                println!(
+                let _ = writeln!(self.writer, "{err:?}");
+                let _ = writeln!(
+                    self.writer,
                     "note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace"
                 );
                 ExitCode::from(2)
@@ -256,7 +261,7 @@ impl CargoShear {
                 continue;
             }
 
-            let result = processor.process_package(&metadata, package)?;
+            let result = processor.process_package(&mut self.writer, &metadata, package)?;
 
             if !result.unused_dependencies.is_empty() {
                 let relative_path = PackageProcessor::get_relative_path(
@@ -264,11 +269,11 @@ impl CargoShear {
                     metadata.workspace_root.as_std_path(),
                 );
 
-                println!("{} -- {}:", package.name, relative_path.display());
+                writeln!(self.writer, "{} -- {}:", package.name, relative_path.display())?;
                 for unused_dep in &result.unused_dependencies {
-                    println!("  {unused_dep}");
+                    writeln!(self.writer, "  {unused_dep}")?;
                 }
-                println!();
+                writeln!(self.writer)?;
 
                 self.unused_dependencies += result.unused_dependencies.len();
 
@@ -285,8 +290,11 @@ impl CargoShear {
         }
 
         // Process workspace dependencies
-        let workspace_unused =
-            PackageProcessor::process_workspace(&metadata, &package_dependencies)?;
+        let workspace_unused = PackageProcessor::process_workspace(
+            &mut self.writer,
+            &metadata,
+            &package_dependencies,
+        )?;
 
         if !workspace_unused.is_empty() {
             let cargo_toml_path = metadata.workspace_root.as_std_path().join("Cargo.toml");
@@ -295,11 +303,11 @@ impl CargoShear {
                 .unwrap_or(&cargo_toml_path)
                 .to_string_lossy();
 
-            println!("root -- {path}:");
+            writeln!(self.writer, "root -- {path}:")?;
             for unused_dep in &workspace_unused {
-                println!("  {unused_dep}");
+                writeln!(self.writer, "  {unused_dep}")?;
             }
-            println!();
+            writeln!(self.writer)?;
 
             self.unused_dependencies += workspace_unused.len();
 

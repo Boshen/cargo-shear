@@ -1,9 +1,0 @@
-[workspace]
-members = ["app", "lib"]
-
-[workspace.dependencies]
-serde = "1.0"
-
-[workspace.metadata.cargo-shear]
-# "workspace-nonexistent" does not exist in workspace dependencies - should trigger a warning
-ignored = ["workspace-nonexistent"]

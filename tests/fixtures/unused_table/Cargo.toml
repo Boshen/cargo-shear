@@ -1,0 +1,10 @@
+[package]
+name = "unused_table"
+version = "0.1.0"
+edition = "2024"
+
+# Unused
+[dependencies.anyhow]
+version = "1.0"
+default-features = false
+features = ["std"]

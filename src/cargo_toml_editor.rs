@@ -8,14 +8,11 @@
 //! - Workspace dependencies (`[workspace.dependencies]`)
 //! - Feature flags that reference removed dependencies
 
-use rustc_hash::FxHashSet;
-use std::fs;
-use std::path::Path;
-use std::str::FromStr;
-
-use toml_edit::DocumentMut;
+use std::{fs, path::Path, str::FromStr};
 
 use anyhow::Result;
+use rustc_hash::FxHashSet;
+use toml_edit::DocumentMut;
 
 /// Provides methods to edit Cargo.toml files and remove unused dependencies.
 pub struct CargoTomlEditor;

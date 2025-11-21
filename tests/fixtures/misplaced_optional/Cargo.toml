@@ -1,0 +1,11 @@
+[package]
+name = "misplaced_optional"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+testing = ["dep:anyhow"]
+
+[dependencies]
+# Misplaced
+anyhow = { version = "1.0", optional = true }
