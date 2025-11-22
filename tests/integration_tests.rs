@@ -69,7 +69,7 @@ fn clean_detection() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-// `anyhow` is used, so it should not be removed when fixing.
+// All dependencies are used, so none should be removed when fixing.
 #[test]
 fn clean_fix() -> Result<(), Box<dyn Error>> {
     let (exit_code, _, temp_dir) = run_cargo_shear("clean", true)?;
@@ -77,6 +77,9 @@ fn clean_fix() -> Result<(), Box<dyn Error>> {
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
     assert!(manifest.dependencies.contains_key("anyhow"));
+    assert!(manifest.dependencies.contains_key("rustc-hash"));
+    assert!(manifest.dependencies.contains_key("serde_json"));
+    assert!(manifest.dependencies.contains_key("smallvec-v1"));
 
     Ok(())
 }
@@ -96,7 +99,7 @@ fn clean_workspace_detection() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-// Workspace dependency `anyhow` should not be removed when it's in use.
+// All workspace dependencies are in use and should not be removed.
 #[test]
 fn clean_workspace_fix() -> Result<(), Box<dyn Error>> {
     let (exit_code, _, temp_dir) = run_cargo_shear("clean_workspace", true)?;
@@ -105,6 +108,9 @@ fn clean_workspace_fix() -> Result<(), Box<dyn Error>> {
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
     let workspace = &manifest.workspace.as_ref().unwrap().dependencies;
     assert!(workspace.contains_key("anyhow"));
+    assert!(workspace.contains_key("rustc-hash"));
+    assert!(workspace.contains_key("serde_json"));
+    assert!(workspace.contains_key("smallvec-v1"));
 
     Ok(())
 }
@@ -143,12 +149,17 @@ fn ignored_invalid() -> Result<(), Box<dyn Error>> {
 
 // `anyhow` is in the ignored list but is actually being used.
 #[test]
-#[ignore = "Unimplemented: #93"]
 fn ignored_redundant() -> Result<(), Box<dyn Error>> {
     let (exit_code, output, _) = run_cargo_shear("ignored_redundant", false)?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
-    insta::assert_snapshot!(output, @"");
+    insta::assert_snapshot!(output, @r"
+    Analyzing .
+
+    warning: 'anyhow' is redundant in [package.metadata.cargo-shear] for package 'ignored_redundant'.
+
+    No unused dependencies!
+    ");
 
     Ok(())
 }
@@ -290,7 +301,7 @@ fn misplaced_table_fix() -> Result<(), Box<dyn Error>> {
 
     let anyhow = manifest.dev_dependencies.get("anyhow").expect("anyhow in dev");
     let anyhow_details = anyhow.detail().expect("anyhow has details");
-    assert_eq!(anyhow_details.default_features, false);
+    assert!(!anyhow_details.default_features);
     assert_eq!(anyhow_details.features, vec!["std"]);
 
     Ok(())
@@ -418,19 +429,21 @@ fn unused_dev_fix() -> Result<(), Box<dyn Error>> {
 
 // `anyhow` is unused in code but referenced in a feature, so it can't be safely removed.
 #[test]
-#[ignore = "Unimplemented: #184"]
 fn unused_feature_detect() -> Result<(), Box<dyn Error>> {
     let (exit_code, output, _) = run_cargo_shear("unused_feature", false)?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
-    insta::assert_snapshot!(output, @"");
+    insta::assert_snapshot!(output, @r"
+    Analyzing .
+
+    No unused dependencies!
+    ");
 
     Ok(())
 }
 
 // `anyhow` should remain since it's referenced in a feature, even though unused in code.
 #[test]
-#[ignore = "Unimplemented: #184"]
 fn unused_feature_fix() -> Result<(), Box<dyn Error>> {
     let (exit_code, _, temp_dir) = run_cargo_shear("unused_feature", true)?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
@@ -443,19 +456,21 @@ fn unused_feature_fix() -> Result<(), Box<dyn Error>> {
 
 // `anyhow` is unused in code but referenced in a weak feature, so it can't be safely removed.
 #[test]
-#[ignore = "Unimplemented: #184"]
 fn unused_feature_weak_detect() -> Result<(), Box<dyn Error>> {
     let (exit_code, output, _) = run_cargo_shear("unused_feature_weak", false)?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
-    insta::assert_snapshot!(output, @"");
+    insta::assert_snapshot!(output, @r"
+    Analyzing .
+
+    No unused dependencies!
+    ");
 
     Ok(())
 }
 
 // `anyhow` should remain since it's referenced in a weak feature, even though unused in code.
 #[test]
-#[ignore = "Unimplemented: #184"]
 fn unused_feature_weak_fix() -> Result<(), Box<dyn Error>> {
     let (exit_code, _, temp_dir) = run_cargo_shear("unused_feature_weak", true)?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
@@ -466,21 +481,103 @@ fn unused_feature_weak_fix() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-// Optional `anyhow` enabled via `dep:anyhow` is unused but can't be removed without breaking the feature.
+// `serde_json` (import `serde_json`) is not used in code.
 #[test]
-#[ignore = "Unimplemented: #184"]
-fn unused_optional_detection() -> Result<(), Box<dyn Error>> {
-    let (exit_code, output, _) = run_cargo_shear("unused_optional", false)?;
+fn unused_naming_hyphen_detection() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _) = run_cargo_shear("unused_naming_hyphen", false)?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
-    insta::assert_snapshot!(output, @"");
+    insta::assert_snapshot!(output, @r#"
+    Analyzing .
+
+    unused_naming_hyphen -- Cargo.toml:
+      serde_json
+
+
+    cargo-shear may have detected unused dependencies incorrectly due to its limitations.
+    They can be ignored by adding the crate name to the package's Cargo.toml:
+
+    [package.metadata.cargo-shear]
+    ignored = ["crate-name"]
+
+    or in the workspace Cargo.toml:
+
+    [workspace.metadata.cargo-shear]
+    ignored = ["crate-name"]
+    "#);
+
+    Ok(())
+}
+
+// `serde_json` should be removed when fixing.
+#[test]
+fn unused_naming_hyphen_fix() -> Result<(), Box<dyn Error>> {
+    let (exit_code, _, temp_dir) = run_cargo_shear("unused_naming_hyphen", true)?;
+    assert_eq!(exit_code, ExitCode::FAILURE);
+
+    let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
+    assert!(!manifest.dependencies.contains_key("serde_json"));
+
+    Ok(())
+}
+
+// `rustc-hash` (import `rustc_hash`) is not used in code.
+#[test]
+fn unused_naming_underscore_detection() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _) = run_cargo_shear("unused_naming_underscore", false)?;
+    assert_eq!(exit_code, ExitCode::FAILURE);
+
+    insta::assert_snapshot!(output, @r#"
+    Analyzing .
+
+    unused_naming_underscore -- Cargo.toml:
+      rustc-hash
+
+
+    cargo-shear may have detected unused dependencies incorrectly due to its limitations.
+    They can be ignored by adding the crate name to the package's Cargo.toml:
+
+    [package.metadata.cargo-shear]
+    ignored = ["crate-name"]
+
+    or in the workspace Cargo.toml:
+
+    [workspace.metadata.cargo-shear]
+    ignored = ["crate-name"]
+    "#);
+
+    Ok(())
+}
+
+// `rustc-hash` should be removed when fixing.
+#[test]
+fn unused_naming_underscore_fix() -> Result<(), Box<dyn Error>> {
+    let (exit_code, _, temp_dir) = run_cargo_shear("unused_naming_underscore", true)?;
+    assert_eq!(exit_code, ExitCode::FAILURE);
+
+    let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
+    assert!(!manifest.dependencies.contains_key("rustc-hash"));
+
+    Ok(())
+}
+
+// Optional `anyhow` enabled via `dep:anyhow` is unused but can't be removed without breaking the feature.
+#[test]
+fn unused_optional_detection() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _) = run_cargo_shear("unused_optional", false)?;
+    assert_eq!(exit_code, ExitCode::SUCCESS);
+
+    insta::assert_snapshot!(output, @r"
+    Analyzing .
+
+    No unused dependencies!
+    ");
 
     Ok(())
 }
 
 // Unused optional `anyhow` enabled via `dep:anyhow` can't be removed since that would break the feature.
 #[test]
-#[ignore = "Unimplemented: #184"]
 fn unused_optional_fix() -> Result<(), Box<dyn Error>> {
     let (exit_code, _, temp_dir) = run_cargo_shear("unused_optional", true)?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
@@ -497,19 +594,21 @@ fn unused_optional_fix() -> Result<(), Box<dyn Error>> {
 
 // Optional `anyhow` with implicit feature is unused but can't be removed without removing the feature.
 #[test]
-#[ignore = "Unimplemented: #184"]
 fn unused_optional_implicit_detection() -> Result<(), Box<dyn Error>> {
     let (exit_code, output, _) = run_cargo_shear("unused_optional_implicit", false)?;
-    assert_eq!(exit_code, ExitCode::FAILURE);
+    assert_eq!(exit_code, ExitCode::SUCCESS);
 
-    insta::assert_snapshot!(output, @"");
+    insta::assert_snapshot!(output, @r"
+    Analyzing .
+
+    No unused dependencies!
+    ");
 
     Ok(())
 }
 
 // Unused optional `anyhow` with implicit feature can't be removed since that would remove the feature.
 #[test]
-#[ignore = "Unimplemented: #184"]
 fn unused_optional_implicit_fix() -> Result<(), Box<dyn Error>> {
     let (exit_code, _, temp_dir) = run_cargo_shear("unused_optional_implicit", true)?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
@@ -550,7 +649,6 @@ fn unused_platform_detection() -> Result<(), Box<dyn Error>> {
 
 // Unused target specific `anyhow` should be removed.
 #[test]
-#[ignore = "Unimplemented: #169"]
 fn unused_platform_fix() -> Result<(), Box<dyn Error>> {
     let (exit_code, _, temp_dir) = run_cargo_shear("unused_platform", true)?;
     assert_eq!(exit_code, ExitCode::FAILURE);
@@ -564,19 +662,34 @@ fn unused_platform_fix() -> Result<(), Box<dyn Error>> {
 
 // Renamed `anyhow_v1` is unused.
 #[test]
-#[ignore = "Unimplemented"]
 fn unused_renamed_detection() -> Result<(), Box<dyn Error>> {
     let (exit_code, output, _) = run_cargo_shear("unused_renamed", false)?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
-    insta::assert_snapshot!(output, @"");
+    insta::assert_snapshot!(output, @r#"
+    Analyzing .
+
+    unused_renamed -- Cargo.toml:
+      anyhow_v1
+
+
+    cargo-shear may have detected unused dependencies incorrectly due to its limitations.
+    They can be ignored by adding the crate name to the package's Cargo.toml:
+
+    [package.metadata.cargo-shear]
+    ignored = ["crate-name"]
+
+    or in the workspace Cargo.toml:
+
+    [workspace.metadata.cargo-shear]
+    ignored = ["crate-name"]
+    "#);
 
     Ok(())
 }
 
 // Unused renamed `anyhow_v1` should be removed.
 #[test]
-#[ignore = "Unimplemented"]
 fn unused_renamed_fix() -> Result<(), Box<dyn Error>> {
     let (exit_code, _, temp_dir) = run_cargo_shear("unused_renamed", true)?;
     assert_eq!(exit_code, ExitCode::FAILURE);
@@ -664,6 +777,47 @@ fn unused_workspace_fix() -> Result<(), Box<dyn Error>> {
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
     let workspace = &manifest.workspace.as_ref().unwrap().dependencies;
     assert!(!workspace.contains_key("anyhow"));
+
+    Ok(())
+}
+
+// Renamed workspace dependency `anyhow_v1` is unused.
+#[test]
+fn unused_workspace_renamed_detection() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _) = run_cargo_shear("unused_workspace_renamed", false)?;
+    assert_eq!(exit_code, ExitCode::FAILURE);
+
+    insta::assert_snapshot!(output, @r#"
+    Analyzing .
+
+    root -- ./Cargo.toml:
+      anyhow_v1
+
+
+    cargo-shear may have detected unused dependencies incorrectly due to its limitations.
+    They can be ignored by adding the crate name to the package's Cargo.toml:
+
+    [package.metadata.cargo-shear]
+    ignored = ["crate-name"]
+
+    or in the workspace Cargo.toml:
+
+    [workspace.metadata.cargo-shear]
+    ignored = ["crate-name"]
+    "#);
+
+    Ok(())
+}
+
+// Unused renamed workspace dependency `anyhow_v1` should be removed.
+#[test]
+fn unused_workspace_renamed_fix() -> Result<(), Box<dyn Error>> {
+    let (exit_code, _, temp_dir) = run_cargo_shear("unused_workspace_renamed", true)?;
+    assert_eq!(exit_code, ExitCode::FAILURE);
+
+    let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
+    let workspace = &manifest.workspace.as_ref().unwrap().dependencies;
+    assert!(!workspace.contains_key("anyhow_v1"));
 
     Ok(())
 }

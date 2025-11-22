@@ -28,7 +28,7 @@ impl CargoTomlEditor {
     /// # Arguments
     ///
     /// * `cargo_toml_path` - Path to the Cargo.toml file to edit
-    /// * `unused_deps` - Set of dependency names to remove
+    /// * `unused_deps` - Set of dependency keys to remove
     ///
     /// # Returns
     ///
@@ -46,6 +46,7 @@ impl CargoTomlEditor {
 
         Self::remove_workspace_dependencies(&mut manifest, unused_deps);
         Self::remove_package_dependencies(&mut manifest, unused_deps);
+        Self::remove_target_dependencies(&mut manifest, unused_deps);
         Self::fix_features(&mut manifest, unused_deps);
 
         let serialized = manifest.to_string();
@@ -71,6 +72,25 @@ impl CargoTomlEditor {
                 manifest.get_mut(table_name).and_then(|item| item.as_table_mut())
             {
                 dependencies.retain(|k, _| !unused_deps.contains(k));
+            }
+        }
+    }
+
+    fn remove_target_dependencies(manifest: &mut DocumentMut, unused_deps: &FxHashSet<String>) {
+        let Some(target) = manifest.get_mut("target").and_then(|item| item.as_table_mut()) else {
+            return;
+        };
+
+        for (_, item) in target.iter_mut() {
+            let Some(table) = item.as_table_mut() else {
+                continue;
+            };
+
+            for name in ["dependencies", "dev-dependencies", "build-dependencies"] {
+                if let Some(dependencies) = table.get_mut(name).and_then(|item| item.as_table_mut())
+                {
+                    dependencies.retain(|k, _| !unused_deps.contains(k));
+                }
             }
         }
     }

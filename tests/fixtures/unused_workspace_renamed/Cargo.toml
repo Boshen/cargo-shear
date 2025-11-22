@@ -1,0 +1,7 @@
+[workspace]
+resolver = "3"
+members = ["app", "lib"]
+
+[workspace.dependencies]
+# Unused
+anyhow_v1 = { package = "anyhow", version = "1.0" }

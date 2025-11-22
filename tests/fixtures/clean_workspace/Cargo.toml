@@ -4,3 +4,6 @@ members = ["app", "lib"]
 
 [workspace.dependencies]
 anyhow = "1.0"
+rustc-hash = "2.0"
+serde_json = "1.0"
+smallvec-v1 = { package = "smallvec", version = "1.0" }
