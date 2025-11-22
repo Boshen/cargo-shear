@@ -10,9 +10,8 @@
 //! - Macro invocations
 //! - Attribute references (e.g., `#[derive(...)]`)
 
+use rustc_hash::FxHashSet;
 use syn::{self, ext::IdentExt, spanned::Spanned};
-
-use crate::dependency_analyzer::Dependencies as Deps;
 
 /// Collect all import statements and crate references from Rust source code.
 ///
@@ -26,11 +25,14 @@ use crate::dependency_analyzer::Dependencies as Deps;
 /// # Returns
 ///
 /// A set of crate names that are referenced in the source code
-pub fn collect_imports(source_text: &str) -> syn::Result<Deps> {
+pub fn collect_imports(source_text: &str) -> syn::Result<FxHashSet<String>> {
     collect_imports_internal(source_text, true)
 }
 
-fn collect_imports_internal(source_text: &str, include_doc_code: bool) -> syn::Result<Deps> {
+fn collect_imports_internal(
+    source_text: &str,
+    include_doc_code: bool,
+) -> syn::Result<FxHashSet<String>> {
     let syntax = syn::parse_str::<syn::File>(source_text)?;
     let mut deps = collect_from_syntax(&syntax, include_doc_code);
 
@@ -49,13 +51,13 @@ fn collect_imports_internal(source_text: &str, include_doc_code: bool) -> syn::R
     Ok(deps)
 }
 
-fn collect_from_syntax(syntax: &syn::File, include_doc_code: bool) -> Deps {
+fn collect_from_syntax(syntax: &syn::File, include_doc_code: bool) -> FxHashSet<String> {
     let mut collector = ImportCollector::new(include_doc_code);
     collector.visit(syntax);
     collector.deps
 }
 
-fn collect_imports_from_snippet(code: &str) -> Option<Deps> {
+fn collect_imports_from_snippet(code: &str) -> Option<FxHashSet<String>> {
     // Try parsing as a complete file first
     if let Ok(syntax) = syn::parse_file(code) {
         return Some(collect_from_syntax(&syntax, false));
@@ -68,13 +70,13 @@ fn collect_imports_from_snippet(code: &str) -> Option<Deps> {
 }
 
 struct ImportCollector {
-    deps: Deps,
+    deps: FxHashSet<String>,
     include_doc_code: bool,
 }
 
 impl ImportCollector {
     fn new(include_doc_code: bool) -> Self {
-        Self { deps: Deps::default(), include_doc_code }
+        Self { deps: FxHashSet::default(), include_doc_code }
     }
 
     fn visit(&mut self, syntax: &syn::File) {

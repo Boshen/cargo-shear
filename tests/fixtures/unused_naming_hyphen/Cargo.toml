@@ -1,0 +1,8 @@
+[package]
+name = "unused_naming_hyphen"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Unused
+serde_json = "1.0"
