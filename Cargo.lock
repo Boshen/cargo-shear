@@ -60,7 +60,7 @@ dependencies = [
 
 [[package]]
 name = "cargo-shear"
-version = "1.6.3"
+version = "1.6.4"
 dependencies = [
  "anyhow",
  "bpaf",
