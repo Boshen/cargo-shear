@@ -37,15 +37,25 @@ mod package_processor;
 #[cfg(test)]
 mod tests;
 
-use std::{env, io::Write, path::PathBuf, process::ExitCode};
+use std::{
+    env, fs,
+    io::Write,
+    path::{Path, PathBuf},
+    process::ExitCode,
+    str::FromStr,
+};
 
 use anyhow::Result;
 use bpaf::Bpaf;
-use cargo_metadata::{CargoOpt, MetadataCommand};
+use cargo_metadata::{CargoOpt, Metadata, MetadataCommand, Package};
 use cargo_toml::Manifest;
 use rustc_hash::FxHashSet;
+use toml_edit::DocumentMut;
 
-use crate::{cargo_toml_editor::CargoTomlEditor, package_processor::PackageProcessor};
+use crate::{
+    cargo_toml_editor::CargoTomlEditor,
+    package_processor::{PackageProcessResult, PackageProcessor, WorkspaceProcessResult},
+};
 
 const VERSION: &str = match option_env!("SHEAR_VERSION") {
     Some(v) => v,
@@ -211,7 +221,7 @@ impl<W: Write> CargoShear<W> {
                         ignored = [\"crate-name\"]\n"
                     );
                 } else {
-                    let _ = writeln!(self.writer, "No unused dependencies!");
+                    let _ = writeln!(self.writer, "No issues detected!");
                 }
 
                 ExitCode::from(u8::from(if self.options.fix { has_fixed } else { has_deps }))
@@ -251,6 +261,7 @@ impl<W: Write> CargoShear<W> {
         // Track all packages used across the workspace
         let mut workspace_used_pkgs = FxHashSet::default();
 
+        // Process packages
         for package in metadata.workspace_packages() {
             // Skip if package is in the exclude list
             if self.options.exclude.iter().any(|name| name == package.name.as_str()) {
@@ -264,81 +275,166 @@ impl<W: Write> CargoShear<W> {
                 continue;
             }
 
-            let manifest = Manifest::from_path(package.manifest_path.as_std_path())?;
+            let manifest_path = package.manifest_path.as_std_path();
+            let manifest = Manifest::from_path(manifest_path)?;
             let result = processor.process_package(&metadata, package, &manifest)?;
 
-            // Warn about redundant ignores
-            for ignored_dep in &result.redundant_ignores {
-                writeln!(
-                    self.writer,
-                    "warning: '{ignored_dep}' is redundant in [package.metadata.cargo-shear] for package '{}'.\n",
-                    package.name
-                )?;
-            }
-
-            if !result.unused_dependencies.is_empty() {
-                let relative_path = PackageProcessor::get_relative_path(
-                    package.manifest_path.as_std_path(),
-                    metadata.workspace_root.as_std_path(),
-                );
-
-                writeln!(self.writer, "{} -- {}:", package.name, relative_path.display())?;
-                for unused_dep in &result.unused_dependencies {
-                    writeln!(self.writer, "  {unused_dep}")?;
-                }
-                writeln!(self.writer)?;
-
-                self.unused_dependencies += result.unused_dependencies.len();
-
-                if self.options.fix {
-                    let fixed = CargoTomlEditor::remove_dependencies(
-                        package.manifest_path.as_std_path(),
-                        &result.unused_dependencies,
-                    )?;
-                    self.fixed_dependencies += fixed;
-                }
-            }
+            self.report_package_issues(package, &result, &metadata)?;
+            self.fix_package_issues(manifest_path, &result)?;
 
             workspace_used_pkgs.extend(result.used_packages);
         }
 
-        // Process workspace dependencies
-        let cargo_toml_path = metadata.workspace_root.as_std_path().join("Cargo.toml");
-        let manifest = Manifest::from_path(&cargo_toml_path)?;
+        // Process workspace
+        let manifest_path = metadata.workspace_root.as_std_path().join("Cargo.toml");
+        let workspace_manifest = Manifest::from_path(&manifest_path)?;
 
-        let workspace_result =
-            PackageProcessor::process_workspace(&manifest, &metadata, &workspace_used_pkgs);
+        let workspace_result = PackageProcessor::process_workspace(
+            &workspace_manifest,
+            &metadata,
+            &workspace_used_pkgs,
+        );
 
+        self.report_workspace_issues(&manifest_path, &workspace_result)?;
+        self.fix_workspace_issues(&manifest_path, &workspace_result)?;
+
+        Ok(())
+    }
+
+    fn report_package_issues(
+        &mut self,
+        package: &Package,
+        result: &PackageProcessResult,
+        metadata: &Metadata,
+    ) -> Result<()> {
+        // Warn about redundant ignores
+        for ignored_dep in &result.redundant_ignores {
+            writeln!(
+                self.writer,
+                "warning: '{ignored_dep}' is redundant in [package.metadata.cargo-shear] for package '{}'.\n",
+                package.name
+            )?;
+        }
+
+        let unused_count = result.unused_dependencies.len();
+        let misplaced_count = result.misplaced_dependencies.len();
+
+        if unused_count == 0 && misplaced_count == 0 {
+            return Ok(());
+        }
+
+        let relative_path = PackageProcessor::get_relative_path(
+            package.manifest_path.as_std_path(),
+            metadata.workspace_root.as_std_path(),
+        );
+
+        writeln!(self.writer, "{} -- {}:", package.name, relative_path.display())?;
+
+        if unused_count > 0 {
+            writeln!(self.writer, "  unused dependencies:")?;
+            for misplaced_dep in &result.unused_dependencies {
+                writeln!(self.writer, "    {misplaced_dep}")?;
+            }
+        }
+
+        if misplaced_count > 0 {
+            writeln!(self.writer, "  misplaced dev dependencies:")?;
+            for misplaced_dep in &result.misplaced_dependencies {
+                writeln!(self.writer, "    {misplaced_dep}")?;
+            }
+        }
+
+        writeln!(self.writer)?;
+
+        self.unused_dependencies += unused_count + misplaced_count;
+
+        Ok(())
+    }
+
+    fn fix_package_issues(
+        &mut self,
+        manifest_path: &Path,
+        result: &PackageProcessResult,
+    ) -> Result<()> {
+        if !self.options.fix {
+            return Ok(());
+        }
+
+        if result.misplaced_dependencies.is_empty() && result.unused_dependencies.is_empty() {
+            return Ok(());
+        }
+
+        let content = fs::read_to_string(manifest_path)?;
+        let mut manifest = DocumentMut::from_str(&content)?;
+
+        let fixed_unused =
+            CargoTomlEditor::remove_dependencies(&mut manifest, &result.unused_dependencies);
+        let fixed_misplaced = CargoTomlEditor::move_to_dev_dependencies(
+            &mut manifest,
+            &result.misplaced_dependencies,
+        );
+
+        fs::write(manifest_path, manifest.to_string())?;
+        self.fixed_dependencies += fixed_unused + fixed_misplaced;
+
+        Ok(())
+    }
+
+    fn report_workspace_issues(
+        &mut self,
+        manifest_path: &Path,
+        result: &WorkspaceProcessResult,
+    ) -> Result<()> {
         // Warn about redundant workspace ignores
-        for ignored_dep in &workspace_result.redundant_ignores {
+        for ignored_dep in &result.redundant_ignores {
             writeln!(
                 self.writer,
                 "warning: '{ignored_dep}' is redundant in [workspace.metadata.cargo-shear].\n"
             )?;
         }
 
-        if !workspace_result.unused_dependencies.is_empty() {
-            let path = cargo_toml_path
-                .strip_prefix(env::current_dir().unwrap_or_default())
-                .unwrap_or(&cargo_toml_path)
-                .to_string_lossy();
-
-            writeln!(self.writer, "root -- {path}:")?;
-            for unused_dep in &workspace_result.unused_dependencies {
-                writeln!(self.writer, "  {unused_dep}")?;
-            }
-            writeln!(self.writer)?;
-
-            self.unused_dependencies += workspace_result.unused_dependencies.len();
-
-            if self.options.fix {
-                let fixed = CargoTomlEditor::remove_dependencies(
-                    &cargo_toml_path,
-                    &workspace_result.unused_dependencies,
-                )?;
-                self.fixed_dependencies += fixed;
-            }
+        if result.unused_dependencies.is_empty() {
+            return Ok(());
         }
+
+        let path = manifest_path
+            .strip_prefix(env::current_dir().unwrap_or_default())
+            .unwrap_or(manifest_path)
+            .to_string_lossy();
+
+        writeln!(self.writer, "root -- {path}:")?;
+        writeln!(self.writer, "  unused dependencies:")?;
+        for unused_dep in &result.unused_dependencies {
+            writeln!(self.writer, "    {unused_dep}")?;
+        }
+        writeln!(self.writer)?;
+
+        self.unused_dependencies += result.unused_dependencies.len();
+
+        Ok(())
+    }
+
+    fn fix_workspace_issues(
+        &mut self,
+        manifest_path: &Path,
+        result: &WorkspaceProcessResult,
+    ) -> Result<()> {
+        if !self.options.fix {
+            return Ok(());
+        }
+
+        if result.unused_dependencies.is_empty() {
+            return Ok(());
+        }
+
+        let content = fs::read_to_string(manifest_path)?;
+        let mut manifest = DocumentMut::from_str(&content)?;
+
+        let fixed =
+            CargoTomlEditor::remove_dependencies(&mut manifest, &result.unused_dependencies);
+
+        fs::write(manifest_path, manifest.to_string())?;
+        self.fixed_dependencies += fixed;
 
         Ok(())
     }

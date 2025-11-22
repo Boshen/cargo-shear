@@ -1,0 +1,8 @@
+[package]
+name = "misplaced_unit"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Misplaced
+anyhow = "1.0"
