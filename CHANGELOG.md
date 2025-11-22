@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.4](https://github.com/Boshen/cargo-shear/compare/v1.6.3...v1.6.4) - 2025-11-22
+
+### Other
+
+- Refactor dependency analysis to properly handle code imports, dependency keys, and package names ([#315](https://github.com/Boshen/cargo-shear/pull/315))
+- Refactor tests, add snapshot testing, improve edge case coverage ([#314](https://github.com/Boshen/cargo-shear/pull/314))
+- *(deps)* update rust crates ([#312](https://github.com/Boshen/cargo-shear/pull/312))
+- *(deps)* update github-actions ([#311](https://github.com/Boshen/cargo-shear/pull/311))
+
 ## [1.6.3](https://github.com/Boshen/cargo-shear/compare/v1.6.2...v1.6.3) - 2025-11-14
 
 ### Other
