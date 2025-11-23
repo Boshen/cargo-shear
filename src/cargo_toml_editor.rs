@@ -8,17 +8,14 @@
 //! - Workspace dependencies (`[workspace.dependencies]`)
 //! - Feature flags that reference removed dependencies
 
-use std::{fs, path::Path, str::FromStr};
-
-use anyhow::Result;
 use rustc_hash::FxHashSet;
-use toml_edit::DocumentMut;
+use toml_edit::{DocumentMut, Item, Table};
 
 /// Provides methods to edit Cargo.toml files and remove unused dependencies.
 pub struct CargoTomlEditor;
 
 impl CargoTomlEditor {
-    /// Remove unused dependencies from a Cargo.toml file.
+    /// Remove unused dependencies from a manifest.
     ///
     /// This method will:
     /// 1. Remove dependencies from `[dependencies]`, `[dev-dependencies]`, and `[build-dependencies]`
@@ -27,32 +24,83 @@ impl CargoTomlEditor {
     ///
     /// # Arguments
     ///
-    /// * `cargo_toml_path` - Path to the Cargo.toml file to edit
-    /// * `unused_deps` - Set of dependency keys to remove
+    /// * `manifest` - The manifest document to edit
+    /// * `unused_deps` - Set of unused dependency keys
     ///
     /// # Returns
     ///
     /// The number of dependencies that were removed
     pub fn remove_dependencies(
-        cargo_toml_path: &Path,
+        manifest: &mut DocumentMut,
         unused_deps: &FxHashSet<String>,
-    ) -> Result<usize> {
+    ) -> usize {
         if unused_deps.is_empty() {
-            return Ok(0);
+            return 0;
         }
 
-        let manifest = fs::read_to_string(cargo_toml_path)?;
-        let mut manifest = DocumentMut::from_str(&manifest)?;
+        Self::remove_workspace_dependencies(manifest, unused_deps);
+        Self::remove_package_dependencies(manifest, unused_deps);
+        Self::remove_target_dependencies(manifest, unused_deps);
+        Self::fix_features(manifest, unused_deps);
 
-        Self::remove_workspace_dependencies(&mut manifest, unused_deps);
-        Self::remove_package_dependencies(&mut manifest, unused_deps);
-        Self::remove_target_dependencies(&mut manifest, unused_deps);
-        Self::fix_features(&mut manifest, unused_deps);
+        unused_deps.len()
+    }
 
-        let serialized = manifest.to_string();
-        fs::write(cargo_toml_path, serialized)?;
+    /// Move dependencies from `[dependencies]` to `[dev-dependencies]`.
+    ///
+    /// This method will:
+    /// 1. Remove dependencies from `[dependencies]`
+    /// 2. Insert them into `[dev-dependencies]`
+    ///
+    /// # Arguments
+    ///
+    /// * `manifest` - The manifest document to edit
+    /// * `misplaced_deps` - Set of misplaced dependency keys
+    ///
+    /// # Returns
+    ///
+    /// The number of dependencies that were moved
+    pub fn move_to_dev_dependencies(
+        manifest: &mut DocumentMut,
+        misplaced_deps: &FxHashSet<String>,
+    ) -> usize {
+        if misplaced_deps.is_empty() {
+            return 0;
+        }
 
-        Ok(unused_deps.len())
+        // Remove from `[dependencies]`
+        let mut moved = Vec::new();
+        if let Some(dependencies) =
+            manifest.get_mut("dependencies").and_then(|item| item.as_table_mut())
+        {
+            for dep in misplaced_deps {
+                if let Some(value) = dependencies.remove(dep.as_str()) {
+                    moved.push((dep.clone(), value));
+                }
+            }
+        }
+
+        if moved.is_empty() {
+            return 0;
+        }
+
+        let count = moved.len();
+
+        // Ensure `[dev-dependencies]` exists
+        if !manifest.contains_key("dev-dependencies") {
+            manifest["dev-dependencies"] = Item::Table(Table::new());
+        }
+
+        // Insert into `[dev-dependencies]`
+        if let Some(dev_deps) =
+            manifest.get_mut("dev-dependencies").and_then(|item| item.as_table_mut())
+        {
+            for (dep, value) in moved {
+                dev_deps.insert(&dep, value);
+            }
+        }
+
+        count
     }
 
     fn remove_workspace_dependencies(manifest: &mut DocumentMut, unused_deps: &FxHashSet<String>) {
