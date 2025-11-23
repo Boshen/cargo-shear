@@ -148,7 +148,10 @@ pub struct CargoShear<W> {
     /// Counter for total unused dependencies found
     unused_dependencies: usize,
 
-    /// Counter for dependencies that were fixed (removed)
+    /// Counter for total misplaced dependencies found
+    misplaced_dependencies: usize,
+
+    /// Counter for dependencies that were fixed
     fixed_dependencies: usize,
 }
 
@@ -171,7 +174,13 @@ impl<W: Write> CargoShear<W> {
     /// ```
     #[must_use]
     pub const fn new(writer: W, options: CargoShearOptions) -> Self {
-        Self { writer, options, unused_dependencies: 0, fixed_dependencies: 0 }
+        Self {
+            writer,
+            options,
+            unused_dependencies: 0,
+            misplaced_dependencies: 0,
+            fixed_dependencies: 0,
+        }
     }
 
     /// Run the dependency analysis and optionally fix unused dependencies.
@@ -206,9 +215,10 @@ impl<W: Write> CargoShear<W> {
                     );
                 }
 
-                let has_deps = (self.unused_dependencies - self.fixed_dependencies) > 0;
+                let total_issues = self.unused_dependencies + self.misplaced_dependencies;
+                let has_issues = (total_issues - self.fixed_dependencies) > 0;
 
-                if has_deps {
+                if has_issues {
                     let _ = writeln!(
                         self.writer,
                         "\n\
@@ -220,11 +230,16 @@ impl<W: Write> CargoShear<W> {
                         [workspace.metadata.cargo-shear]\n\
                         ignored = [\"crate-name\"]\n"
                     );
+
+                    if !self.options.fix {
+                        let _ =
+                            writeln!(self.writer, "To automatically fix issues, run with --fix");
+                    }
                 } else {
                     let _ = writeln!(self.writer, "No issues detected!");
                 }
 
-                ExitCode::from(u8::from(if self.options.fix { has_fixed } else { has_deps }))
+                ExitCode::from(u8::from(if self.options.fix { has_fixed } else { has_issues }))
             }
             Err(err) => {
                 let _ = writeln!(self.writer, "{err:?}");
@@ -338,7 +353,7 @@ impl<W: Write> CargoShear<W> {
         }
 
         if misplaced_count > 0 {
-            writeln!(self.writer, "  misplaced dev dependencies:")?;
+            writeln!(self.writer, "  move to dev-dependencies:")?;
             for misplaced_dep in &result.misplaced_dependencies {
                 writeln!(self.writer, "    {misplaced_dep}")?;
             }
@@ -346,7 +361,8 @@ impl<W: Write> CargoShear<W> {
 
         writeln!(self.writer)?;
 
-        self.unused_dependencies += unused_count + misplaced_count;
+        self.unused_dependencies += unused_count;
+        self.misplaced_dependencies += misplaced_count;
 
         Ok(())
     }
