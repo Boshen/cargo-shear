@@ -18,13 +18,32 @@ use std::{
 };
 
 use anyhow::{Result, anyhow};
-use cargo_metadata::{Package, TargetKind};
+use cargo_metadata::{Package, Target, TargetKind};
 use cargo_toml::Manifest;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use rustc_hash::FxHashSet;
 use walkdir::{DirEntry, WalkDir};
 
 use crate::import_collector::collect_imports;
+
+/// Categorized imports based on where they are used.
+#[derive(Debug, Default)]
+pub struct CategorizedImports {
+    /// Imports used in normal targets (lib, bin, ...).
+    pub normal: FxHashSet<String>,
+
+    /// Imports used in dev targets (test, bench, example).
+    pub dev: FxHashSet<String>,
+
+    /// Imports used in build scripts.
+    pub build: FxHashSet<String>,
+}
+
+impl CategorizedImports {
+    pub fn all_imports(&self) -> FxHashSet<String> {
+        self.normal.union(&self.dev).chain(&self.build).cloned().collect()
+    }
+}
 
 /// Analyzes Rust source code to find used dependencies.
 ///
@@ -42,55 +61,69 @@ impl DependencyAnalyzer {
         Self { expand_macros }
     }
 
-    /// Analyze a package to find all used import names from source code and features.
+    /// Analyze a package to find all used imports, categorized by target type.
     pub fn analyze_package(
         &self,
         package: &Package,
         manifest: &Manifest,
-    ) -> Result<FxHashSet<String>> {
-        let mut imports = if self.expand_macros {
+    ) -> Result<CategorizedImports> {
+        let mut categorized = if self.expand_macros {
             Self::analyze_with_expansion(package)?
         } else {
             Self::analyze_from_files(package)?
         };
 
+        // Features can only be normal dependencies
         let features = Self::analyze_features(manifest);
-        imports.extend(features);
+        categorized.normal.extend(features);
 
-        Ok(imports)
+        Ok(categorized)
     }
 
-    fn analyze_from_files(package: &Package) -> Result<FxHashSet<String>> {
-        let rust_files = Self::get_package_rust_files(package);
-
-        let deps_vec: Vec<FxHashSet<String>> = rust_files
-            .par_iter()
-            .map(|path| Self::process_rust_source(path))
-            .collect::<Result<Vec<_>>>()?;
-
-        Ok(deps_vec.into_iter().fold(FxHashSet::default(), |a, b| a.union(&b).cloned().collect()))
-    }
-
-    fn analyze_with_expansion(package: &Package) -> Result<FxHashSet<String>> {
-        let mut combined_imports = Self::analyze_from_files(package)?;
+    fn analyze_from_files(package: &Package) -> Result<CategorizedImports> {
+        let mut categorized = CategorizedImports::default();
 
         for target in &package.targets {
-            let target_arg =
-                match target.kind.first().ok_or_else(|| anyhow!("Failed to get target kind"))? {
-                    TargetKind::CustomBuild => continue,
-                    TargetKind::Bin => format!("--bin={}", target.name),
-                    TargetKind::Example => format!("--example={}", target.name),
-                    TargetKind::Test => format!("--test={}", target.name),
-                    TargetKind::Bench => format!("--bench={}", target.name),
-                    TargetKind::CDyLib
-                    | TargetKind::DyLib
-                    | TargetKind::Lib
-                    | TargetKind::ProcMacro
-                    | TargetKind::RLib
-                    | TargetKind::StaticLib
-                    | TargetKind::Unknown(_)
-                    | _ => "--lib".to_owned(),
-                };
+            let target_kind = target.kind.first().ok_or_else(|| anyhow!("Target has no kind"))?;
+            let rust_files = Self::get_target_rust_files(target);
+
+            let deps_vec: Vec<FxHashSet<String>> = rust_files
+                .par_iter()
+                .map(|path| Self::process_rust_source(path))
+                .collect::<Result<Vec<_>>>()?;
+
+            let imports = deps_vec
+                .into_iter()
+                .fold(FxHashSet::default(), |a, b| a.union(&b).cloned().collect());
+
+            Self::categorize_imports(&mut categorized, target_kind, imports);
+        }
+
+        Ok(categorized)
+    }
+
+    fn analyze_with_expansion(package: &Package) -> Result<CategorizedImports> {
+        let mut categorized = Self::analyze_from_files(package)?;
+
+        for target in &package.targets {
+            let target_kind =
+                target.kind.first().ok_or_else(|| anyhow!("Failed to get target kind"))?;
+
+            let target_arg = match target_kind {
+                TargetKind::CustomBuild => continue,
+                TargetKind::Bin => format!("--bin={}", target.name),
+                TargetKind::Example => format!("--example={}", target.name),
+                TargetKind::Test => format!("--test={}", target.name),
+                TargetKind::Bench => format!("--bench={}", target.name),
+                TargetKind::CDyLib
+                | TargetKind::DyLib
+                | TargetKind::Lib
+                | TargetKind::ProcMacro
+                | TargetKind::RLib
+                | TargetKind::StaticLib
+                | TargetKind::Unknown(_)
+                | _ => "--lib".to_owned(),
+            };
 
             let cargo = env::var_os("CARGO").unwrap_or_else(|| OsString::from("cargo"));
 
@@ -109,7 +142,7 @@ impl DependencyAnalyzer {
             let output = cmd.output()?;
             if !output.status.success() {
                 return Err(anyhow!(
-                    "Cargo expand failed for {}: {}",
+                    "Cargo expand failed for {}:\n{}",
                     target.name,
                     String::from_utf8_lossy(&output.stderr)
                 ));
@@ -135,37 +168,54 @@ impl DependencyAnalyzer {
                 )
             })?;
 
-            combined_imports.extend(imports);
+            Self::categorize_imports(&mut categorized, target_kind, imports);
         }
 
-        Ok(combined_imports)
+        Ok(categorized)
     }
 
-    /// Collect all Rust source files for a package from its targets.
-    fn get_package_rust_files(package: &Package) -> Vec<PathBuf> {
-        package
-            .targets
-            .iter()
-            .flat_map(|target| {
-                if target.kind.contains(&TargetKind::CustomBuild) {
-                    vec![target.src_path.clone().into_std_path_buf()]
-                } else {
-                    let target_dir = target.src_path.parent().unwrap_or_else(|| {
-                        panic!("Failed to get parent path {}", &target.src_path)
-                    });
+    /// Collect all Rust source files for a target.
+    fn get_target_rust_files(target: &Target) -> Vec<PathBuf> {
+        if target.kind.contains(&TargetKind::CustomBuild) {
+            vec![target.src_path.clone().into_std_path_buf()]
+        } else {
+            let target_dir = target
+                .src_path
+                .parent()
+                .unwrap_or_else(|| panic!("Failed to get parent path {}", &target.src_path));
 
-                    WalkDir::new(target_dir)
-                        .into_iter()
-                        .filter_map(std::result::Result::ok)
-                        .filter(|e| {
-                            e.file_type().is_file()
-                                && e.path().extension().is_some_and(|ext| ext == "rs")
-                        })
-                        .map(DirEntry::into_path)
-                        .collect::<Vec<_>>()
-                }
-            })
-            .collect()
+            WalkDir::new(target_dir)
+                .into_iter()
+                .filter_map(std::result::Result::ok)
+                .filter(|e| {
+                    e.file_type().is_file() && e.path().extension().is_some_and(|ext| ext == "rs")
+                })
+                .map(DirEntry::into_path)
+                .collect::<Vec<_>>()
+        }
+    }
+
+    /// Categorize imports into normal, dev, or build based on target kind.
+    fn categorize_imports(
+        categorized: &mut CategorizedImports,
+        target_kind: &TargetKind,
+        imports: FxHashSet<String>,
+    ) {
+        match target_kind {
+            TargetKind::CustomBuild => categorized.build.extend(imports),
+            TargetKind::Test | TargetKind::Bench | TargetKind::Example => {
+                categorized.dev.extend(imports);
+            }
+            TargetKind::Lib
+            | TargetKind::Bin
+            | TargetKind::CDyLib
+            | TargetKind::DyLib
+            | TargetKind::ProcMacro
+            | TargetKind::RLib
+            | TargetKind::StaticLib
+            | TargetKind::Unknown(_)
+            | _ => categorized.normal.extend(imports),
+        }
     }
 
     /// Parse a Rust source file and collect all import names.

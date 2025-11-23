@@ -1,6 +1,6 @@
 # Cargo Shear ✂️ 🐑
 
-Detect and remove unused dependencies from `Cargo.toml` in Rust projects.
+Detect and fix unused/misplaced dependencies from `Cargo.toml` in Rust projects.
 
 ## Installation
 
@@ -21,7 +21,7 @@ brew install cargo-shear
 cargo shear --fix
 ```
 
-## Limitation
+## Limitations
 
 > [!IMPORTANT]
 > `cargo shear` cannot detect "hidden" imports from macro expansions without the `--expand` flag (nightly only).
@@ -34,6 +34,10 @@ cargo shear --expand --fix
 ```
 
 The `--expand` flag uses `cargo expand`, which requires nightly and is significantly slower.
+
+> [!IMPORTANT]
+> Misplaced dependency detection only works for integration tests, benchmarks, and examples.
+> Unit tests dependencies within `#[cfg(test)]` cannot be detected as misplaced.
 
 ## Ignore false positives
 

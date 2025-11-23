@@ -40,7 +40,7 @@ use std::{
 
 use anyhow::{Result, anyhow};
 use cargo_metadata::{Metadata, NodeDep, Package};
-use cargo_toml::{DepsSet, Manifest};
+use cargo_toml::{Dependency, DepsSet, Manifest};
 use cargo_util_schemas::core::PackageIdSpec;
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -67,6 +67,9 @@ pub struct PackageProcessResult {
 
     /// Redundant ignores.
     pub redundant_ignores: FxHashSet<String>,
+
+    /// Dependencies in [dependencies] that should be in [dev-dependencies].
+    pub misplaced_dependencies: FxHashSet<String>,
 }
 
 /// Result of processing a workspace.
@@ -85,7 +88,7 @@ impl PackageProcessor {
         Self { analyzer: DependencyAnalyzer::new(expand_macros) }
     }
 
-    /// Process a package to find unused dependencies and track used packages.
+    /// Process a package to find unused/misplaced dependencies and track used packages.
     pub fn process_package(
         &self,
         metadata: &Metadata,
@@ -110,6 +113,7 @@ impl PackageProcessor {
 
         let import_to_pkg = Self::import_to_pkg_map(&resolved.deps)?;
         let used_imports = self.analyzer.analyze_package(package, manifest)?;
+        let all_used_imports = used_imports.all_imports();
 
         let ignored_imports: FxHashSet<String> = package_ignored_deps
             .iter()
@@ -119,19 +123,31 @@ impl PackageProcessor {
 
         let mut unused_dependencies = FxHashSet::default();
         let mut used_packages = FxHashSet::default();
+        let mut misplaced_dependencies = FxHashSet::default();
 
         for (import, pkg) in &import_to_pkg {
-            if used_imports.contains(import) {
-                used_packages.insert(pkg.clone());
-                continue;
-            }
-
             if ignored_imports.contains(import) {
                 continue;
             }
 
             let dep = Self::find_dep(manifest, import);
-            unused_dependencies.insert(dep);
+            if !all_used_imports.contains(import) {
+                unused_dependencies.insert(dep);
+                continue;
+            }
+
+            used_packages.insert(pkg.clone());
+            if !manifest.dependencies.contains_key(&dep) {
+                continue;
+            }
+
+            let used_in_normal = used_imports.normal.contains(import);
+            let used_in_dev = used_imports.dev.contains(import);
+            let is_optional = manifest.dependencies.get(&dep).is_some_and(Dependency::optional);
+
+            if !used_in_normal && used_in_dev && !is_optional {
+                misplaced_dependencies.insert(dep);
+            }
         }
 
         let mut redundant_ignores = FxHashSet::default();
@@ -139,14 +155,19 @@ impl PackageProcessor {
             let ignored_import = ignored_dep.replace('-', "_");
 
             let doesnt_exist = !import_to_pkg.contains_key(&ignored_import);
-            let is_used = used_imports.contains(&ignored_import);
+            let is_used = all_used_imports.contains(&ignored_import);
 
             if doesnt_exist || is_used {
                 redundant_ignores.insert((*ignored_dep).to_owned());
             }
         }
 
-        Ok(PackageProcessResult { unused_dependencies, used_packages, redundant_ignores })
+        Ok(PackageProcessResult {
+            unused_dependencies,
+            used_packages,
+            redundant_ignores,
+            misplaced_dependencies,
+        })
     }
 
     /// Process workspace to find unused workspace dependencies.

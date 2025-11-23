@@ -63,7 +63,7 @@ fn clean_detection() -> Result<(), Box<dyn Error>> {
     insta::assert_snapshot!(output, @r"
     Analyzing .
 
-    No unused dependencies!
+    No issues detected!
     ");
 
     Ok(())
@@ -93,7 +93,7 @@ fn clean_workspace_detection() -> Result<(), Box<dyn Error>> {
     insta::assert_snapshot!(output, @r"
     Analyzing .
 
-    No unused dependencies!
+    No issues detected!
     ");
 
     Ok(())
@@ -124,7 +124,7 @@ fn ignored() -> Result<(), Box<dyn Error>> {
     insta::assert_snapshot!(output, @r"
     Analyzing .
 
-    No unused dependencies!
+    No issues detected!
     ");
 
     Ok(())
@@ -141,7 +141,7 @@ fn ignored_invalid() -> Result<(), Box<dyn Error>> {
 
     warning: 'anywho' is redundant in [package.metadata.cargo-shear] for package 'ignored_invalid'.
 
-    No unused dependencies!
+    No issues detected!
     ");
 
     Ok(())
@@ -158,7 +158,7 @@ fn ignored_redundant() -> Result<(), Box<dyn Error>> {
 
     warning: 'anyhow' is redundant in [package.metadata.cargo-shear] for package 'ignored_redundant'.
 
-    No unused dependencies!
+    No issues detected!
     ");
 
     Ok(())
@@ -173,7 +173,7 @@ fn ignored_workspace() -> Result<(), Box<dyn Error>> {
     insta::assert_snapshot!(output, @r"
     Analyzing .
 
-    No unused dependencies!
+    No issues detected!
     ");
 
     Ok(())
@@ -188,7 +188,7 @@ fn ignored_workspace_merged() -> Result<(), Box<dyn Error>> {
     insta::assert_snapshot!(output, @r"
     Analyzing .
 
-    No unused dependencies!
+    No issues detected!
     ");
 
     Ok(())
@@ -196,19 +196,35 @@ fn ignored_workspace_merged() -> Result<(), Box<dyn Error>> {
 
 // `anyhow` is only used in tests but declared in `dependencies` instead of `dev-dependencies`.
 #[test]
-#[ignore = "Unimplemented: #47"]
 fn misplaced_detection() -> Result<(), Box<dyn Error>> {
     let (exit_code, output, _) = run_cargo_shear("misplaced", false)?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
-    insta::assert_snapshot!(output, @"");
+    insta::assert_snapshot!(output, @r#"
+    Analyzing .
+
+    misplaced -- Cargo.toml:
+      misplaced dev dependencies:
+        anyhow
+
+
+    cargo-shear may have detected unused dependencies incorrectly due to its limitations.
+    They can be ignored by adding the crate name to the package's Cargo.toml:
+
+    [package.metadata.cargo-shear]
+    ignored = ["crate-name"]
+
+    or in the workspace Cargo.toml:
+
+    [workspace.metadata.cargo-shear]
+    ignored = ["crate-name"]
+    "#);
 
     Ok(())
 }
 
 // `anyhow` should be moved from `dependencies` to `dev-dependencies`.
 #[test]
-#[ignore = "Unimplemented: #47"]
 fn misplaced_fix() -> Result<(), Box<dyn Error>> {
     let (exit_code, _, temp_dir) = run_cargo_shear("misplaced", true)?;
     assert_eq!(exit_code, ExitCode::FAILURE);
@@ -222,19 +238,21 @@ fn misplaced_fix() -> Result<(), Box<dyn Error>> {
 
 // Optional `anyhow` is only used in tests but declared in `dependencies`.
 #[test]
-#[ignore = "Unimplemented: #47"]
 fn misplaced_optional_detection() -> Result<(), Box<dyn Error>> {
     let (exit_code, output, _) = run_cargo_shear("misplaced_optional", false)?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
-    insta::assert_snapshot!(output, @"");
+    insta::assert_snapshot!(output, @r"
+    Analyzing .
+
+    No issues detected!
+    ");
 
     Ok(())
 }
 
 // Optional `anyhow` can't be moved to `dev-dependencies` since they don't support `optional = true`.
 #[test]
-#[ignore = "Unimplemented: #47"]
 fn misplaced_optional_fix() -> Result<(), Box<dyn Error>> {
     let (exit_code, _, temp_dir) = run_cargo_shear("misplaced_optional", true)?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
@@ -248,19 +266,35 @@ fn misplaced_optional_fix() -> Result<(), Box<dyn Error>> {
 
 // Renamed dependency `anyhow_v1` is only used in tests but declared in `dependencies`.
 #[test]
-#[ignore = "Unimplemented: #47"]
 fn misplaced_renamed_detection() -> Result<(), Box<dyn Error>> {
     let (exit_code, output, _) = run_cargo_shear("misplaced_renamed", false)?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
-    insta::assert_snapshot!(output, @"");
+    insta::assert_snapshot!(output, @r#"
+    Analyzing .
+
+    misplaced_renamed -- Cargo.toml:
+      misplaced dev dependencies:
+        anyhow_v1
+
+
+    cargo-shear may have detected unused dependencies incorrectly due to its limitations.
+    They can be ignored by adding the crate name to the package's Cargo.toml:
+
+    [package.metadata.cargo-shear]
+    ignored = ["crate-name"]
+
+    or in the workspace Cargo.toml:
+
+    [workspace.metadata.cargo-shear]
+    ignored = ["crate-name"]
+    "#);
 
     Ok(())
 }
 
 // Renamed `anyhow_v1` should be moved to `dev-dependencies` while maintaining package details.
 #[test]
-#[ignore = "Unimplemented: #47"]
 fn misplaced_renamed_fix() -> Result<(), Box<dyn Error>> {
     let (exit_code, _, temp_dir) = run_cargo_shear("misplaced_renamed", true)?;
     assert_eq!(exit_code, ExitCode::FAILURE);
@@ -278,19 +312,35 @@ fn misplaced_renamed_fix() -> Result<(), Box<dyn Error>> {
 
 // Table syntax `anyhow` is only used in tests but declared in `dependencies`.
 #[test]
-#[ignore = "Unimplemented: #47"]
 fn misplaced_table_detection() -> Result<(), Box<dyn Error>> {
     let (exit_code, output, _) = run_cargo_shear("misplaced_table", false)?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
-    insta::assert_snapshot!(output, @"");
+    insta::assert_snapshot!(output, @r#"
+    Analyzing .
+
+    misplaced_table -- Cargo.toml:
+      misplaced dev dependencies:
+        anyhow
+
+
+    cargo-shear may have detected unused dependencies incorrectly due to its limitations.
+    They can be ignored by adding the crate name to the package's Cargo.toml:
+
+    [package.metadata.cargo-shear]
+    ignored = ["crate-name"]
+
+    or in the workspace Cargo.toml:
+
+    [workspace.metadata.cargo-shear]
+    ignored = ["crate-name"]
+    "#);
 
     Ok(())
 }
 
 // Table syntax `anyhow` should be moved to `dev-dependencies` while maintaining package details.
 #[test]
-#[ignore = "Unimplemented: #47"]
 fn misplaced_table_fix() -> Result<(), Box<dyn Error>> {
     let (exit_code, _, temp_dir) = run_cargo_shear("misplaced_table", true)?;
     assert_eq!(exit_code, ExitCode::FAILURE);
@@ -307,6 +357,32 @@ fn misplaced_table_fix() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// `anyhow` is only used in unit tests but declared in `dependencies` instead of `dev-dependencies`.
+#[test]
+#[ignore = "Cannot detect misplaced dependencies in unit tests"]
+fn misplaced_unit_detection() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _) = run_cargo_shear("misplaced_unit", false)?;
+    assert_eq!(exit_code, ExitCode::SUCCESS);
+
+    insta::assert_snapshot!(output, @"");
+
+    Ok(())
+}
+
+// `anyhow` should be moved from `dependencies` to `dev-dependencies`.
+#[test]
+#[ignore = "Cannot detect misplaced dependencies in unit tests"]
+fn misplaced_unit_fix() -> Result<(), Box<dyn Error>> {
+    let (exit_code, _, temp_dir) = run_cargo_shear("misplaced_unit", true)?;
+    assert_eq!(exit_code, ExitCode::FAILURE);
+
+    let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
+    assert!(manifest.dev_dependencies.contains_key("anyhow"));
+    assert!(!manifest.dependencies.contains_key("anyhow"));
+
+    Ok(())
+}
+
 // `anyhow` is unused.
 #[test]
 fn unused_detection() -> Result<(), Box<dyn Error>> {
@@ -317,7 +393,8 @@ fn unused_detection() -> Result<(), Box<dyn Error>> {
     Analyzing .
 
     unused -- Cargo.toml:
-      anyhow
+      unused dependencies:
+        anyhow
 
 
     cargo-shear may have detected unused dependencies incorrectly due to its limitations.
@@ -357,7 +434,8 @@ fn unused_build_detection() -> Result<(), Box<dyn Error>> {
     Analyzing .
 
     unused_build -- Cargo.toml:
-      anyhow
+      unused dependencies:
+        anyhow
 
 
     cargo-shear may have detected unused dependencies incorrectly due to its limitations.
@@ -397,7 +475,8 @@ fn unused_dev_detection() -> Result<(), Box<dyn Error>> {
     Analyzing .
 
     unused_dev -- Cargo.toml:
-      anyhow
+      unused dependencies:
+        anyhow
 
 
     cargo-shear may have detected unused dependencies incorrectly due to its limitations.
@@ -436,7 +515,7 @@ fn unused_feature_detect() -> Result<(), Box<dyn Error>> {
     insta::assert_snapshot!(output, @r"
     Analyzing .
 
-    No unused dependencies!
+    No issues detected!
     ");
 
     Ok(())
@@ -463,7 +542,7 @@ fn unused_feature_weak_detect() -> Result<(), Box<dyn Error>> {
     insta::assert_snapshot!(output, @r"
     Analyzing .
 
-    No unused dependencies!
+    No issues detected!
     ");
 
     Ok(())
@@ -491,7 +570,8 @@ fn unused_naming_hyphen_detection() -> Result<(), Box<dyn Error>> {
     Analyzing .
 
     unused_naming_hyphen -- Cargo.toml:
-      serde_json
+      unused dependencies:
+        serde_json
 
 
     cargo-shear may have detected unused dependencies incorrectly due to its limitations.
@@ -531,7 +611,8 @@ fn unused_naming_underscore_detection() -> Result<(), Box<dyn Error>> {
     Analyzing .
 
     unused_naming_underscore -- Cargo.toml:
-      rustc-hash
+      unused dependencies:
+        rustc-hash
 
 
     cargo-shear may have detected unused dependencies incorrectly due to its limitations.
@@ -570,7 +651,7 @@ fn unused_optional_detection() -> Result<(), Box<dyn Error>> {
     insta::assert_snapshot!(output, @r"
     Analyzing .
 
-    No unused dependencies!
+    No issues detected!
     ");
 
     Ok(())
@@ -601,7 +682,7 @@ fn unused_optional_implicit_detection() -> Result<(), Box<dyn Error>> {
     insta::assert_snapshot!(output, @r"
     Analyzing .
 
-    No unused dependencies!
+    No issues detected!
     ");
 
     Ok(())
@@ -629,7 +710,8 @@ fn unused_platform_detection() -> Result<(), Box<dyn Error>> {
     Analyzing .
 
     unused_platform -- Cargo.toml:
-      anyhow
+      unused dependencies:
+        anyhow
 
 
     cargo-shear may have detected unused dependencies incorrectly due to its limitations.
@@ -670,7 +752,8 @@ fn unused_renamed_detection() -> Result<(), Box<dyn Error>> {
     Analyzing .
 
     unused_renamed -- Cargo.toml:
-      anyhow_v1
+      unused dependencies:
+        anyhow_v1
 
 
     cargo-shear may have detected unused dependencies incorrectly due to its limitations.
@@ -710,7 +793,8 @@ fn unused_table_detection() -> Result<(), Box<dyn Error>> {
     Analyzing .
 
     unused_table -- Cargo.toml:
-      anyhow
+      unused dependencies:
+        anyhow
 
 
     cargo-shear may have detected unused dependencies incorrectly due to its limitations.
@@ -750,7 +834,8 @@ fn unused_workspace_detection() -> Result<(), Box<dyn Error>> {
     Analyzing .
 
     root -- ./Cargo.toml:
-      anyhow
+      unused dependencies:
+        anyhow
 
 
     cargo-shear may have detected unused dependencies incorrectly due to its limitations.
@@ -791,7 +876,8 @@ fn unused_workspace_renamed_detection() -> Result<(), Box<dyn Error>> {
     Analyzing .
 
     root -- ./Cargo.toml:
-      anyhow_v1
+      unused dependencies:
+        anyhow_v1
 
 
     cargo-shear may have detected unused dependencies incorrectly due to its limitations.
