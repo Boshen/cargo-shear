@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.5](https://github.com/Boshen/cargo-shear/compare/v1.6.4...v1.6.5) - 2025-11-24
+
+### Other
+
+- Improve error reporting for misplaced deps, and mention fix flag if not used ([#318](https://github.com/Boshen/cargo-shear/pull/318))
+- *(deps)* update rust crate syn to v2.0.111 ([#320](https://github.com/Boshen/cargo-shear/pull/320))
+- *(deps)* update github-actions ([#319](https://github.com/Boshen/cargo-shear/pull/319))
+- Detect and fix misplaced dev dependencies ([#316](https://github.com/Boshen/cargo-shear/pull/316))
+
 ## [1.6.4](https://github.com/Boshen/cargo-shear/compare/v1.6.3...v1.6.4) - 2025-11-22
 
 ### Other
