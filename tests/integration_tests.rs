@@ -204,7 +204,7 @@ fn misplaced_detection() -> Result<(), Box<dyn Error>> {
     Analyzing .
 
     misplaced -- Cargo.toml:
-      misplaced dev dependencies:
+      move to dev-dependencies:
         anyhow
 
 
@@ -218,6 +218,8 @@ fn misplaced_detection() -> Result<(), Box<dyn Error>> {
 
     [workspace.metadata.cargo-shear]
     ignored = ["crate-name"]
+
+    To automatically fix issues, run with --fix
     "#);
 
     Ok(())
@@ -274,7 +276,7 @@ fn misplaced_renamed_detection() -> Result<(), Box<dyn Error>> {
     Analyzing .
 
     misplaced_renamed -- Cargo.toml:
-      misplaced dev dependencies:
+      move to dev-dependencies:
         anyhow_v1
 
 
@@ -288,6 +290,8 @@ fn misplaced_renamed_detection() -> Result<(), Box<dyn Error>> {
 
     [workspace.metadata.cargo-shear]
     ignored = ["crate-name"]
+
+    To automatically fix issues, run with --fix
     "#);
 
     Ok(())
@@ -320,7 +324,7 @@ fn misplaced_table_detection() -> Result<(), Box<dyn Error>> {
     Analyzing .
 
     misplaced_table -- Cargo.toml:
-      misplaced dev dependencies:
+      move to dev-dependencies:
         anyhow
 
 
@@ -334,6 +338,8 @@ fn misplaced_table_detection() -> Result<(), Box<dyn Error>> {
 
     [workspace.metadata.cargo-shear]
     ignored = ["crate-name"]
+
+    To automatically fix issues, run with --fix
     "#);
 
     Ok(())
@@ -407,6 +413,8 @@ fn unused_detection() -> Result<(), Box<dyn Error>> {
 
     [workspace.metadata.cargo-shear]
     ignored = ["crate-name"]
+
+    To automatically fix issues, run with --fix
     "#);
 
     Ok(())
@@ -448,6 +456,8 @@ fn unused_build_detection() -> Result<(), Box<dyn Error>> {
 
     [workspace.metadata.cargo-shear]
     ignored = ["crate-name"]
+
+    To automatically fix issues, run with --fix
     "#);
 
     Ok(())
@@ -489,6 +499,8 @@ fn unused_dev_detection() -> Result<(), Box<dyn Error>> {
 
     [workspace.metadata.cargo-shear]
     ignored = ["crate-name"]
+
+    To automatically fix issues, run with --fix
     "#);
 
     Ok(())
@@ -584,6 +596,8 @@ fn unused_naming_hyphen_detection() -> Result<(), Box<dyn Error>> {
 
     [workspace.metadata.cargo-shear]
     ignored = ["crate-name"]
+
+    To automatically fix issues, run with --fix
     "#);
 
     Ok(())
@@ -625,6 +639,8 @@ fn unused_naming_underscore_detection() -> Result<(), Box<dyn Error>> {
 
     [workspace.metadata.cargo-shear]
     ignored = ["crate-name"]
+
+    To automatically fix issues, run with --fix
     "#);
 
     Ok(())
@@ -724,6 +740,8 @@ fn unused_platform_detection() -> Result<(), Box<dyn Error>> {
 
     [workspace.metadata.cargo-shear]
     ignored = ["crate-name"]
+
+    To automatically fix issues, run with --fix
     "#);
 
     Ok(())
@@ -766,6 +784,8 @@ fn unused_renamed_detection() -> Result<(), Box<dyn Error>> {
 
     [workspace.metadata.cargo-shear]
     ignored = ["crate-name"]
+
+    To automatically fix issues, run with --fix
     "#);
 
     Ok(())
@@ -807,6 +827,8 @@ fn unused_table_detection() -> Result<(), Box<dyn Error>> {
 
     [workspace.metadata.cargo-shear]
     ignored = ["crate-name"]
+
+    To automatically fix issues, run with --fix
     "#);
 
     Ok(())
@@ -848,6 +870,8 @@ fn unused_workspace_detection() -> Result<(), Box<dyn Error>> {
 
     [workspace.metadata.cargo-shear]
     ignored = ["crate-name"]
+
+    To automatically fix issues, run with --fix
     "#);
 
     Ok(())
@@ -890,6 +914,8 @@ fn unused_workspace_renamed_detection() -> Result<(), Box<dyn Error>> {
 
     [workspace.metadata.cargo-shear]
     ignored = ["crate-name"]
+
+    To automatically fix issues, run with --fix
     "#);
 
     Ok(())
