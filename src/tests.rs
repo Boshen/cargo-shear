@@ -6,7 +6,7 @@ use crate::{CargoShear, CargoShearOptions, default_path, import_collector::colle
 
 #[track_caller]
 fn test(source_text: &str) {
-    let deps = collect_imports(source_text).unwrap();
+    let deps = collect_imports(source_text);
     let expected = FxHashSet::from_iter(["foo".to_owned()]);
     assert_eq!(deps, expected, "{source_text}");
 }
@@ -100,31 +100,31 @@ fn test_lib() {
 
 #[test]
 fn empty_source() {
-    let deps = collect_imports("").unwrap();
+    let deps = collect_imports("");
     assert!(deps.is_empty());
 }
 
 #[test]
 fn comment_only() {
-    let deps = collect_imports("// this is a comment").unwrap();
+    let deps = collect_imports("// this is a comment");
     assert!(deps.is_empty());
 }
 
 #[test]
 fn std_imports_not_collected() {
-    let deps = collect_imports("use std::collections::HashMap;").unwrap();
+    let deps = collect_imports("use std::collections::HashMap;");
     assert!(deps.is_empty());
 }
 
 #[test]
 fn self_super_crate_not_collected() {
-    let deps = collect_imports("use self::module;").unwrap();
+    let deps = collect_imports("use self::module;");
     assert!(deps.is_empty());
 
-    let deps = collect_imports("use super::module;").unwrap();
+    let deps = collect_imports("use super::module;");
     assert!(deps.is_empty());
 
-    let deps = collect_imports("use crate::module;").unwrap();
+    let deps = collect_imports("use crate::module;");
     assert!(deps.is_empty());
 }
 
@@ -137,7 +137,7 @@ fn multiple_imports_same_crate() {
             foo::qux();
         }
     ";
-    let deps = collect_imports(source).unwrap();
+    let deps = collect_imports(source);
     let expected = FxHashSet::from_iter(["foo".to_owned()]);
     assert_eq!(deps, expected);
 }
@@ -239,28 +239,22 @@ fn lifetimes_and_generics() {
 #[test]
 fn malformed_syntax_recovery() {
     // Test that we can handle some malformed syntax gracefully
-    let result = collect_imports("use foo::;"); // Incomplete use statement
-    // Should either parse successfully or return an error, but not panic
-    if let Ok(deps) = result {
-        // If it parses, foo should be collected
-        assert!(deps.contains("foo") || deps.is_empty());
-    } else {
-        // Parsing error is acceptable for malformed syntax
-    }
+    let deps = collect_imports("use foo::;");
+    assert!(deps.contains("foo"));
 }
 
 #[test]
 fn very_long_path() {
     let long_path = "foo::".repeat(100) + "bar";
     let source = format!("use {long_path};");
-    let deps = collect_imports(&source).unwrap();
+    let deps = collect_imports(&source);
     let expected = FxHashSet::from_iter(["foo".to_owned()]);
     assert_eq!(deps, expected);
 }
 
 #[test]
 fn unicode_identifiers() {
-    let deps = collect_imports("use foo::数据;").unwrap();
+    let deps = collect_imports("use foo::数据;");
     let expected = FxHashSet::from_iter(["foo".to_owned()]);
     assert_eq!(deps, expected);
 }
@@ -283,7 +277,7 @@ fn raw_string_inside_macro() {
 
 #[test]
 fn glob_imports() {
-    let deps = collect_imports("use foo::*;").unwrap();
+    let deps = collect_imports("use foo::*;");
     let expected = FxHashSet::from_iter(["foo".to_owned()]);
     assert_eq!(deps, expected);
 }
@@ -386,19 +380,19 @@ fn cargo_shear_options_creation() {
 
 #[test]
 fn invalid_rust_syntax() {
-    let result = collect_imports("this is not rust code ^^^");
-    assert!(result.is_err(), "Should fail to parse invalid Rust syntax");
+    let deps = collect_imports("this is not rust code ^^^");
+    assert!(deps.is_empty(), "Should gracefully handle invalid Rust syntax");
 }
 
 #[test]
 fn empty_file_handling() {
-    let deps = collect_imports("").unwrap();
+    let deps = collect_imports("");
     assert!(deps.is_empty(), "Empty file should result in no dependencies");
 }
 
 #[test]
 fn whitespace_only() {
-    let deps = collect_imports("   \n  \t  \n  ").unwrap();
+    let deps = collect_imports("   \n  \t  \n  ");
     assert!(deps.is_empty(), "Whitespace-only file should result in no dependencies");
 }
 
@@ -411,7 +405,7 @@ fn mixed_valid_invalid_imports() {
         use self::local;  // should be ignored (self)
         use foo::baz::qux;  // valid, same crate as first
     ";
-    let deps = collect_imports(source).unwrap();
+    let deps = collect_imports(source);
     let expected = FxHashSet::from_iter(["foo".to_owned()]);
     assert_eq!(deps, expected);
 }
@@ -420,13 +414,13 @@ fn mixed_valid_invalid_imports() {
 
 #[track_caller]
 fn test_no_deps(source_text: &str) {
-    let deps = collect_imports(source_text).unwrap();
+    let deps = collect_imports(source_text);
     assert!(deps.is_empty(), "Expected no dependencies for: {source_text}");
 }
 
 #[track_caller]
 fn test_multiple_deps(source_text: &str, expected_deps: &[&str]) {
-    let deps = collect_imports(source_text).unwrap();
+    let deps = collect_imports(source_text);
     let expected = expected_deps.iter().map(|s| (*s).to_owned()).collect::<FxHashSet<_>>();
     assert_eq!(deps, expected, "Dependencies mismatch for: {source_text}");
 }
@@ -459,7 +453,7 @@ fn large_file_simulation() {
         writeln!(source, "fn func{i}() {{ foo::call{i}(); }}").unwrap();
     }
 
-    let deps = collect_imports(&source).unwrap();
+    let deps = collect_imports(&source);
     let expected = FxHashSet::from_iter(["foo".to_owned()]);
     assert_eq!(deps, expected);
 }
@@ -468,7 +462,7 @@ fn large_file_simulation() {
 fn deeply_nested_paths() {
     let nested_path = (0..20).map(|i| format!("level{i}")).collect::<Vec<_>>().join("::");
     let source = format!("use foo::{nested_path};");
-    let deps = collect_imports(&source).unwrap();
+    let deps = collect_imports(&source);
     let expected = FxHashSet::from_iter(["foo".to_owned()]);
     assert_eq!(deps, expected);
 }
@@ -500,7 +494,7 @@ fn raw_identifiers() {
 
 #[test]
 fn raw_identifier_crate_name() {
-    let deps = collect_imports("use r#continue::thing;").unwrap();
+    let deps = collect_imports("use r#continue::thing;");
     assert!(deps.contains("continue"));
 }
 
@@ -647,10 +641,16 @@ fn dependency_injection() {
 
 #[test]
 fn incomplete_statements() {
-    // These should parse or fail gracefully without panicking
-    let _ = collect_imports("use foo::");
-    let _ = collect_imports("fn main() { foo:: }");
-    let _ = collect_imports("struct S { field: foo:: }");
+    // These should parse without panicking
+
+    let deps = collect_imports("use foo::");
+    assert!(deps.contains("foo"));
+
+    let deps = collect_imports("fn main() { foo:: }");
+    assert!(deps.is_empty());
+
+    let deps = collect_imports("struct S { field: foo:: }");
+    assert!(deps.is_empty());
 }
 
 #[test]
@@ -689,7 +689,7 @@ fn many_small_imports() {
     for i in 0..1000 {
         writeln!(source, "use foo::item{i};").unwrap();
     }
-    let deps = collect_imports(&source).unwrap();
+    let deps = collect_imports(&source);
     let expected = FxHashSet::from_iter(["foo".to_owned()]);
     assert_eq!(deps, expected);
 }
@@ -700,7 +700,7 @@ fn deeply_nested_modules() {
     for i in 0..100 {
         writeln!(source, "mod level{i} {{ use foo::item{i}; }}").unwrap();
     }
-    let deps = collect_imports(&source).unwrap();
+    let deps = collect_imports(&source);
     let expected = FxHashSet::from_iter(["foo".to_owned()]);
     assert_eq!(deps, expected);
 }
@@ -755,55 +755,52 @@ fn macro_invocation_complex_patterns() {
 #[test]
 fn raw_identifier_combinations() {
     // Raw identifiers in both positions
-    let deps = collect_imports("use r#foo::r#type;").unwrap();
+    let deps = collect_imports("use r#foo::r#type;");
     assert!(deps.contains("foo"));
 
-    let deps = collect_imports("fn main() { r#foo::r#match(); }").unwrap();
+    let deps = collect_imports("fn main() { r#foo::r#match(); }");
     assert!(deps.contains("foo"));
 
     // Raw identifier only on left
-    let deps = collect_imports("use r#async::bar;").unwrap();
+    let deps = collect_imports("use r#async::bar;");
     assert!(deps.contains("async"));
 
-    let deps = collect_imports("fn main() { r#type::regular(); }").unwrap();
+    let deps = collect_imports("fn main() { r#type::regular(); }");
     assert!(deps.contains("type"));
 
     // Raw identifier only on right
-    let deps = collect_imports("use regular::r#await;").unwrap();
+    let deps = collect_imports("use regular::r#await;");
     assert!(deps.contains("regular"));
     test("fn main() { foo::r#fn(); }");
 
     // Raw identifiers with whitespace
-    let deps = collect_imports("use r#foo  ::  r#bar;").unwrap();
+    let deps = collect_imports("use r#foo  ::  r#bar;");
     assert!(deps.contains("foo"));
 
-    let deps = collect_imports("fn main() { r#type\t::\tr#match(); }").unwrap();
+    let deps = collect_imports("fn main() { r#type\t::\tr#match(); }");
     assert!(deps.contains("type"));
 
     // Raw identifiers in macros
-    let deps = collect_imports(r#"fn main() { println!("{}", r#foo::r#bar); }"#).unwrap();
+    let deps = collect_imports(r#"fn main() { println!("{}", r#foo::r#bar); }"#);
     assert!(deps.contains("foo"));
 
-    let deps = collect_imports("#[derive(r#foo::r#Trait)] struct S;").unwrap();
+    let deps = collect_imports("#[derive(r#foo::r#Trait)] struct S;");
     assert!(deps.contains("foo"));
 }
 
 #[test]
 fn multiple_colon_patterns() {
     // Three or more colons (should handle gracefully)
-    let result = collect_imports("fn main() { foo:::bar(); }");
-    // Should either parse or fail gracefully
-    assert!(result.is_ok() || result.is_err());
+    let deps = collect_imports("fn main() { foo:::bar(); }");
+    assert!(deps.contains("foo"));
 
-    let result = collect_imports("fn main() { foo::::bar(); }");
-    assert!(result.is_ok() || result.is_err());
+    let deps = collect_imports("fn main() { foo::::bar(); }");
+    assert!(deps.contains("foo"));
 
     // Mixed valid and invalid patterns
-    let result = collect_imports("fn main() { foo::bar(); baz:::qux(); }");
-    if let Ok(deps) = result {
-        // Should at least capture foo from the valid pattern
-        assert!(deps.contains("foo") || deps.is_empty());
-    }
+    let deps = collect_imports("fn main() { foo::bar(); baz:::qux(); }");
+    let expected = FxHashSet::from_iter(["foo".to_owned(), "baz".to_owned()]);
+    assert_eq!(deps, expected);
 }
 
 #[test]
@@ -882,24 +879,24 @@ fn derive_macro_variations() {
 #[test]
 fn edge_case_path_segments() {
     // Single letter crate names
-    let deps = collect_imports("use a::b;").unwrap();
+    let deps = collect_imports("use a::b;");
     assert!(deps.contains("a"));
 
-    let deps = collect_imports("fn main() { x::y(); }").unwrap();
+    let deps = collect_imports("fn main() { x::y(); }");
     assert!(deps.contains("x"));
 
     // Underscore in paths
-    let deps = collect_imports("use foo_bar::baz_qux;").unwrap();
+    let deps = collect_imports("use foo_bar::baz_qux;");
     assert!(deps.contains("foo_bar"));
 
-    let deps = collect_imports("fn main() { snake_case::function_name(); }").unwrap();
+    let deps = collect_imports("fn main() { snake_case::function_name(); }");
     assert!(deps.contains("snake_case"));
 
     // Numbers in identifiers
-    let deps = collect_imports("use foo2::bar3;").unwrap();
+    let deps = collect_imports("use foo2::bar3;");
     assert!(deps.contains("foo2"));
 
-    let deps = collect_imports("fn main() { crate1::module2::func3(); }").unwrap();
+    let deps = collect_imports("fn main() { crate1::module2::func3(); }");
     assert!(deps.contains("crate1"));
 }
 
