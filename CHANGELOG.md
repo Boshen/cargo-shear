@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.6](https://github.com/Boshen/cargo-shear/compare/v1.6.5...v1.6.6) - 2025-11-26
+
+### Fixed
+
+- fix incorrect `--version` output ([#326](https://github.com/Boshen/cargo-shear/pull/326))
+
+### Other
+
+- Fix detection of redundant workspace ignores ([#324](https://github.com/Boshen/cargo-shear/pull/324))
+- Switch from `syn` to `ra_ap_syntax` for parsing ([#322](https://github.com/Boshen/cargo-shear/pull/322))
+
 ## [1.6.5](https://github.com/Boshen/cargo-shear/compare/v1.6.4...v1.6.5) - 2025-11-24
 
 ### Other
