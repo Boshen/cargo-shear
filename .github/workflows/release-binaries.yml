@@ -51,10 +51,14 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
-    env:
-      SHEAR_VERSION: ${{ github.ref }}
     steps:
       - uses: taiki-e/checkout-action@b13d20b7cda4e2f325ef19895128f7ff735c0b3d # v1.3.1
+
+      - name: Set environment variables
+        run: |
+          VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
+          echo "SHEAR_VERSION=$VERSION" >> $GITHUB_ENV
+          echo "CC=clang" >> $GITHUB_ENV # for mimalloc
 
       - uses: oxc-project/setup-rust@eb5c2bf64ce11cc9557c576d6766c164d064fdb7 # v1.0.10
 
@@ -66,8 +70,6 @@ jobs:
         if: contains(matrix.target, '-linux-musl')
 
       - uses: taiki-e/upload-rust-binary-action@3962470d6e7f1993108411bc3f75a135ec67fc8c # v1.27.0
-        env:
-          CC: clang # for mimalloc
         with:
           bin: cargo-shear
           target: ${{ matrix.target }}
