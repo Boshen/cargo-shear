@@ -10,8 +10,13 @@
 //! - Macro invocations
 //! - Attribute references (e.g., `#[derive(...)]`)
 
+#![expect(
+    clippy::wildcard_enum_match_arm,
+    reason = "Hundreds of SyntaxKind variants, matching on '_' is the best option"
+)]
+
 use ra_ap_syntax::{
-    AstNode, Edition, SourceFile, SyntaxKind, SyntaxNode, WalkEvent,
+    AstNode, Edition, NodeOrToken, SourceFile, SyntaxKind, SyntaxNode, SyntaxToken, WalkEvent,
     ast::{Attr, ExternCrate, MacroCall, MacroRules, Path, TokenTree, Use, UseTree},
 };
 use rustc_hash::FxHashSet;
@@ -88,10 +93,6 @@ impl ImportCollector {
         for event in syntax.syntax().preorder() {
             let WalkEvent::Enter(node) = event else { continue };
 
-            #[expect(
-                clippy::wildcard_enum_match_arm,
-                reason = "Hundreds of variants, using '_' is the best option"
-            )]
             match node.kind() {
                 SyntaxKind::USE => self.visit_use(node),
                 SyntaxKind::EXTERN_CRATE => self.visit_extern_crate(node),
@@ -161,71 +162,62 @@ impl ImportCollector {
     // `println!("{}", foo::bar);`
     //                 ^^^^^^^^ search for the `::` pattern
     fn collect_tokens(&mut self, node: &SyntaxNode) {
-        let source_text = node.text().to_string();
+        let tokens: Vec<SyntaxToken> = node
+            .descendants_with_tokens()
+            .filter_map(NodeOrToken::into_token)
+            .filter(|t| !t.kind().is_trivia())
+            .collect();
 
-        let idents = source_text
-            .match_indices("::")
-            .filter_map(|(pos, _)| Self::extract_identifier_before(&source_text, pos))
-            .filter(|ident| !Self::is_known_import(ident));
+        for (i, token) in tokens.iter().enumerate() {
+            if i == 0 {
+                continue;
+            }
 
-        self.deps.extend(idents);
+            let is_path_sep = match token.kind() {
+                SyntaxKind::COLON2 => true,
+                SyntaxKind::COLON => {
+                    i + 1 < tokens.len() && tokens[i + 1].kind() == SyntaxKind::COLON
+                }
+                _ => false,
+            };
+
+            if is_path_sep {
+                // Check that prev token is NOT also preceded by ::
+                // (we only want the first segment of a path)
+                let preceded_by_path_sep = i >= 2 && {
+                    let before_prev = &tokens[i - 2];
+                    before_prev.kind() == SyntaxKind::COLON2
+                        || (before_prev.kind() == SyntaxKind::COLON
+                            && i >= 3
+                            && tokens[i - 3].kind() == SyntaxKind::COLON)
+                };
+
+                if !preceded_by_path_sep {
+                    let prev = &tokens[i - 1];
+                    if prev.kind() == SyntaxKind::IDENT && Self::is_valid_import_ident(prev.text())
+                    {
+                        self.add_import(prev.text());
+                    }
+                }
+            }
+        }
     }
 
-    // Helper function to extract identifier before a given position
-    fn extract_identifier_before(text: &str, pos: usize) -> Option<String> {
-        let bytes = text.as_bytes();
-        let mut end = pos;
-
-        // Skip any whitespace before ::
-        while end > 0 && bytes[end - 1].is_ascii_whitespace() {
-            end -= 1;
+    fn is_valid_import_ident(text: &str) -> bool {
+        if text.is_empty() {
+            return false;
         }
 
-        if end == 0 {
-            return None;
+        // Skip known keywords
+        if Self::is_known_import(text) {
+            return false;
         }
 
-        // Check for raw identifier (r#)
-        let is_raw = end >= 2 && &bytes[end - 2..end] == b"r#";
-        let ident_end = if is_raw { end - 2 } else { end };
+        // Handle raw identifiers
+        let clean = text.strip_prefix("r#").unwrap_or(text);
 
-        // Find the start of the identifier
-        let mut start = ident_end;
-        while start > 0 {
-            let prev = start - 1;
-            let ch = bytes[prev];
-            if ch.is_ascii_alphabetic() || ch == b'_' || (start < ident_end && ch.is_ascii_digit())
-            {
-                start = prev;
-            } else {
-                break;
-            }
-        }
-
-        // If we're looking at a raw identifier, adjust the start
-        if is_raw && start >= 2 && &bytes[start - 2..start] == b"r#" {
-            start -= 2;
-        }
-
-        // Check if there's another :: before this identifier (i.e., this is part of a longer path)
-        // We only want to capture the first segment of paths like foo::bar::baz
-        if start >= 2 && bytes[start - 2] == b':' && bytes[start - 1] == b':' {
-            return None;
-        }
-
-        if start < ident_end {
-            let full_ident = &text[start..end];
-            // Remove r# prefix if present for the actual identifier
-            let ident =
-                full_ident.strip_prefix("r#").map_or_else(|| full_ident.to_owned(), str::to_owned);
-
-            // Validate it's a proper identifier
-            if ident.chars().next()?.is_ascii_alphabetic() || ident.starts_with('_') {
-                return Some(ident);
-            }
-        }
-
-        None
+        // Must start with letter or underscore
+        clean.chars().next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
     }
 
     // #[serde(with = "foo")]
@@ -251,6 +243,10 @@ impl ImportCollector {
     }
 
     fn visit_path(&mut self, node: SyntaxNode) {
+        // Skip paths inside use statements, they're handled by collect_use_tree
+        if node.ancestors().any(|n| n.kind() == SyntaxKind::USE) {
+            return;
+        }
         let Some(path) = Path::cast(node) else { return };
         self.collect_path(&path, false);
     }
