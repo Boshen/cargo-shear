@@ -179,6 +179,23 @@ fn ignored_workspace() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// `anyhow` is in the workspace ignored list but is actually being used.
+#[test]
+fn ignored_workspace_redundant() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _) = run_cargo_shear("ignored_workspace_redundant", false)?;
+    assert_eq!(exit_code, ExitCode::SUCCESS);
+
+    insta::assert_snapshot!(output, @r"
+    Analyzing .
+
+    warning: 'anyhow' is redundant in [workspace.metadata.cargo-shear].
+
+    No issues detected!
+    ");
+
+    Ok(())
+}
+
 // Both `anyhow` (workspace ignore) and `thiserror` (package ignore) are unused, but ignored.
 #[test]
 fn ignored_workspace_merged() -> Result<(), Box<dyn Error>> {
