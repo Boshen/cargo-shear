@@ -3,7 +3,7 @@
 //! This module is responsible for analyzing Rust source code to determine
 //! which dependencies are actually used. It supports two modes:
 //!
-//! 1. **Normal mode**: Parses Rust source files directly using `syn`
+//! 1. **Normal mode**: Parses Rust source files directly using `ra_ap_syntax`
 //! 2. **Expand mode**: Uses `cargo expand` to expand macros for more accurate detection
 //!
 //! The analyzer walks through all source files in a package, collects import
@@ -12,7 +12,6 @@
 use std::{
     env,
     ffi::OsString,
-    fmt::Write,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -156,18 +155,7 @@ impl DependencyAnalyzer {
                 ));
             }
 
-            let imports = collect_imports(&output_str).map_err(|err| {
-                let location = err.span().start();
-                let snippet = Self::extract_code_snippet(&output_str, location.line);
-
-                anyhow!(
-                    "Syntax error in {} at line {}:{}:\n{err}\n{snippet}",
-                    target.name,
-                    location.line,
-                    location.column
-                )
-            })?;
-
+            let imports = collect_imports(&output_str);
             Self::categorize_imports(&mut categorized, target_kind, imports);
         }
 
@@ -221,40 +209,7 @@ impl DependencyAnalyzer {
     /// Parse a Rust source file and collect all import names.
     fn process_rust_source(path: &Path) -> Result<FxHashSet<String>> {
         let source_text = std::fs::read_to_string(path)?;
-        collect_imports(&source_text).map_err(|err| {
-            let location = err.span().start();
-            let snippet = Self::extract_code_snippet(&source_text, location.line);
-
-            anyhow!(
-                "Syntax error in {} at line {}:{}:\n{err}\n{snippet}",
-                path.display(),
-                location.line,
-                location.column
-            )
-        })
-    }
-
-    /// Extracts a snippet of code around the specified line number.
-    fn extract_code_snippet(source: &str, location: usize) -> String {
-        let lines: Vec<&str> = source.lines().collect();
-        let total = lines.len();
-
-        if location == 0 || location > total {
-            return String::new();
-        }
-
-        // Try and show 3 lines of context before/after the location
-        let start = location.saturating_sub(4);
-        let end = (location + 3).min(total);
-
-        let mut snippet = String::from("\n");
-        for (index, line) in lines.iter().enumerate().skip(start).take(end - start) {
-            let line_num = index + 1;
-            let marker = if line_num == location { ">" } else { " " };
-            let _ = writeln!(snippet, "{marker} {line_num:4} | {line}");
-        }
-
-        snippet
+        Ok(collect_imports(&source_text))
     }
 
     /// Collect import names for dependencies referenced in features.

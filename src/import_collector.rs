@@ -1,6 +1,6 @@
 //! Import statement collector for cargo-shear.
 //!
-//! This module parses Rust source code using `syn` to extract all import
+//! This module parses Rust source code using `ra_ap_syntax` to extract all import
 //! statements and references to external crates. It handles various forms
 //! of imports including:
 //!
@@ -10,8 +10,11 @@
 //! - Macro invocations
 //! - Attribute references (e.g., `#[derive(...)]`)
 
+use ra_ap_syntax::{
+    AstNode, Edition, SourceFile, SyntaxKind, SyntaxNode, WalkEvent,
+    ast::{Attr, ExternCrate, MacroCall, MacroRules, Path, TokenTree, Use, UseTree},
+};
 use rustc_hash::FxHashSet;
-use syn::{self, ext::IdentExt, spanned::Spanned};
 
 /// Collect all import statements and crate references from Rust source code.
 ///
@@ -25,16 +28,13 @@ use syn::{self, ext::IdentExt, spanned::Spanned};
 /// # Returns
 ///
 /// A set of crate names that are referenced in the source code
-pub fn collect_imports(source_text: &str) -> syn::Result<FxHashSet<String>> {
+pub fn collect_imports(source_text: &str) -> FxHashSet<String> {
     collect_imports_internal(source_text, true)
 }
 
-fn collect_imports_internal(
-    source_text: &str,
-    include_doc_code: bool,
-) -> syn::Result<FxHashSet<String>> {
-    let syntax = syn::parse_str::<syn::File>(source_text)?;
-    let mut deps = collect_from_syntax(&syntax, include_doc_code);
+fn collect_imports_internal(source_text: &str, include_doc_code: bool) -> FxHashSet<String> {
+    let syntax = SourceFile::parse(source_text, Edition::CURRENT);
+    let mut deps = collect_from_syntax(&syntax.tree(), include_doc_code);
 
     if include_doc_code {
         for block in gather_doc_blocks(source_text) {
@@ -48,10 +48,10 @@ fn collect_imports_internal(
         }
     }
 
-    Ok(deps)
+    deps
 }
 
-fn collect_from_syntax(syntax: &syn::File, include_doc_code: bool) -> FxHashSet<String> {
+fn collect_from_syntax(syntax: &SourceFile, include_doc_code: bool) -> FxHashSet<String> {
     let mut collector = ImportCollector::new(include_doc_code);
     collector.visit(syntax);
     collector.deps
@@ -59,14 +59,19 @@ fn collect_from_syntax(syntax: &syn::File, include_doc_code: bool) -> FxHashSet<
 
 fn collect_imports_from_snippet(code: &str) -> Option<FxHashSet<String>> {
     // Try parsing as a complete file first
-    if let Ok(syntax) = syn::parse_file(code) {
-        return Some(collect_from_syntax(&syntax, false));
+    let syntax = SourceFile::parse(code, Edition::CURRENT);
+    if syntax.errors().is_empty() {
+        return Some(collect_from_syntax(&syntax.tree(), false));
     }
 
     // If that fails, wrap in a main function (like doc tests do)
     let wrapped = format!("fn main() {{\n{code}\n}}");
-    let syntax = syn::parse_file(&wrapped).ok()?;
-    Some(collect_from_syntax(&syntax, false))
+    let syntax = SourceFile::parse(&wrapped, Edition::CURRENT);
+    if syntax.errors().is_empty() {
+        return Some(collect_from_syntax(&syntax.tree(), false));
+    }
+
+    None
 }
 
 struct ImportCollector {
@@ -79,69 +84,84 @@ impl ImportCollector {
         Self { deps: FxHashSet::default(), include_doc_code }
     }
 
-    fn visit(&mut self, syntax: &syn::File) {
-        use syn::visit::Visit;
-        self.visit_file(syntax);
+    fn visit(&mut self, syntax: &SourceFile) {
+        for event in syntax.syntax().preorder() {
+            let WalkEvent::Enter(node) = event else { continue };
+
+            #[expect(
+                clippy::wildcard_enum_match_arm,
+                reason = "Hundreds of variants, using '_' is the best option"
+            )]
+            match node.kind() {
+                SyntaxKind::USE => self.visit_use(node),
+                SyntaxKind::EXTERN_CRATE => self.visit_extern_crate(node),
+                SyntaxKind::PATH => self.visit_path(node),
+                SyntaxKind::MACRO_CALL => self.visit_macro_call(node),
+                SyntaxKind::MACRO_RULES => self.visit_macro_rules(node),
+                SyntaxKind::ATTR => self.visit_attribute(node),
+                _ => {}
+            }
+        }
     }
 
     fn is_known_import(s: &str) -> bool {
         matches!(s, "crate" | "super" | "self" | "std")
     }
 
-    fn add_import(&mut self, s: String) {
-        if !Self::is_known_import(&s) {
-            self.deps.insert(s);
+    fn add_import(&mut self, s: &str) {
+        if !Self::is_known_import(s) {
+            // Handle raw identifiers
+            let clean = s.strip_prefix("r#").unwrap_or(s);
+            self.deps.insert(clean.to_owned());
         }
     }
 
-    fn unraw_string(ident: &syn::Ident) -> String {
-        ident.unraw().to_string()
-    }
+    fn collect_use_tree(&mut self, tree: &UseTree) {
+        // Path imports
+        // - `use foo::bar`
+        // - `use foo::{bar, baz}`
+        // - `use foo as bar`
+        if let Some(path) = tree.path() {
+            // Extract the first segment
+            if let Some(first_segment) = path.segments().next()
+                && let Some(name_ref) = first_segment.name_ref()
+            {
+                self.add_import(name_ref.text().as_ref());
+            }
+        }
 
-    fn add_ident(&mut self, ident: &syn::Ident) {
-        self.add_import(Self::unraw_string(ident));
-    }
-
-    fn collect_use_tree(&mut self, i: &syn::UseTree) {
-        use syn::UseTree;
-        match i {
-            UseTree::Path(use_path) => self.add_ident(&use_path.ident),
-            UseTree::Name(use_name) => self.add_ident(&use_name.ident),
-            UseTree::Rename(use_rename) => self.add_ident(&use_rename.ident),
-            UseTree::Glob(_) => {}
-            UseTree::Group(use_group) => {
-                for use_tree in &use_group.items {
-                    self.collect_use_tree(use_tree);
-                }
+        // Group imports
+        // - `use {foo, bar}`
+        // - `use foo::{bar, baz}`
+        if let Some(use_tree_list) = tree.use_tree_list()
+            && tree.path().is_none()
+        {
+            for subtree in use_tree_list.use_trees() {
+                self.collect_use_tree(&subtree);
             }
         }
     }
 
     // `foo::bar` in expressions
-    fn collect_path(&mut self, path: &syn::Path, is_module: bool) {
-        if path.segments.len() <= 1 && !is_module {
+    fn collect_path(&mut self, path: &Path, is_module: bool) {
+        if path.segments().count() <= 1 && !is_module {
             // Avoid collecting single-segment paths unless they explicitly point to a module, which might be a crate.
             // This prevents false positives from free functions and other local items.
             return;
         }
-        let Some(path_segment) = path.segments.first() else { return };
-        let ident = Self::unraw_string(&path_segment.ident);
+        let Some(path_segment) = path.segments().next() else { return };
+        let Some(name_ref) = path_segment.name_ref() else { return };
+        let ident = name_ref.text();
         if ident.chars().next().is_some_and(char::is_uppercase) {
             return;
         }
-        self.add_import(ident);
-    }
-
-    // `let _: <foo::bar>`
-    fn collect_type_path(&mut self, type_path: &syn::TypePath) {
-        let path = &type_path.path;
-        self.collect_path(path, false);
+        self.add_import(ident.as_ref());
     }
 
     // `println!("{}", foo::bar);`
     //                 ^^^^^^^^ search for the `::` pattern
-    fn collect_tokens(&mut self, tokens: &proc_macro2::TokenStream) {
-        let Some(source_text) = tokens.span().source_text() else { return };
+    fn collect_tokens(&mut self, node: &SyntaxNode) {
+        let source_text = node.text().to_string();
 
         let idents = source_text
             .match_indices("::")
@@ -209,75 +229,87 @@ impl ImportCollector {
     }
 
     // #[serde(with = "foo")]
-    fn collect_known_attribute(&mut self, attr: &syn::Attribute) {
+    fn collect_serde_attribute(&mut self, token_tree: &TokenTree) {
         // Many serde attributes are already caught by `collect_tokens` because they use the `::` pattern.
         // However, the `with` and `crate` attributes are special cases since they directly reference modules or crates.
-        if attr.path().is_ident("serde") {
-            attr.parse_nested_meta(|meta| {
-                // #[serde(with = "foo")]
-                // #[serde(crate = "foo")]
-                if meta.path.is_ident("with") || meta.path.is_ident("crate") {
-                    let _eq = meta.input.parse::<syn::Token![=]>()?;
-                    let lit = meta.input.parse::<syn::LitStr>()?;
-                    let path = syn::parse_str(&lit.value())?;
-                    self.collect_path(&path, true);
-                }
-                // ignore unknown args
-                Ok(())
-            })
-            // Ignore invalid serde attributes.
-            .ok();
+        let text = token_tree.syntax().text().to_string();
+
+        // #[serde(with = "foo")]
+        // #[serde(crate = "foo")]
+        for pattern in ["with = \"", "crate = \""] {
+            let Some(rest) = text.split_once(pattern).map(|(_, after)| after) else {
+                continue;
+            };
+
+            let Some((path, _)) = rest.split_once('"') else { continue };
+
+            // Extract first segment
+            if let Some(import) = path.split("::").next() {
+                self.add_import(import);
+            }
         }
     }
-}
 
-impl<'a> syn::visit::Visit<'a> for ImportCollector {
-    fn visit_path(&mut self, i: &'a syn::Path) {
-        self.collect_path(i, false);
-        syn::visit::visit_path(self, i);
+    fn visit_path(&mut self, node: SyntaxNode) {
+        let Some(path) = Path::cast(node) else { return };
+        self.collect_path(&path, false);
     }
 
-    /// A use declaration: `use std::collections::HashMap`.
-    fn visit_item_use(&mut self, i: &'a syn::ItemUse) {
-        self.collect_use_tree(&i.tree);
+    /// A use declaration: `use std::collections::HashMap`
+    fn visit_use(&mut self, node: SyntaxNode) {
+        let Some(use_item) = Use::cast(node) else { return };
+        let Some(use_tree) = use_item.use_tree() else { return };
+        self.collect_use_tree(&use_tree);
     }
 
-    /// A path like `std::slice::Iter`, optionally qualified with a self-type as in <Vec<T> as `SomeTrait>::Associated`.
-    fn visit_type_path(&mut self, i: &'a syn::TypePath) {
-        self.collect_type_path(i);
-        syn::visit::visit_type_path(self, i);
+    /// An extern crate item: `extern crate serde`
+    fn visit_extern_crate(&mut self, node: SyntaxNode) {
+        let Some(extern_crate) = ExternCrate::cast(node) else { return };
+        let Some(name_ref) = extern_crate.name_ref() else { return };
+        self.add_import(name_ref.text().as_ref());
     }
 
-    /// A structured list within an attribute, like derive(Copy, Clone).
-    fn visit_meta_list(&mut self, m: &'a syn::MetaList) {
-        self.collect_path(&m.path, false);
-        self.collect_tokens(&m.tokens);
-    }
+    /// A macro invocation: `println!("hello")`
+    fn visit_macro_call(&mut self, node: SyntaxNode) {
+        let Some(macro_call) = MacroCall::cast(node) else { return };
 
-    /// An extern crate item: extern crate serde.
-    fn visit_item_extern_crate(&mut self, i: &'a syn::ItemExternCrate) {
-        self.add_ident(&i.ident);
-    }
-
-    fn visit_macro(&mut self, m: &'a syn::Macro) {
-        self.collect_path(&m.path, false);
-        self.collect_tokens(&m.tokens);
-    }
-
-    fn visit_item(&mut self, i: &'a syn::Item) {
-        // For tokens not interpreted by Syn.
-        if let syn::Item::Verbatim(tokens) = i {
-            self.collect_tokens(tokens);
+        if let Some(path) = macro_call.path() {
+            self.collect_path(&path, false);
         }
-        syn::visit::visit_item(self, i);
+
+        if let Some(token_tree) = macro_call.token_tree() {
+            self.collect_tokens(token_tree.syntax());
+        }
     }
 
-    fn visit_attribute(&mut self, attr: &'a syn::Attribute) {
-        if !self.include_doc_code && attr.path().is_ident("doc") {
+    /// A `macro_rules` definition: `macro_rules! foo { ... }`
+    fn visit_macro_rules(&mut self, node: SyntaxNode) {
+        let Some(macro_rules) = MacroRules::cast(node) else { return };
+        let Some(token_tree) = macro_rules.token_tree() else { return };
+        self.collect_tokens(token_tree.syntax());
+    }
+
+    /// An attribute: `#[derive(Debug)]`
+    fn visit_attribute(&mut self, node: SyntaxNode) {
+        let Some(attr) = Attr::cast(node) else { return };
+
+        if !self.include_doc_code
+            && let Some(path) = attr.path()
+            && path.to_string() == "doc"
+        {
             return;
         }
-        self.collect_known_attribute(attr);
-        syn::visit::visit_attribute(self, attr);
+
+        if let Some(token_tree) = attr.token_tree() {
+            self.collect_tokens(token_tree.syntax());
+
+            // Handle known attributes
+            if let Some(path) = attr.path()
+                && path.to_string() == "serde"
+            {
+                self.collect_serde_attribute(&token_tree);
+            }
+        }
     }
 }
 
@@ -476,7 +508,7 @@ mod tests {
         fn demo() {}
         "#;
 
-        let deps = collect_imports(source).expect("failed to collect imports from doc block");
+        let deps = collect_imports(source);
         assert!(deps.contains("url"), "doc-test rust blocks should count as dependency usage");
     }
 
@@ -493,7 +525,7 @@ mod tests {
         fn example() {}
         ";
 
-        let deps = collect_imports(source).expect("failed to collect imports");
+        let deps = collect_imports(source);
         assert!(deps.contains("async_trait"), "should detect async_trait");
     }
 
@@ -512,8 +544,7 @@ mod tests {
         fn example() {}
         "#;
 
-        let deps = collect_imports(source)
-            .expect("failed to collect imports from statement-based doctest");
+        let deps = collect_imports(source);
         assert!(
             deps.contains("serde_json"),
             "statement-based doctests should be wrapped and parsed correctly"
