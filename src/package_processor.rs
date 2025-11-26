@@ -126,17 +126,22 @@ impl PackageProcessor {
         let mut misplaced_dependencies = FxHashSet::default();
 
         for (import, pkg) in &import_to_pkg {
+            let dep = Self::find_dep(manifest, import);
+
+            let is_used = all_used_imports.contains(import);
+            if is_used {
+                used_packages.insert(pkg.clone());
+            }
+
             if ignored_imports.contains(import) {
                 continue;
             }
 
-            let dep = Self::find_dep(manifest, import);
-            if !all_used_imports.contains(import) {
+            if !is_used {
                 unused_dependencies.insert(dep);
                 continue;
             }
 
-            used_packages.insert(pkg.clone());
             if !manifest.dependencies.contains_key(&dep) {
                 continue;
             }
