@@ -49,6 +49,7 @@ use anyhow::Result;
 use bpaf::Bpaf;
 use cargo_metadata::{CargoOpt, Metadata, MetadataCommand, Package};
 use cargo_toml::Manifest;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use rustc_hash::FxHashSet;
 use toml_edit::DocumentMut;
 
@@ -273,27 +274,41 @@ impl<W: Write> CargoShear<W> {
 
         let processor = PackageProcessor::new(self.options.expand);
 
+        let packages = metadata.workspace_packages();
+        let packages: Vec<_> = packages
+            .into_iter()
+            .filter(|package| {
+                // Skip if package is in the exclude list
+                if self.options.exclude.iter().any(|name| name == package.name.as_str()) {
+                    return false;
+                }
+
+                // Skip if specific packages are specified and this package is not in the list
+                if !self.options.package.is_empty()
+                    && !self.options.package.iter().any(|name| name == package.name.as_str())
+                {
+                    return false;
+                }
+
+                true
+            })
+            .collect();
+
+        // Process packages in parallel
+        let results: Vec<_> = packages
+            .par_iter()
+            .map(|package| {
+                let manifest_path = package.manifest_path.as_std_path();
+                let manifest = Manifest::from_path(manifest_path)?;
+                let result = processor.process_package(&metadata, package, &manifest)?;
+                Ok::<_, anyhow::Error>((*package, manifest_path, result))
+            })
+            .collect::<Result<Vec<_>>>()?;
+
         // Track all packages used across the workspace
         let mut workspace_used_pkgs = FxHashSet::default();
 
-        // Process packages
-        for package in metadata.workspace_packages() {
-            // Skip if package is in the exclude list
-            if self.options.exclude.iter().any(|name| name == package.name.as_str()) {
-                continue;
-            }
-
-            // Skip if specific packages are specified and this package is not in the list
-            if !self.options.package.is_empty()
-                && !self.options.package.iter().any(|name| name == package.name.as_str())
-            {
-                continue;
-            }
-
-            let manifest_path = package.manifest_path.as_std_path();
-            let manifest = Manifest::from_path(manifest_path)?;
-            let result = processor.process_package(&metadata, package, &manifest)?;
-
+        for (package, manifest_path, result) in results {
             self.report_package_issues(package, &result, &metadata)?;
             self.fix_package_issues(manifest_path, &result)?;
 
