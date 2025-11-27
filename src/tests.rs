@@ -88,6 +88,7 @@ fn test_lib() {
             frozen: false,
             package: vec![],
             exclude: vec![],
+            color: false,
             path: default_path().unwrap(),
             expand: false,
         },
@@ -150,7 +151,7 @@ fn complex_path_expressions() {
 
 #[test]
 fn generic_types_with_paths() {
-    test("fn main() { let x: Vec<foo::Bar> = Vec::new(); }");
+    test("fn main() { let x: Vec<foo::Bar> = std::io::sink(); }");
     test("fn main() { let x: HashMap<String, foo::Value> = HashMap::new(); }");
 }
 
@@ -309,6 +310,7 @@ fn cargo_shear_with_different_options() {
             frozen: false,
             package: vec![],
             exclude: vec![],
+            color: false,
             path: default_path().unwrap(),
             expand: false,
         },
@@ -329,6 +331,7 @@ fn cargo_shear_with_package_filter() {
             frozen: false,
             package: vec!["cargo-shear".to_owned()],
             exclude: vec![],
+            color: false,
             path: default_path().unwrap(),
             expand: false,
         },
@@ -349,6 +352,7 @@ fn cargo_shear_with_exclude_filter() {
             frozen: false,
             package: vec![],
             exclude: vec!["some-package".to_owned()],
+            color: false,
             path: default_path().unwrap(),
             expand: false,
         },
@@ -367,13 +371,12 @@ fn cargo_shear_options_creation() {
         frozen: false,
         package: vec!["test1".to_owned(), "test2".to_owned()],
         exclude: vec!["exclude1".to_owned()],
+        color: false,
         path: std::path::PathBuf::from("/tmp"),
         expand: true,
     };
 
-    let shear = CargoShear::new(std::io::sink(), options.clone());
-    // Verify the shear instance was created successfully
-    assert_eq!(format!("{:?}", shear.options.fix), format!("{:?}", options.fix));
+    let _shear = CargoShear::new(std::io::sink(), options);
 }
 
 // Error handling and edge case tests
@@ -528,6 +531,7 @@ fn test_cargo_shear_new() {
         frozen: false,
         package: vec![],
         exclude: vec![],
+        color: false,
         path: default_path().unwrap(),
         expand: false,
     };

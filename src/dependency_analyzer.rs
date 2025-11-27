@@ -18,12 +18,14 @@ use std::{
 
 use anyhow::{Result, anyhow};
 use cargo_metadata::{Package, Target, TargetKind};
-use cargo_toml::Manifest;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 use walkdir::{DirEntry, WalkDir};
 
-use crate::import_collector::collect_imports;
+use crate::{
+    import_collector::collect_imports,
+    manifest::{FeatureDep, Manifest},
+};
 
 /// Categorized imports based on where they are used.
 #[derive(Debug, Default)]
@@ -36,11 +38,19 @@ pub struct CategorizedImports {
 
     /// Imports used in build scripts.
     pub build: FxHashSet<String>,
+
+    /// Features referencing each import (maps import name to features).
+    pub features: FxHashMap<String, Vec<FeatureDep>>,
 }
 
 impl CategorizedImports {
     pub fn all_imports(&self) -> FxHashSet<String> {
-        self.normal.union(&self.dev).chain(&self.build).cloned().collect()
+        self.normal
+            .union(&self.dev)
+            .chain(&self.build)
+            .chain(self.features.keys())
+            .cloned()
+            .collect()
     }
 }
 
@@ -66,22 +76,19 @@ impl DependencyAnalyzer {
         package: &Package,
         manifest: &Manifest,
     ) -> Result<CategorizedImports> {
-        let mut categorized = if self.expand_macros {
-            Self::analyze_with_expansion(package)?
+        let mut categorized = CategorizedImports::default();
+
+        if self.expand_macros {
+            Self::analyze_with_expansion(&mut categorized, package)?;
         } else {
-            Self::analyze_from_files(package)?
-        };
+            Self::analyze_from_files(&mut categorized, package)?;
+        }
 
-        // Features can only be normal dependencies
-        let features = Self::analyze_features(manifest);
-        categorized.normal.extend(features);
-
+        Self::analyze_features(&mut categorized, manifest);
         Ok(categorized)
     }
 
-    fn analyze_from_files(package: &Package) -> Result<CategorizedImports> {
-        let mut categorized = CategorizedImports::default();
-
+    fn analyze_from_files(categorized: &mut CategorizedImports, package: &Package) -> Result<()> {
         for target in &package.targets {
             let target_kind = target.kind.first().ok_or_else(|| anyhow!("Target has no kind"))?;
             let rust_files = Self::get_target_rust_files(target);
@@ -95,15 +102,16 @@ impl DependencyAnalyzer {
                 .into_iter()
                 .fold(FxHashSet::default(), |a, b| a.union(&b).cloned().collect());
 
-            Self::categorize_imports(&mut categorized, target_kind, imports);
+            Self::categorize_imports(categorized, target_kind, imports);
         }
 
-        Ok(categorized)
+        Ok(())
     }
 
-    fn analyze_with_expansion(package: &Package) -> Result<CategorizedImports> {
-        let mut categorized = Self::analyze_from_files(package)?;
-
+    fn analyze_with_expansion(
+        categorized: &mut CategorizedImports,
+        package: &Package,
+    ) -> Result<()> {
         for target in &package.targets {
             let target_kind =
                 target.kind.first().ok_or_else(|| anyhow!("Failed to get target kind"))?;
@@ -156,10 +164,10 @@ impl DependencyAnalyzer {
             }
 
             let imports = collect_imports(&output_str);
-            Self::categorize_imports(&mut categorized, target_kind, imports);
+            Self::categorize_imports(categorized, target_kind, imports);
         }
 
-        Ok(categorized)
+        Ok(())
     }
 
     /// Collect all Rust source files for a target.
@@ -212,56 +220,33 @@ impl DependencyAnalyzer {
         Ok(collect_imports(&source_text))
     }
 
-    /// Collect import names for dependencies referenced in features.
+    /// Collect feature references for dependencies referenced in `[features]`.
     ///
     /// This handles:
     /// - Explicit features (e.g. `["dep:foo"]`)
     /// - Feature enablement (e.g. `["foo/std"]`)
     /// - Weak feature enablement (e.g. `["foo?/std"]`)
-    /// - Implicit dependencies (e.g. `foo = { optional = true }`)
     ///
-    /// We convert these dependency keys into imports, in order to simplify merging with discovered source code imports.
-    fn analyze_features(manifest: &Manifest) -> FxHashSet<String> {
-        let mut imports = FxHashSet::default();
+    /// Implicit features (e.g. `foo = { optional = true }`) are not tracked here.
+    fn analyze_features(categorized: &mut CategorizedImports, manifest: &Manifest) {
+        for (key, values) in &manifest.features {
+            let name = key.get_ref();
+            for value in values {
+                let feature = FeatureDep { name: name.clone(), span: value.span() };
+                let value = value.get_ref();
 
-        // Collect explicit features
-        for features in manifest.features.values() {
-            for feature in features {
-                if let Some(dep) = feature.strip_prefix("dep:") {
+                if let Some(dep) = value.strip_prefix("dep:") {
                     let import = dep.replace('-', "_");
-                    imports.insert(import);
+                    categorized.features.entry(import).or_default().push(feature);
                     continue;
                 }
 
-                if let Some((dep, _)) = feature.split_once('/') {
+                if let Some((dep, _)) = value.split_once('/') {
                     let dep = dep.trim_end_matches('?');
                     let import = dep.replace('-', "_");
-                    imports.insert(import);
+                    categorized.features.entry(import).or_default().push(feature);
                 }
             }
         }
-
-        // Collect implicit features from optional dependencies
-        for (dep, details) in &manifest.dependencies {
-            if details.optional() {
-                let import = dep.replace('-', "_");
-                imports.insert(import);
-            }
-        }
-
-        imports
-    }
-
-    /// Extract the list of ignored deps from metadata.
-    pub fn get_ignored_dependency_keys(value: &serde_json::Value) -> FxHashSet<&str> {
-        value
-            .as_object()
-            .and_then(|object| object.get("cargo-shear"))
-            .and_then(|object| object.get("ignored"))
-            .and_then(|ignored| ignored.as_array())
-            .map(|ignored| {
-                ignored.iter().filter_map(|item| item.as_str()).collect::<FxHashSet<_>>()
-            })
-            .unwrap_or_default()
     }
 }

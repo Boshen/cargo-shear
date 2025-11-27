@@ -43,13 +43,8 @@ fn run_cargo_shear(
     let options = CargoShearOptions::new_for_test(temp_dir.path().to_path_buf(), fix);
 
     let mut output = Vec::new();
-    let shear = CargoShear::new(&mut output, options);
-    let exit_code = shear.run();
-
-    // Redact any mentions of the temp dir, for stable snapshots.
-    let mut output = String::from_utf8(output)?;
-    let path = temp_dir.path().to_string_lossy();
-    output = output.replace(&*path, ".");
+    let exit_code = CargoShear::new(&mut output, options).run();
+    let output = String::from_utf8(output)?;
 
     Ok((exit_code, output, temp_dir))
 }
@@ -60,11 +55,7 @@ fn clean_detection() -> Result<(), Box<dyn Error>> {
     let (exit_code, output, _) = run_cargo_shear("clean", false)?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
-    insta::assert_snapshot!(output, @r"
-    Analyzing .
-
-    No issues detected!
-    ");
+    insta::assert_snapshot!(output, @"");
 
     Ok(())
 }
@@ -90,11 +81,7 @@ fn clean_workspace_detection() -> Result<(), Box<dyn Error>> {
     let (exit_code, output, _) = run_cargo_shear("clean_workspace", false)?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
-    insta::assert_snapshot!(output, @r"
-    Analyzing .
-
-    No issues detected!
-    ");
+    insta::assert_snapshot!(output, @"");
 
     Ok(())
 }
@@ -117,42 +104,289 @@ fn clean_workspace_fix() -> Result<(), Box<dyn Error>> {
 
 // Complex fixture with one of each issue type of issue.
 #[test]
+#[expect(clippy::too_many_lines, reason = "Stress test of output")]
 fn complex_detection() -> Result<(), Box<dyn Error>> {
     let (exit_code, output, _) = run_cargo_shear("complex", false)?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     insta::assert_snapshot!(output, @r#"
-    Analyzing .
+    shear::unused
 
-    warning: 'slab' in [package.metadata.cargo-shear] for package 'complex' is ignored but not needed; remove it unless you're suppressing a known false positive.
+      × unused dependency `either`
+        ╭─[Cargo.toml:16:1]
+     15 │ # Unused
+     16 │ either = "1.0"
+        · ───┬──
+        ·    ╰── not used anywhere in the code
+     17 │ 
+        ╰────
+      help: remove this dependency
 
-    warning: 'fake-crate' in [package.metadata.cargo-shear] for package 'complex' is ignored but not needed; remove it unless you're suppressing a known false positive.
+    shear::unused
 
-    complex -- Cargo.toml:
-      unused dependencies:
-        either
-        serde
-        bitflags_v2
-        winapi
-        cfg-if
-        version_check
-      move to dev-dependencies:
-        ryu_v1
-        fastrand
+      × unused dependency `bitflags_v2`
+        ╭─[Cargo.toml:28:1]
+     27 │ # Unused Renamed
+     28 │ bitflags_v2 = { package = "bitflags", version = "2.0" }
+        · ─────┬─────
+        ·      ╰── not used anywhere in the code
+     29 │ 
+        ╰────
+      help: remove this dependency
 
+    shear::unused
 
-    cargo-shear may have detected unused dependencies incorrectly due to its limitations.
-    They can be ignored by adding the crate name to the package's Cargo.toml:
+      × unused dependency `serde`
+        ╭─[Cargo.toml:53:1]
+     52 │ # Unused Dev
+     53 │ serde = "1.0"
+        · ──┬──
+        ·   ╰── not used anywhere in the code
+     54 │ 
+        ╰────
+      help: remove this dependency
 
-    [package.metadata.cargo-shear]
-    ignored = ["crate-name"]
+    shear::unused
 
-    or in the workspace Cargo.toml:
+      × unused dependency `version_check`
+        ╭─[Cargo.toml:57:1]
+     56 │ # Unused Build
+     57 │ version_check = "0.9"
+        · ──────┬──────
+        ·       ╰── not used anywhere in the code
+     58 │ 
+        ╰────
+      help: remove this dependency
 
-    [workspace.metadata.cargo-shear]
-    ignored = ["crate-name"]
+    shear::unused
 
-    To automatically fix issues, run with --fix
+      × unused dependency `winapi`
+        ╭─[Cargo.toml:61:1]
+     60 │ # Unused Platform
+     61 │ winapi = "0.3"
+        · ───┬──
+        ·    ╰── not used anywhere in the code
+     62 │ 
+        ╰────
+      help: remove this dependency
+
+    shear::unused
+
+      × unused dependency `cfg-if`
+        ╭─[Cargo.toml:64:15]
+     63 │ # Unused Table
+     64 │ [dependencies.cfg-if]
+        ·               ───┬──
+        ·                  ╰── not used anywhere in the code
+     65 │ version = "1.0"
+        ╰────
+      help: remove this dependency
+
+    shear::unused_optional
+
+      ⚠ unused optional dependency `itoa`
+        ╭─[Cargo.toml:19:1]
+     18 │ # Unused Optional
+     19 │ itoa = { version = "1.0", optional = true }
+        · ──┬─
+        ·   ╰── not used anywhere in the code
+     20 │ 
+        ╰────
+      help: consider removing this dependency, or suppressing this warning
+
+    Advice: 
+      ☞ used in feature
+       ╭─[Cargo.toml:7:20]
+     6 │ [features]
+     7 │ unused-optional = ["dep:itoa"]
+       ·                    ─────┬────
+       ·                         ╰── referenced by feature `unused-optional`
+     8 │ unused-optional-feature = ["once_cell/std"]
+       ╰────
+
+    Advice: 
+      ☞ removing an optional dependency is a breaking change
+
+    shear::unused_optional
+
+      ⚠ unused optional dependency `once_cell`
+        ╭─[Cargo.toml:22:1]
+     21 │ # Unused Optional Feature
+     22 │ once_cell = { version = "1.0", optional = true }
+        · ────┬────
+        ·     ╰── not used anywhere in the code
+     23 │ 
+        ╰────
+      help: consider removing this dependency, or suppressing this warning
+
+    Advice: 
+      ☞ used in feature
+       ╭─[Cargo.toml:8:28]
+     7 │ unused-optional = ["dep:itoa"]
+     8 │ unused-optional-feature = ["once_cell/std"]
+       ·                            ───────┬───────
+       ·                                   ╰── referenced by feature `unused-optional-feature`
+     9 │ unused-optional-weak = ["memchr?/std"]
+       ╰────
+
+    Advice: 
+      ☞ removing an optional dependency is a breaking change
+
+    shear::unused_optional
+
+      ⚠ unused optional dependency `memchr`
+        ╭─[Cargo.toml:25:1]
+     24 │ # Unused Optional Feature Weak
+     25 │ memchr = { version = "2.7", optional = true }
+        · ───┬──
+        ·    ╰── not used anywhere in the code
+     26 │ 
+        ╰────
+      help: consider removing this dependency, or suppressing this warning
+
+    Advice: 
+      ☞ used in feature
+        ╭─[Cargo.toml:9:25]
+      8 │ unused-optional-feature = ["once_cell/std"]
+      9 │ unused-optional-weak = ["memchr?/std"]
+        ·                         ──────┬──────
+        ·                               ╰── referenced by feature `unused-optional-weak`
+     10 │ misplaced-optional = ["dep:smallvec"]
+        ╰────
+
+    Advice: 
+      ☞ removing an optional dependency is a breaking change
+
+    shear::misplaced
+
+      × misplaced dependency `fastrand`
+        ╭─[Cargo.toml:34:1]
+     33 │ # Misplaced
+     34 │ fastrand = "2.0"
+        · ────┬───
+        ·     ╰── only used in dev targets
+     35 │ 
+        ╰────
+      help: move this dependency to `[dev-dependencies]`
+
+    shear::misplaced
+
+      × misplaced dependency `ryu_v1`
+        ╭─[Cargo.toml:46:1]
+     45 │ # Misplaced Renamed
+     46 │ ryu_v1 = { package = "ryu", version = "1.0" }
+        · ───┬──
+        ·    ╰── only used in dev targets
+     47 │ 
+        ╰────
+      help: move this dependency to `[dev-dependencies]`
+
+    shear::misplaced_optional
+
+      ⚠ misplaced optional dependency `smallvec`
+        ╭─[Cargo.toml:37:1]
+     36 │ # Misplaced Optional
+     37 │ smallvec = { version = "1.0", optional = true }
+        · ────┬───
+        ·     ╰── only used in dev targets
+     38 │ 
+        ╰────
+      help: consider removing the `optional` flag and moving to `[dev-dependencies]`, or suppressing this warning
+
+    Advice: 
+      ☞ used in feature
+        ╭─[Cargo.toml:10:23]
+      9 │ unused-optional-weak = ["memchr?/std"]
+     10 │ misplaced-optional = ["dep:smallvec"]
+        ·                       ───────┬──────
+        ·                              ╰── referenced by feature `misplaced-optional`
+     11 │ misplaced-optional-feature = ["hashbrown/serde"]
+        ╰────
+
+    Advice: 
+      ☞ removing an optional dependency is a breaking change
+
+    shear::misplaced_optional
+
+      ⚠ misplaced optional dependency `hashbrown`
+        ╭─[Cargo.toml:40:1]
+     39 │ # Misplaced Optional Feature
+     40 │ hashbrown = { version = "0.15", optional = true }
+        · ────┬────
+        ·     ╰── only used in dev targets
+     41 │ 
+        ╰────
+      help: consider removing the `optional` flag and moving to `[dev-dependencies]`, or suppressing this warning
+
+    Advice: 
+      ☞ used in feature
+        ╭─[Cargo.toml:11:31]
+     10 │ misplaced-optional = ["dep:smallvec"]
+     11 │ misplaced-optional-feature = ["hashbrown/serde"]
+        ·                               ────────┬────────
+        ·                                       ╰── referenced by feature `misplaced-optional-feature`
+     12 │ misplaced-optional-weak = ["ahash?/std"]
+        ╰────
+
+    Advice: 
+      ☞ removing an optional dependency is a breaking change
+
+    shear::misplaced_optional
+
+      ⚠ misplaced optional dependency `ahash`
+        ╭─[Cargo.toml:43:1]
+     42 │ # Misplaced Optional Feature Weak
+     43 │ ahash = { version = "0.8", optional = true }
+        · ──┬──
+        ·   ╰── only used in dev targets
+     44 │ 
+        ╰────
+      help: consider removing the `optional` flag and moving to `[dev-dependencies]`, or suppressing this warning
+
+    Advice: 
+      ☞ used in feature
+        ╭─[Cargo.toml:12:28]
+     11 │ misplaced-optional-feature = ["hashbrown/serde"]
+     12 │ misplaced-optional-weak = ["ahash?/std"]
+        ·                            ──────┬─────
+        ·                                  ╰── referenced by feature `misplaced-optional-weak`
+     13 │ 
+        ╰────
+
+    Advice: 
+      ☞ removing an optional dependency is a breaking change
+
+    shear::redundant_ignore
+
+      ⚠ redundant ignore `slab`
+        ╭─[Cargo.toml:68:28]
+     67 │ [package.metadata.cargo-shear]
+     68 │ ignored = ["regex-syntax", "slab", "fake-crate"]
+        ·                            ───┬──
+        ·                               ╰── dependency is used
+        ╰────
+      help: remove this from the ignored list
+
+    shear::redundant_ignore
+
+      ⚠ redundant ignore `fake-crate`
+        ╭─[Cargo.toml:68:36]
+     67 │ [package.metadata.cargo-shear]
+     68 │ ignored = ["regex-syntax", "slab", "fake-crate"]
+        ·                                    ──────┬─────
+        ·                                          ╰── not a declared dependency
+        ╰────
+      help: remove this from the ignored list
+
+      ☞ to suppress a warning within a package
+      help: [package.metadata.cargo-shear]
+            ignored = ["crate_name"]
+
+      ☞ to suppress a warning across a workspace
+      help: [workspace.metadata.cargo-shear]
+            ignored = ["crate_name"]
+
+      ☞ to automatically fix issues, run with `--fix`
     "#);
 
     Ok(())
@@ -196,11 +430,7 @@ fn ignored() -> Result<(), Box<dyn Error>> {
     let (exit_code, output, _) = run_cargo_shear("ignored", false)?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
-    insta::assert_snapshot!(output, @r"
-    Analyzing .
-
-    No issues detected!
-    ");
+    insta::assert_snapshot!(output, @"");
 
     Ok(())
 }
@@ -211,13 +441,18 @@ fn ignored_invalid() -> Result<(), Box<dyn Error>> {
     let (exit_code, output, _) = run_cargo_shear("ignored_invalid", false)?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
-    insta::assert_snapshot!(output, @r"
-    Analyzing .
+    insta::assert_snapshot!(output, @r#"
+    shear::redundant_ignore
 
-    warning: 'anywho' in [package.metadata.cargo-shear] for package 'ignored_invalid' is ignored but not needed; remove it unless you're suppressing a known false positive.
-
-    No issues detected!
-    ");
+      ⚠ redundant ignore `anywho`
+       ╭─[Cargo.toml:7:12]
+     6 │ [package.metadata.cargo-shear]
+     7 │ ignored = ["anywho"]
+       ·            ────┬───
+       ·                ╰── not a declared dependency
+       ╰────
+      help: remove this from the ignored list
+    "#);
 
     Ok(())
 }
@@ -228,13 +463,18 @@ fn ignored_redundant() -> Result<(), Box<dyn Error>> {
     let (exit_code, output, _) = run_cargo_shear("ignored_redundant", false)?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
-    insta::assert_snapshot!(output, @r"
-    Analyzing .
+    insta::assert_snapshot!(output, @r#"
+    shear::redundant_ignore
 
-    warning: 'anyhow' in [package.metadata.cargo-shear] for package 'ignored_redundant' is ignored but not needed; remove it unless you're suppressing a known false positive.
-
-    No issues detected!
-    ");
+      ⚠ redundant ignore `anyhow`
+        ╭─[Cargo.toml:10:12]
+      9 │ [package.metadata.cargo-shear]
+     10 │ ignored = ["anyhow"]
+        ·            ────┬───
+        ·                ╰── dependency is used
+        ╰────
+      help: remove this from the ignored list
+    "#);
 
     Ok(())
 }
@@ -245,11 +485,7 @@ fn ignored_workspace() -> Result<(), Box<dyn Error>> {
     let (exit_code, output, _) = run_cargo_shear("ignored_workspace", false)?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
-    insta::assert_snapshot!(output, @r"
-    Analyzing .
-
-    No issues detected!
-    ");
+    insta::assert_snapshot!(output, @"");
 
     Ok(())
 }
@@ -260,13 +496,18 @@ fn ignored_workspace_redundant() -> Result<(), Box<dyn Error>> {
     let (exit_code, output, _) = run_cargo_shear("ignored_workspace_redundant", false)?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
-    insta::assert_snapshot!(output, @r"
-    Analyzing .
+    insta::assert_snapshot!(output, @r#"
+    shear::redundant_ignore
 
-    warning: 'anyhow' in [workspace.metadata.cargo-shear] is ignored but not needed; remove it unless you're suppressing a known false positive.
-
-    No issues detected!
-    ");
+      ⚠ redundant ignore `anyhow`
+        ╭─[Cargo.toml:10:12]
+      9 │ [workspace.metadata.cargo-shear]
+     10 │ ignored = ["anyhow"]
+        ·            ────┬───
+        ·                ╰── dependency is used
+        ╰────
+      help: remove this from the ignored list
+    "#);
 
     Ok(())
 }
@@ -277,11 +518,7 @@ fn ignored_workspace_merged() -> Result<(), Box<dyn Error>> {
     let (exit_code, output, _) = run_cargo_shear("ignored_workspace_merged", false)?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
-    insta::assert_snapshot!(output, @r"
-    Analyzing .
-
-    No issues detected!
-    ");
+    insta::assert_snapshot!(output, @"");
 
     Ok(())
 }
@@ -293,25 +530,26 @@ fn misplaced_detection() -> Result<(), Box<dyn Error>> {
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     insta::assert_snapshot!(output, @r#"
-    Analyzing .
+    shear::misplaced
 
-    misplaced -- Cargo.toml:
-      move to dev-dependencies:
-        anyhow
+      × misplaced dependency `anyhow`
+       ╭─[Cargo.toml:8:1]
+     7 │ # Misplaced
+     8 │ anyhow = "1.0"
+       · ───┬──
+       ·    ╰── only used in dev targets
+       ╰────
+      help: move this dependency to `[dev-dependencies]`
 
+      ☞ to suppress a warning within a package
+      help: [package.metadata.cargo-shear]
+            ignored = ["crate_name"]
 
-    cargo-shear may have detected unused dependencies incorrectly due to its limitations.
-    They can be ignored by adding the crate name to the package's Cargo.toml:
+      ☞ to suppress a warning across a workspace
+      help: [workspace.metadata.cargo-shear]
+            ignored = ["crate_name"]
 
-    [package.metadata.cargo-shear]
-    ignored = ["crate-name"]
-
-    or in the workspace Cargo.toml:
-
-    [workspace.metadata.cargo-shear]
-    ignored = ["crate-name"]
-
-    To automatically fix issues, run with --fix
+      ☞ to automatically fix issues, run with `--fix`
     "#);
 
     Ok(())
@@ -336,11 +574,31 @@ fn misplaced_optional_detection() -> Result<(), Box<dyn Error>> {
     let (exit_code, output, _) = run_cargo_shear("misplaced_optional", false)?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
-    insta::assert_snapshot!(output, @r"
-    Analyzing .
+    insta::assert_snapshot!(output, @r#"
+    shear::misplaced_optional
 
-    No issues detected!
-    ");
+      ⚠ misplaced optional dependency `anyhow`
+        ╭─[Cargo.toml:11:1]
+     10 │ # Misplaced
+     11 │ anyhow = { version = "1.0", optional = true }
+        · ───┬──
+        ·    ╰── only used in dev targets
+        ╰────
+      help: consider removing the `optional` flag and moving to `[dev-dependencies]`, or suppressing this warning
+
+    Advice: 
+      ☞ used in feature
+       ╭─[Cargo.toml:7:12]
+     6 │ [features]
+     7 │ testing = ["dep:anyhow"]
+       ·            ──────┬─────
+       ·                  ╰── referenced by feature `testing`
+     8 │ 
+       ╰────
+
+    Advice: 
+      ☞ removing an optional dependency is a breaking change
+    "#);
 
     Ok(())
 }
@@ -365,25 +623,26 @@ fn misplaced_platform_detection() -> Result<(), Box<dyn Error>> {
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     insta::assert_snapshot!(output, @r#"
-    Analyzing .
+    shear::misplaced
 
-    misplaced_platform -- Cargo.toml:
-      move to dev-dependencies:
-        anyhow
+      × misplaced dependency `anyhow`
+       ╭─[Cargo.toml:8:1]
+     7 │ # Misplaced
+     8 │ anyhow = "1.0"
+       · ───┬──
+       ·    ╰── only used in dev targets
+       ╰────
+      help: move this dependency to `[target.'cfg(unix)'.dev-dependencies]`
 
+      ☞ to suppress a warning within a package
+      help: [package.metadata.cargo-shear]
+            ignored = ["crate_name"]
 
-    cargo-shear may have detected unused dependencies incorrectly due to its limitations.
-    They can be ignored by adding the crate name to the package's Cargo.toml:
+      ☞ to suppress a warning across a workspace
+      help: [workspace.metadata.cargo-shear]
+            ignored = ["crate_name"]
 
-    [package.metadata.cargo-shear]
-    ignored = ["crate-name"]
-
-    or in the workspace Cargo.toml:
-
-    [workspace.metadata.cargo-shear]
-    ignored = ["crate-name"]
-
-    To automatically fix issues, run with --fix
+      ☞ to automatically fix issues, run with `--fix`
     "#);
 
     Ok(())
@@ -410,25 +669,26 @@ fn misplaced_renamed_detection() -> Result<(), Box<dyn Error>> {
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     insta::assert_snapshot!(output, @r#"
-    Analyzing .
+    shear::misplaced
 
-    misplaced_renamed -- Cargo.toml:
-      move to dev-dependencies:
-        anyhow_v1
+      × misplaced dependency `anyhow_v1`
+       ╭─[Cargo.toml:8:1]
+     7 │ # Misplaced
+     8 │ anyhow_v1 = { package = "anyhow", version = "1.0" }
+       · ────┬────
+       ·     ╰── only used in dev targets
+       ╰────
+      help: move this dependency to `[dev-dependencies]`
 
+      ☞ to suppress a warning within a package
+      help: [package.metadata.cargo-shear]
+            ignored = ["crate_name"]
 
-    cargo-shear may have detected unused dependencies incorrectly due to its limitations.
-    They can be ignored by adding the crate name to the package's Cargo.toml:
+      ☞ to suppress a warning across a workspace
+      help: [workspace.metadata.cargo-shear]
+            ignored = ["crate_name"]
 
-    [package.metadata.cargo-shear]
-    ignored = ["crate-name"]
-
-    or in the workspace Cargo.toml:
-
-    [workspace.metadata.cargo-shear]
-    ignored = ["crate-name"]
-
-    To automatically fix issues, run with --fix
+      ☞ to automatically fix issues, run with `--fix`
     "#);
 
     Ok(())
@@ -458,25 +718,27 @@ fn misplaced_table_detection() -> Result<(), Box<dyn Error>> {
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     insta::assert_snapshot!(output, @r#"
-    Analyzing .
+    shear::misplaced
 
-    misplaced_table -- Cargo.toml:
-      move to dev-dependencies:
-        anyhow
+      × misplaced dependency `anyhow`
+       ╭─[Cargo.toml:7:15]
+     6 │ # Misplaced
+     7 │ [dependencies.anyhow]
+       ·               ───┬──
+       ·                  ╰── only used in dev targets
+     8 │ version = "1.0"
+       ╰────
+      help: move this dependency to `[dev-dependencies]`
 
+      ☞ to suppress a warning within a package
+      help: [package.metadata.cargo-shear]
+            ignored = ["crate_name"]
 
-    cargo-shear may have detected unused dependencies incorrectly due to its limitations.
-    They can be ignored by adding the crate name to the package's Cargo.toml:
+      ☞ to suppress a warning across a workspace
+      help: [workspace.metadata.cargo-shear]
+            ignored = ["crate_name"]
 
-    [package.metadata.cargo-shear]
-    ignored = ["crate-name"]
-
-    or in the workspace Cargo.toml:
-
-    [workspace.metadata.cargo-shear]
-    ignored = ["crate-name"]
-
-    To automatically fix issues, run with --fix
+      ☞ to automatically fix issues, run with `--fix`
     "#);
 
     Ok(())
@@ -533,25 +795,26 @@ fn unused_detection() -> Result<(), Box<dyn Error>> {
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     insta::assert_snapshot!(output, @r#"
-    Analyzing .
+    shear::unused
 
-    unused -- Cargo.toml:
-      unused dependencies:
-        anyhow
+      × unused dependency `anyhow`
+       ╭─[Cargo.toml:8:1]
+     7 │ # Unused
+     8 │ anyhow = "1.0"
+       · ───┬──
+       ·    ╰── not used anywhere in the code
+       ╰────
+      help: remove this dependency
 
+      ☞ to suppress a warning within a package
+      help: [package.metadata.cargo-shear]
+            ignored = ["crate_name"]
 
-    cargo-shear may have detected unused dependencies incorrectly due to its limitations.
-    They can be ignored by adding the crate name to the package's Cargo.toml:
+      ☞ to suppress a warning across a workspace
+      help: [workspace.metadata.cargo-shear]
+            ignored = ["crate_name"]
 
-    [package.metadata.cargo-shear]
-    ignored = ["crate-name"]
-
-    or in the workspace Cargo.toml:
-
-    [workspace.metadata.cargo-shear]
-    ignored = ["crate-name"]
-
-    To automatically fix issues, run with --fix
+      ☞ to automatically fix issues, run with `--fix`
     "#);
 
     Ok(())
@@ -576,25 +839,26 @@ fn unused_build_detection() -> Result<(), Box<dyn Error>> {
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     insta::assert_snapshot!(output, @r#"
-    Analyzing .
+    shear::unused
 
-    unused_build -- Cargo.toml:
-      unused dependencies:
-        anyhow
+      × unused dependency `anyhow`
+       ╭─[Cargo.toml:8:1]
+     7 │ # Unused
+     8 │ anyhow = "1.0"
+       · ───┬──
+       ·    ╰── not used anywhere in the code
+       ╰────
+      help: remove this dependency
 
+      ☞ to suppress a warning within a package
+      help: [package.metadata.cargo-shear]
+            ignored = ["crate_name"]
 
-    cargo-shear may have detected unused dependencies incorrectly due to its limitations.
-    They can be ignored by adding the crate name to the package's Cargo.toml:
+      ☞ to suppress a warning across a workspace
+      help: [workspace.metadata.cargo-shear]
+            ignored = ["crate_name"]
 
-    [package.metadata.cargo-shear]
-    ignored = ["crate-name"]
-
-    or in the workspace Cargo.toml:
-
-    [workspace.metadata.cargo-shear]
-    ignored = ["crate-name"]
-
-    To automatically fix issues, run with --fix
+      ☞ to automatically fix issues, run with `--fix`
     "#);
 
     Ok(())
@@ -619,25 +883,26 @@ fn unused_dev_detection() -> Result<(), Box<dyn Error>> {
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     insta::assert_snapshot!(output, @r#"
-    Analyzing .
+    shear::unused
 
-    unused_dev -- Cargo.toml:
-      unused dependencies:
-        anyhow
+      × unused dependency `anyhow`
+       ╭─[Cargo.toml:8:1]
+     7 │ # Unused
+     8 │ anyhow = "1.0"
+       · ───┬──
+       ·    ╰── not used anywhere in the code
+       ╰────
+      help: remove this dependency
 
+      ☞ to suppress a warning within a package
+      help: [package.metadata.cargo-shear]
+            ignored = ["crate_name"]
 
-    cargo-shear may have detected unused dependencies incorrectly due to its limitations.
-    They can be ignored by adding the crate name to the package's Cargo.toml:
+      ☞ to suppress a warning across a workspace
+      help: [workspace.metadata.cargo-shear]
+            ignored = ["crate_name"]
 
-    [package.metadata.cargo-shear]
-    ignored = ["crate-name"]
-
-    or in the workspace Cargo.toml:
-
-    [workspace.metadata.cargo-shear]
-    ignored = ["crate-name"]
-
-    To automatically fix issues, run with --fix
+      ☞ to automatically fix issues, run with `--fix`
     "#);
 
     Ok(())
@@ -661,11 +926,7 @@ fn unused_feature_detect() -> Result<(), Box<dyn Error>> {
     let (exit_code, output, _) = run_cargo_shear("unused_feature", false)?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
-    insta::assert_snapshot!(output, @r"
-    Analyzing .
-
-    No issues detected!
-    ");
+    insta::assert_snapshot!(output, @"");
 
     Ok(())
 }
@@ -688,11 +949,31 @@ fn unused_feature_weak_detect() -> Result<(), Box<dyn Error>> {
     let (exit_code, output, _) = run_cargo_shear("unused_feature_weak", false)?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
-    insta::assert_snapshot!(output, @r"
-    Analyzing .
+    insta::assert_snapshot!(output, @r#"
+    shear::unused_optional
 
-    No issues detected!
-    ");
+      ⚠ unused optional dependency `anyhow`
+        ╭─[Cargo.toml:11:1]
+     10 │ # Unused
+     11 │ anyhow = { version = "1.0", optional = true }
+        · ───┬──
+        ·    ╰── not used anywhere in the code
+        ╰────
+      help: consider removing this dependency, or suppressing this warning
+
+    Advice: 
+      ☞ used in feature
+       ╭─[Cargo.toml:7:8]
+     6 │ [features]
+     7 │ std = ["anyhow?/std"]
+       ·        ──────┬──────
+       ·              ╰── referenced by feature `std`
+     8 │ 
+       ╰────
+
+    Advice: 
+      ☞ removing an optional dependency is a breaking change
+    "#);
 
     Ok(())
 }
@@ -716,25 +997,26 @@ fn unused_naming_hyphen_detection() -> Result<(), Box<dyn Error>> {
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     insta::assert_snapshot!(output, @r#"
-    Analyzing .
+    shear::unused
 
-    unused_naming_hyphen -- Cargo.toml:
-      unused dependencies:
-        serde_json
+      × unused dependency `serde_json`
+       ╭─[Cargo.toml:8:1]
+     7 │ # Unused
+     8 │ serde_json = "1.0"
+       · ─────┬────
+       ·      ╰── not used anywhere in the code
+       ╰────
+      help: remove this dependency
 
+      ☞ to suppress a warning within a package
+      help: [package.metadata.cargo-shear]
+            ignored = ["crate_name"]
 
-    cargo-shear may have detected unused dependencies incorrectly due to its limitations.
-    They can be ignored by adding the crate name to the package's Cargo.toml:
+      ☞ to suppress a warning across a workspace
+      help: [workspace.metadata.cargo-shear]
+            ignored = ["crate_name"]
 
-    [package.metadata.cargo-shear]
-    ignored = ["crate-name"]
-
-    or in the workspace Cargo.toml:
-
-    [workspace.metadata.cargo-shear]
-    ignored = ["crate-name"]
-
-    To automatically fix issues, run with --fix
+      ☞ to automatically fix issues, run with `--fix`
     "#);
 
     Ok(())
@@ -759,25 +1041,26 @@ fn unused_naming_underscore_detection() -> Result<(), Box<dyn Error>> {
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     insta::assert_snapshot!(output, @r#"
-    Analyzing .
+    shear::unused
 
-    unused_naming_underscore -- Cargo.toml:
-      unused dependencies:
-        rustc-hash
+      × unused dependency `rustc-hash`
+       ╭─[Cargo.toml:8:1]
+     7 │ # Unused
+     8 │ rustc-hash = "2.0"
+       · ─────┬────
+       ·      ╰── not used anywhere in the code
+       ╰────
+      help: remove this dependency
 
+      ☞ to suppress a warning within a package
+      help: [package.metadata.cargo-shear]
+            ignored = ["crate_name"]
 
-    cargo-shear may have detected unused dependencies incorrectly due to its limitations.
-    They can be ignored by adding the crate name to the package's Cargo.toml:
+      ☞ to suppress a warning across a workspace
+      help: [workspace.metadata.cargo-shear]
+            ignored = ["crate_name"]
 
-    [package.metadata.cargo-shear]
-    ignored = ["crate-name"]
-
-    or in the workspace Cargo.toml:
-
-    [workspace.metadata.cargo-shear]
-    ignored = ["crate-name"]
-
-    To automatically fix issues, run with --fix
+      ☞ to automatically fix issues, run with `--fix`
     "#);
 
     Ok(())
@@ -801,11 +1084,31 @@ fn unused_optional_detection() -> Result<(), Box<dyn Error>> {
     let (exit_code, output, _) = run_cargo_shear("unused_optional", false)?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
-    insta::assert_snapshot!(output, @r"
-    Analyzing .
+    insta::assert_snapshot!(output, @r#"
+    shear::unused_optional
 
-    No issues detected!
-    ");
+      ⚠ unused optional dependency `anyhow`
+        ╭─[Cargo.toml:11:1]
+     10 │ # Unused
+     11 │ anyhow = { version = "1.0", optional = true }
+        · ───┬──
+        ·    ╰── not used anywhere in the code
+        ╰────
+      help: consider removing this dependency, or suppressing this warning
+
+    Advice: 
+      ☞ used in feature
+       ╭─[Cargo.toml:7:11]
+     6 │ [features]
+     7 │ anyhow = ["dep:anyhow"]
+       ·           ──────┬─────
+       ·                 ╰── referenced by feature `anyhow`
+     8 │ 
+       ╰────
+
+    Advice: 
+      ☞ removing an optional dependency is a breaking change
+    "#);
 
     Ok(())
 }
@@ -832,11 +1135,21 @@ fn unused_optional_implicit_detection() -> Result<(), Box<dyn Error>> {
     let (exit_code, output, _) = run_cargo_shear("unused_optional_implicit", false)?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
-    insta::assert_snapshot!(output, @r"
-    Analyzing .
+    insta::assert_snapshot!(output, @r#"
+    shear::unused_optional
 
-    No issues detected!
-    ");
+      ⚠ unused optional dependency `anyhow`
+       ╭─[Cargo.toml:8:1]
+     7 │ # Unused
+     8 │ anyhow = { version = "1.0", optional = true }
+       · ───┬──
+       ·    ╰── not used anywhere in the code
+       ╰────
+      help: consider removing this dependency, or suppressing this warning
+
+    Advice: 
+      ☞ removing an optional dependency is a breaking change
+    "#);
 
     Ok(())
 }
@@ -860,25 +1173,26 @@ fn unused_platform_detection() -> Result<(), Box<dyn Error>> {
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     insta::assert_snapshot!(output, @r#"
-    Analyzing .
+    shear::unused
 
-    unused_platform -- Cargo.toml:
-      unused dependencies:
-        anyhow
+      × unused dependency `anyhow`
+       ╭─[Cargo.toml:8:1]
+     7 │ # Unused
+     8 │ anyhow = "1.0"
+       · ───┬──
+       ·    ╰── not used anywhere in the code
+       ╰────
+      help: remove this dependency
 
+      ☞ to suppress a warning within a package
+      help: [package.metadata.cargo-shear]
+            ignored = ["crate_name"]
 
-    cargo-shear may have detected unused dependencies incorrectly due to its limitations.
-    They can be ignored by adding the crate name to the package's Cargo.toml:
+      ☞ to suppress a warning across a workspace
+      help: [workspace.metadata.cargo-shear]
+            ignored = ["crate_name"]
 
-    [package.metadata.cargo-shear]
-    ignored = ["crate-name"]
-
-    or in the workspace Cargo.toml:
-
-    [workspace.metadata.cargo-shear]
-    ignored = ["crate-name"]
-
-    To automatically fix issues, run with --fix
+      ☞ to automatically fix issues, run with `--fix`
     "#);
 
     Ok(())
@@ -904,25 +1218,26 @@ fn unused_renamed_detection() -> Result<(), Box<dyn Error>> {
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     insta::assert_snapshot!(output, @r#"
-    Analyzing .
+    shear::unused
 
-    unused_renamed -- Cargo.toml:
-      unused dependencies:
-        anyhow_v1
+      × unused dependency `anyhow_v1`
+       ╭─[Cargo.toml:8:1]
+     7 │ # Unused
+     8 │ anyhow_v1 = { package = "anyhow", version = "1.0" }
+       · ────┬────
+       ·     ╰── not used anywhere in the code
+       ╰────
+      help: remove this dependency
 
+      ☞ to suppress a warning within a package
+      help: [package.metadata.cargo-shear]
+            ignored = ["crate_name"]
 
-    cargo-shear may have detected unused dependencies incorrectly due to its limitations.
-    They can be ignored by adding the crate name to the package's Cargo.toml:
+      ☞ to suppress a warning across a workspace
+      help: [workspace.metadata.cargo-shear]
+            ignored = ["crate_name"]
 
-    [package.metadata.cargo-shear]
-    ignored = ["crate-name"]
-
-    or in the workspace Cargo.toml:
-
-    [workspace.metadata.cargo-shear]
-    ignored = ["crate-name"]
-
-    To automatically fix issues, run with --fix
+      ☞ to automatically fix issues, run with `--fix`
     "#);
 
     Ok(())
@@ -947,25 +1262,26 @@ fn unused_libname_detection() -> Result<(), Box<dyn Error>> {
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     insta::assert_snapshot!(output, @r#"
-    Analyzing .
+    shear::unused
 
-    unused_libname -- Cargo.toml:
-      unused dependencies:
-        criterion2
+      × unused dependency `criterion2`
+       ╭─[Cargo.toml:8:1]
+     7 │ # Unused
+     8 │ criterion2 = { version = "3.0", default-features = false }
+       · ─────┬────
+       ·      ╰── not used anywhere in the code
+       ╰────
+      help: remove this dependency
 
+      ☞ to suppress a warning within a package
+      help: [package.metadata.cargo-shear]
+            ignored = ["crate_name"]
 
-    cargo-shear may have detected unused dependencies incorrectly due to its limitations.
-    They can be ignored by adding the crate name to the package's Cargo.toml:
+      ☞ to suppress a warning across a workspace
+      help: [workspace.metadata.cargo-shear]
+            ignored = ["crate_name"]
 
-    [package.metadata.cargo-shear]
-    ignored = ["crate-name"]
-
-    or in the workspace Cargo.toml:
-
-    [workspace.metadata.cargo-shear]
-    ignored = ["crate-name"]
-
-    To automatically fix issues, run with --fix
+      ☞ to automatically fix issues, run with `--fix`
     "#);
 
     Ok(())
@@ -990,25 +1306,27 @@ fn unused_table_detection() -> Result<(), Box<dyn Error>> {
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     insta::assert_snapshot!(output, @r#"
-    Analyzing .
+    shear::unused
 
-    unused_table -- Cargo.toml:
-      unused dependencies:
-        anyhow
+      × unused dependency `anyhow`
+       ╭─[Cargo.toml:7:15]
+     6 │ # Unused
+     7 │ [dependencies.anyhow]
+       ·               ───┬──
+       ·                  ╰── not used anywhere in the code
+     8 │ version = "1.0"
+       ╰────
+      help: remove this dependency
 
+      ☞ to suppress a warning within a package
+      help: [package.metadata.cargo-shear]
+            ignored = ["crate_name"]
 
-    cargo-shear may have detected unused dependencies incorrectly due to its limitations.
-    They can be ignored by adding the crate name to the package's Cargo.toml:
+      ☞ to suppress a warning across a workspace
+      help: [workspace.metadata.cargo-shear]
+            ignored = ["crate_name"]
 
-    [package.metadata.cargo-shear]
-    ignored = ["crate-name"]
-
-    or in the workspace Cargo.toml:
-
-    [workspace.metadata.cargo-shear]
-    ignored = ["crate-name"]
-
-    To automatically fix issues, run with --fix
+      ☞ to automatically fix issues, run with `--fix`
     "#);
 
     Ok(())
@@ -1033,25 +1351,26 @@ fn unused_workspace_detection() -> Result<(), Box<dyn Error>> {
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     insta::assert_snapshot!(output, @r#"
-    Analyzing .
+    shear::unused_workspace
 
-    root -- ./Cargo.toml:
-      unused dependencies:
-        anyhow
+      × unused workspace dependency `anyhow`
+       ╭─[Cargo.toml:7:1]
+     6 │ # Unused
+     7 │ anyhow = "1.0"
+       · ───┬──
+       ·    ╰── not used by any package in this workspace
+       ╰────
+      help: remove it from `[workspace.dependencies]`
 
+      ☞ to suppress a warning within a package
+      help: [package.metadata.cargo-shear]
+            ignored = ["crate_name"]
 
-    cargo-shear may have detected unused dependencies incorrectly due to its limitations.
-    They can be ignored by adding the crate name to the package's Cargo.toml:
+      ☞ to suppress a warning across a workspace
+      help: [workspace.metadata.cargo-shear]
+            ignored = ["crate_name"]
 
-    [package.metadata.cargo-shear]
-    ignored = ["crate-name"]
-
-    or in the workspace Cargo.toml:
-
-    [workspace.metadata.cargo-shear]
-    ignored = ["crate-name"]
-
-    To automatically fix issues, run with --fix
+      ☞ to automatically fix issues, run with `--fix`
     "#);
 
     Ok(())
@@ -1077,25 +1396,26 @@ fn unused_workspace_renamed_detection() -> Result<(), Box<dyn Error>> {
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     insta::assert_snapshot!(output, @r#"
-    Analyzing .
+    shear::unused_workspace
 
-    root -- ./Cargo.toml:
-      unused dependencies:
-        anyhow_v1
+      × unused workspace dependency `anyhow_v1`
+       ╭─[Cargo.toml:7:1]
+     6 │ # Unused
+     7 │ anyhow_v1 = { package = "anyhow", version = "1.0" }
+       · ────┬────
+       ·     ╰── not used by any package in this workspace
+       ╰────
+      help: remove it from `[workspace.dependencies]`
 
+      ☞ to suppress a warning within a package
+      help: [package.metadata.cargo-shear]
+            ignored = ["crate_name"]
 
-    cargo-shear may have detected unused dependencies incorrectly due to its limitations.
-    They can be ignored by adding the crate name to the package's Cargo.toml:
+      ☞ to suppress a warning across a workspace
+      help: [workspace.metadata.cargo-shear]
+            ignored = ["crate_name"]
 
-    [package.metadata.cargo-shear]
-    ignored = ["crate-name"]
-
-    or in the workspace Cargo.toml:
-
-    [workspace.metadata.cargo-shear]
-    ignored = ["crate-name"]
-
-    To automatically fix issues, run with --fix
+      ☞ to automatically fix issues, run with `--fix`
     "#);
 
     Ok(())
@@ -1121,25 +1441,26 @@ fn unused_workspace_libname_detection() -> Result<(), Box<dyn Error>> {
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     insta::assert_snapshot!(output, @r#"
-    Analyzing .
+    shear::unused_workspace
 
-    root -- ./Cargo.toml:
-      unused dependencies:
-        criterion2
+      × unused workspace dependency `criterion2`
+       ╭─[Cargo.toml:7:1]
+     6 │ # Unused
+     7 │ criterion2 = { version = "3.0", default-features = false }
+       · ─────┬────
+       ·      ╰── not used by any package in this workspace
+       ╰────
+      help: remove it from `[workspace.dependencies]`
 
+      ☞ to suppress a warning within a package
+      help: [package.metadata.cargo-shear]
+            ignored = ["crate_name"]
 
-    cargo-shear may have detected unused dependencies incorrectly due to its limitations.
-    They can be ignored by adding the crate name to the package's Cargo.toml:
+      ☞ to suppress a warning across a workspace
+      help: [workspace.metadata.cargo-shear]
+            ignored = ["crate_name"]
 
-    [package.metadata.cargo-shear]
-    ignored = ["crate-name"]
-
-    or in the workspace Cargo.toml:
-
-    [workspace.metadata.cargo-shear]
-    ignored = ["crate-name"]
-
-    To automatically fix issues, run with --fix
+      ☞ to automatically fix issues, run with `--fix`
     "#);
 
     Ok(())

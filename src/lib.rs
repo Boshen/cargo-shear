@@ -32,14 +32,15 @@
 
 mod cargo_toml_editor;
 mod dependency_analyzer;
+pub mod diagnostic;
 mod import_collector;
+mod manifest;
 mod package_processor;
 #[cfg(test)]
 mod tests;
 
 use std::{
-    env, fs,
-    io::Write,
+    env, fs, io,
     path::{Path, PathBuf},
     process::ExitCode,
     str::FromStr,
@@ -47,14 +48,18 @@ use std::{
 
 use anyhow::Result;
 use bpaf::Bpaf;
-use cargo_metadata::{CargoOpt, Metadata, MetadataCommand, Package};
-use cargo_toml::Manifest;
+use cargo_metadata::{CargoOpt, MetadataCommand};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use rustc_hash::FxHashSet;
 use toml_edit::DocumentMut;
 
 use crate::{
     cargo_toml_editor::CargoTomlEditor,
+    diagnostic::{
+        BoxedDiagnostic, DiagnosticPrinter, FixHelp, IgnoreHelpPackage, IgnoreHelpWorkspace,
+        ProcessingError,
+    },
+    manifest::Manifest,
     package_processor::{PackageProcessResult, PackageProcessor, WorkspaceProcessResult},
 };
 
@@ -107,6 +112,10 @@ pub struct CargoShearOptions {
     /// Can be specified multiple times to exclude multiple packages.
     exclude: Vec<String>,
 
+    /// Disable colored output.
+    #[bpaf(long("no-color"), flag(false, true), fallback(true))]
+    color: bool,
+
     /// Path to the project directory.
     ///
     /// Defaults to the current directory if not specified.
@@ -126,6 +135,7 @@ impl CargoShearOptions {
             frozen: false,
             package: vec![],
             exclude: vec![],
+            color: false,
             path,
         }
     }
@@ -146,22 +156,22 @@ pub struct CargoShear<W> {
     /// Configuration options for the analysis
     options: CargoShearOptions,
 
-    /// Counter for total unused dependencies found
-    unused_dependencies: usize,
+    /// Collected diagnostics
+    diagnostics: Vec<BoxedDiagnostic>,
 
-    /// Counter for total misplaced dependencies found
-    misplaced_dependencies: usize,
+    /// Whether any fixable issues were found
+    has_fixable_issues: bool,
 
-    /// Counter for dependencies that were fixed
-    fixed_dependencies: usize,
+    /// Whether any fixes were applied
+    has_fixed: bool,
 }
 
-impl<W: Write> CargoShear<W> {
+impl<W: io::Write> CargoShear<W> {
     /// Create a new `CargoShear` instance with the given options.
     ///
     /// # Arguments
     ///
-    /// * `writer` - Output writer
+    /// * `writer` - Writer for output
     /// * `options` - Configuration options for the analysis
     ///
     /// # Example
@@ -178,76 +188,51 @@ impl<W: Write> CargoShear<W> {
         Self {
             writer,
             options,
-            unused_dependencies: 0,
-            misplaced_dependencies: 0,
-            fixed_dependencies: 0,
+            diagnostics: Vec::new(),
+            has_fixable_issues: false,
+            has_fixed: false,
         }
     }
 
-    /// Run the dependency analysis and optionally fix unused dependencies.
+    /// Run the dependency analysis and optionally fix issues.
     ///
     /// This method performs the complete analysis workflow:
     /// 1. Analyzes all packages in the workspace
-    /// 2. Detects unused dependencies
-    /// 3. Optionally removes them if `--fix` is enabled
-    /// 4. Reports results to the writer
+    /// 2. Detects issues
+    /// 3. Optionally fixes them if `--fix` is enabled
+    /// 4. Prints diagnostics to the writer
     ///
     /// # Returns
     ///
-    /// Returns an `ExitCode` indicating success or failure:
-    /// - `0` if no issues were found or all issues were fixed
-    /// - `1` if unused dependencies were found (without `--fix`)
-    /// - `2` if an error occurred
-    #[must_use]
+    /// - Exit code `0` if no issues were found or all issues were fixed
+    /// - Exit code `1` if issues were found (without `--fix`)
+    /// - Exit code `2` if an error occurred
     pub fn run(mut self) -> ExitCode {
-        let _ = writeln!(self.writer, "Analyzing {}", self.options.path.to_string_lossy());
-        let _ = writeln!(self.writer);
+        let printer = if self.options.color {
+            DiagnosticPrinter::fancy()
+        } else {
+            DiagnosticPrinter::plain()
+        };
 
         match self.shear() {
             Ok(()) => {
-                let has_fixed = self.fixed_dependencies > 0;
+                let has_issues = self.has_fixable_issues && !self.has_fixed;
 
-                if has_fixed {
-                    let _ = writeln!(
-                        self.writer,
-                        "Fixed {} {}.\n",
-                        self.fixed_dependencies,
-                        if self.fixed_dependencies == 1 { "dependency" } else { "dependencies" }
-                    );
+                for diagnostic in &self.diagnostics {
+                    let _ = printer.print(diagnostic.as_ref(), &mut self.writer);
                 }
-
-                let total_issues = self.unused_dependencies + self.misplaced_dependencies;
-                let has_issues = (total_issues - self.fixed_dependencies) > 0;
-
                 if has_issues {
-                    let _ = writeln!(
-                        self.writer,
-                        "\n\
-                        cargo-shear may have detected unused dependencies incorrectly due to its limitations.\n\
-                        They can be ignored by adding the crate name to the package's Cargo.toml:\n\n\
-                        [package.metadata.cargo-shear]\n\
-                        ignored = [\"crate-name\"]\n\n\
-                        or in the workspace Cargo.toml:\n\n\
-                        [workspace.metadata.cargo-shear]\n\
-                        ignored = [\"crate-name\"]\n"
-                    );
-
+                    let _ = printer.print(&IgnoreHelpPackage, &mut self.writer);
+                    let _ = printer.print(&IgnoreHelpWorkspace, &mut self.writer);
                     if !self.options.fix {
-                        let _ =
-                            writeln!(self.writer, "To automatically fix issues, run with --fix");
+                        let _ = printer.print(&FixHelp, &mut self.writer);
                     }
-                } else {
-                    let _ = writeln!(self.writer, "No issues detected!");
                 }
 
-                ExitCode::from(u8::from(if self.options.fix { has_fixed } else { has_issues }))
+                ExitCode::from(u8::from(if self.options.fix { self.has_fixed } else { has_issues }))
             }
             Err(err) => {
-                let _ = writeln!(self.writer, "{err:?}");
-                let _ = writeln!(
-                    self.writer,
-                    "note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace"
-                );
+                let _ = printer.print(&ProcessingError::new(err), &mut self.writer);
                 ExitCode::from(2)
             }
         }
@@ -272,6 +257,7 @@ impl<W: Write> CargoShear<W> {
             .exec()
             .map_err(|e| anyhow::anyhow!("Metadata error: {e}"))?;
 
+        let workspace_root = metadata.workspace_root.as_std_path().to_path_buf();
         let processor = PackageProcessor::new(self.options.expand);
 
         let packages = metadata.workspace_packages();
@@ -294,92 +280,62 @@ impl<W: Write> CargoShear<W> {
             })
             .collect();
 
+        let workspace_manifest_path = metadata.workspace_root.as_std_path().join("Cargo.toml");
+        let workspace_manifest_content = fs::read_to_string(&workspace_manifest_path)?;
+        let workspace_manifest: Manifest = toml::from_str(&workspace_manifest_content)?;
+
         // Process packages in parallel
         let results: Vec<_> = packages
             .par_iter()
             .map(|package| {
                 let manifest_path = package.manifest_path.as_std_path();
-                let manifest = Manifest::from_path(manifest_path)?;
-                let result = processor.process_package(&metadata, package, &manifest)?;
-                Ok::<_, anyhow::Error>((*package, manifest_path, result))
+                let manifest_content = fs::read_to_string(manifest_path)?;
+                let manifest: Manifest = toml::from_str(&manifest_content)?;
+                let result = processor.process_package(
+                    &metadata,
+                    package,
+                    &manifest,
+                    &manifest_content,
+                    &workspace_manifest,
+                    &workspace_root,
+                )?;
+                Ok::<_, anyhow::Error>((manifest_path, result))
             })
             .collect::<Result<Vec<_>>>()?;
 
         // Track all packages used across the workspace
         let mut workspace_used_pkgs = FxHashSet::default();
 
-        for (package, manifest_path, result) in results {
-            self.report_package_issues(package, &result, &metadata)?;
+        for (manifest_path, mut result) in results {
             self.fix_package_issues(manifest_path, &result)?;
+            self.report_package_issues(&mut result);
 
             workspace_used_pkgs.extend(result.used_packages);
         }
 
         // Process workspace
-        let manifest_path = metadata.workspace_root.as_std_path().join("Cargo.toml");
-        let workspace_manifest = Manifest::from_path(&manifest_path)?;
-
-        let workspace_result = PackageProcessor::process_workspace(
+        let mut workspace_result = PackageProcessor::process_workspace(
+            &workspace_manifest_path,
             &workspace_manifest,
+            &workspace_manifest_content,
             &metadata,
             &workspace_used_pkgs,
+            &workspace_root,
         );
 
-        self.report_workspace_issues(&manifest_path, &workspace_result)?;
-        self.fix_workspace_issues(&manifest_path, &workspace_result)?;
+        self.fix_workspace_issues(&workspace_manifest_path, &workspace_result)?;
+        self.report_workspace_issues(&mut workspace_result);
 
         Ok(())
     }
 
-    fn report_package_issues(
-        &mut self,
-        package: &Package,
-        result: &PackageProcessResult,
-        metadata: &Metadata,
-    ) -> Result<()> {
-        // Warn about redundant ignores
-        for ignored_dep in &result.redundant_ignores {
-            writeln!(
-                self.writer,
-                "warning: '{ignored_dep}' in [package.metadata.cargo-shear] for package '{}' is ignored but not needed; remove it unless you're suppressing a known false positive.\n",
-                package.name
-            )?;
+    fn report_package_issues(&mut self, result: &mut PackageProcessResult) {
+        if !result.has_issues() {
+            return;
         }
 
-        let unused_count = result.unused_dependencies.len();
-        let misplaced_count = result.misplaced_dependencies.len();
-
-        if unused_count == 0 && misplaced_count == 0 {
-            return Ok(());
-        }
-
-        let relative_path = PackageProcessor::get_relative_path(
-            package.manifest_path.as_std_path(),
-            metadata.workspace_root.as_std_path(),
-        );
-
-        writeln!(self.writer, "{} -- {}:", package.name, relative_path.display())?;
-
-        if unused_count > 0 {
-            writeln!(self.writer, "  unused dependencies:")?;
-            for unused_dep in &result.unused_dependencies {
-                writeln!(self.writer, "    {}", unused_dep.name)?;
-            }
-        }
-
-        if misplaced_count > 0 {
-            writeln!(self.writer, "  move to dev-dependencies:")?;
-            for misplaced_dep in &result.misplaced_dependencies {
-                writeln!(self.writer, "    {}", misplaced_dep.name)?;
-            }
-        }
-
-        writeln!(self.writer)?;
-
-        self.unused_dependencies += unused_count;
-        self.misplaced_dependencies += misplaced_count;
-
-        Ok(())
+        self.has_fixable_issues |= result.has_fixable_issues();
+        self.diagnostics.extend(result.diagnostics());
     }
 
     fn fix_package_issues(
@@ -387,62 +343,29 @@ impl<W: Write> CargoShear<W> {
         manifest_path: &Path,
         result: &PackageProcessResult,
     ) -> Result<()> {
-        if !self.options.fix {
+        if !self.options.fix || !result.has_fixable_issues() {
             return Ok(());
         }
 
-        if result.misplaced_dependencies.is_empty() && result.unused_dependencies.is_empty() {
-            return Ok(());
-        }
-
-        let content = fs::read_to_string(manifest_path)?;
+        let content = fs::read_to_string(&result.manifest)?;
         let mut manifest = DocumentMut::from_str(&content)?;
 
-        let fixed_unused =
-            CargoTomlEditor::remove_dependencies(&mut manifest, &result.unused_dependencies);
-        let fixed_misplaced = CargoTomlEditor::move_to_dev_dependencies(
-            &mut manifest,
-            &result.misplaced_dependencies,
-        );
+        CargoTomlEditor::remove_dependencies(&mut manifest, &result.unused);
+        CargoTomlEditor::move_to_dev_dependencies(&mut manifest, &result.misplaced);
 
         fs::write(manifest_path, manifest.to_string())?;
-        self.fixed_dependencies += fixed_unused + fixed_misplaced;
+        self.has_fixed = true;
 
         Ok(())
     }
 
-    fn report_workspace_issues(
-        &mut self,
-        manifest_path: &Path,
-        result: &WorkspaceProcessResult,
-    ) -> Result<()> {
-        // Warn about redundant workspace ignores
-        for ignored_dep in &result.redundant_ignores {
-            writeln!(
-                self.writer,
-                "warning: '{ignored_dep}' in [workspace.metadata.cargo-shear] is ignored but not needed; remove it unless you're suppressing a known false positive.\n"
-            )?;
+    fn report_workspace_issues(&mut self, result: &mut WorkspaceProcessResult) {
+        if !result.has_issues() {
+            return;
         }
 
-        if result.unused_dependencies.is_empty() {
-            return Ok(());
-        }
-
-        let path = manifest_path
-            .strip_prefix(env::current_dir().unwrap_or_default())
-            .unwrap_or(manifest_path)
-            .to_string_lossy();
-
-        writeln!(self.writer, "root -- {path}:")?;
-        writeln!(self.writer, "  unused dependencies:")?;
-        for unused_dep in &result.unused_dependencies {
-            writeln!(self.writer, "    {}", unused_dep.name)?;
-        }
-        writeln!(self.writer)?;
-
-        self.unused_dependencies += result.unused_dependencies.len();
-
-        Ok(())
+        self.has_fixable_issues |= result.has_fixable_issues();
+        self.diagnostics.extend(result.diagnostics());
     }
 
     fn fix_workspace_issues(
@@ -450,22 +373,17 @@ impl<W: Write> CargoShear<W> {
         manifest_path: &Path,
         result: &WorkspaceProcessResult,
     ) -> Result<()> {
-        if !self.options.fix {
+        if !self.options.fix || !result.has_fixable_issues() {
             return Ok(());
         }
 
-        if result.unused_dependencies.is_empty() {
-            return Ok(());
-        }
-
-        let content = fs::read_to_string(manifest_path)?;
+        let content = fs::read_to_string(&result.manifest)?;
         let mut manifest = DocumentMut::from_str(&content)?;
 
-        let fixed =
-            CargoTomlEditor::remove_workspace_deps(&mut manifest, &result.unused_dependencies);
+        CargoTomlEditor::remove_workspace_deps(&mut manifest, &result.unused);
 
         fs::write(manifest_path, manifest.to_string())?;
-        self.fixed_dependencies += fixed;
+        self.has_fixed = true;
 
         Ok(())
     }
