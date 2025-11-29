@@ -240,7 +240,7 @@ impl<W: Write> CargoShear<W> {
                     let _ = writeln!(self.writer, "No issues detected!");
                 }
 
-                ExitCode::from(u8::from(if self.options.fix { has_fixed } else { has_issues }))
+                ExitCode::from(u8::from(has_issues))
             }
             Err(err) => {
                 let _ = writeln!(self.writer, "{err:?}");
@@ -325,7 +325,7 @@ impl<W: Write> CargoShear<W> {
             &workspace_used_pkgs,
         );
 
-        self.report_workspace_issues(&manifest_path, &workspace_result)?;
+        self.report_workspace_issues(&manifest_path, &workspace_result, &metadata)?;
         self.fix_workspace_issues(&manifest_path, &workspace_result)?;
 
         Ok(())
@@ -362,8 +362,8 @@ impl<W: Write> CargoShear<W> {
 
         if unused_count > 0 {
             writeln!(self.writer, "  unused dependencies:")?;
-            for misplaced_dep in &result.unused_dependencies {
-                writeln!(self.writer, "    {misplaced_dep}")?;
+            for unused_dep in &result.unused_dependencies {
+                writeln!(self.writer, "    {unused_dep}")?;
             }
         }
 
@@ -415,6 +415,7 @@ impl<W: Write> CargoShear<W> {
         &mut self,
         manifest_path: &Path,
         result: &WorkspaceProcessResult,
+        metadata: &Metadata,
     ) -> Result<()> {
         // Warn about redundant workspace ignores
         for ignored_dep in &result.redundant_ignores {
@@ -428,12 +429,18 @@ impl<W: Write> CargoShear<W> {
             return Ok(());
         }
 
-        let path = manifest_path
-            .strip_prefix(env::current_dir().unwrap_or_default())
-            .unwrap_or(manifest_path)
-            .to_string_lossy();
+        let path = PackageProcessor::get_relative_path(
+            manifest_path,
+            metadata.workspace_root.as_std_path(),
+        );
+        // Ensure relative paths start with ./ for consistency
+        let path_str = if path.is_relative() && !path.starts_with(".") {
+            format!("./{}", path.display())
+        } else {
+            path.display().to_string()
+        };
 
-        writeln!(self.writer, "root -- {path}:")?;
+        writeln!(self.writer, "root -- {path_str}:")?;
         writeln!(self.writer, "  unused dependencies:")?;
         for unused_dep in &result.unused_dependencies {
             writeln!(self.writer, "    {unused_dep}")?;
