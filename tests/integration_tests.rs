@@ -246,7 +246,7 @@ fn misplaced_detection() -> Result<(), Box<dyn Error>> {
 #[test]
 fn misplaced_fix() -> Result<(), Box<dyn Error>> {
     let (exit_code, _, temp_dir) = run_cargo_shear("misplaced", true)?;
-    assert_eq!(exit_code, ExitCode::FAILURE);
+    assert_eq!(exit_code, ExitCode::SUCCESS);
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
     assert!(manifest.dev_dependencies.contains_key("anyhow"));
@@ -318,7 +318,7 @@ fn misplaced_renamed_detection() -> Result<(), Box<dyn Error>> {
 #[test]
 fn misplaced_renamed_fix() -> Result<(), Box<dyn Error>> {
     let (exit_code, _, temp_dir) = run_cargo_shear("misplaced_renamed", true)?;
-    assert_eq!(exit_code, ExitCode::FAILURE);
+    assert_eq!(exit_code, ExitCode::SUCCESS);
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
     assert!(manifest.dev_dependencies.contains_key("anyhow_v1"));
@@ -366,7 +366,7 @@ fn misplaced_table_detection() -> Result<(), Box<dyn Error>> {
 #[test]
 fn misplaced_table_fix() -> Result<(), Box<dyn Error>> {
     let (exit_code, _, temp_dir) = run_cargo_shear("misplaced_table", true)?;
-    assert_eq!(exit_code, ExitCode::FAILURE);
+    assert_eq!(exit_code, ExitCode::SUCCESS);
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
     assert!(manifest.dev_dependencies.contains_key("anyhow"));
@@ -397,7 +397,7 @@ fn misplaced_unit_detection() -> Result<(), Box<dyn Error>> {
 #[ignore = "Cannot detect misplaced dependencies in unit tests"]
 fn misplaced_unit_fix() -> Result<(), Box<dyn Error>> {
     let (exit_code, _, temp_dir) = run_cargo_shear("misplaced_unit", true)?;
-    assert_eq!(exit_code, ExitCode::FAILURE);
+    assert_eq!(exit_code, ExitCode::SUCCESS);
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
     assert!(manifest.dev_dependencies.contains_key("anyhow"));
@@ -441,7 +441,7 @@ fn unused_detection() -> Result<(), Box<dyn Error>> {
 #[test]
 fn unused_fix() -> Result<(), Box<dyn Error>> {
     let (exit_code, _, temp_dir) = run_cargo_shear("unused", true)?;
-    assert_eq!(exit_code, ExitCode::FAILURE);
+    assert_eq!(exit_code, ExitCode::SUCCESS);
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
     assert!(!manifest.dependencies.contains_key("anyhow"));
@@ -484,7 +484,7 @@ fn unused_build_detection() -> Result<(), Box<dyn Error>> {
 #[test]
 fn unused_build_fix() -> Result<(), Box<dyn Error>> {
     let (exit_code, _, temp_dir) = run_cargo_shear("unused_build", true)?;
-    assert_eq!(exit_code, ExitCode::FAILURE);
+    assert_eq!(exit_code, ExitCode::SUCCESS);
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
     assert!(!manifest.build_dependencies.contains_key("anyhow"));
@@ -527,7 +527,7 @@ fn unused_dev_detection() -> Result<(), Box<dyn Error>> {
 #[test]
 fn unused_dev_fix() -> Result<(), Box<dyn Error>> {
     let (exit_code, _, temp_dir) = run_cargo_shear("unused_dev", true)?;
-    assert_eq!(exit_code, ExitCode::FAILURE);
+    assert_eq!(exit_code, ExitCode::SUCCESS);
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
     assert!(!manifest.dev_dependencies.contains_key("anyhow"));
@@ -624,7 +624,7 @@ fn unused_naming_hyphen_detection() -> Result<(), Box<dyn Error>> {
 #[test]
 fn unused_naming_hyphen_fix() -> Result<(), Box<dyn Error>> {
     let (exit_code, _, temp_dir) = run_cargo_shear("unused_naming_hyphen", true)?;
-    assert_eq!(exit_code, ExitCode::FAILURE);
+    assert_eq!(exit_code, ExitCode::SUCCESS);
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
     assert!(!manifest.dependencies.contains_key("serde_json"));
@@ -667,7 +667,7 @@ fn unused_naming_underscore_detection() -> Result<(), Box<dyn Error>> {
 #[test]
 fn unused_naming_underscore_fix() -> Result<(), Box<dyn Error>> {
     let (exit_code, _, temp_dir) = run_cargo_shear("unused_naming_underscore", true)?;
-    assert_eq!(exit_code, ExitCode::FAILURE);
+    assert_eq!(exit_code, ExitCode::SUCCESS);
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
     assert!(!manifest.dependencies.contains_key("rustc-hash"));
@@ -768,7 +768,7 @@ fn unused_platform_detection() -> Result<(), Box<dyn Error>> {
 #[test]
 fn unused_platform_fix() -> Result<(), Box<dyn Error>> {
     let (exit_code, _, temp_dir) = run_cargo_shear("unused_platform", true)?;
-    assert_eq!(exit_code, ExitCode::FAILURE);
+    assert_eq!(exit_code, ExitCode::SUCCESS);
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
     let windows = manifest.target.get("cfg(windows)");
@@ -812,7 +812,7 @@ fn unused_renamed_detection() -> Result<(), Box<dyn Error>> {
 #[test]
 fn unused_renamed_fix() -> Result<(), Box<dyn Error>> {
     let (exit_code, _, temp_dir) = run_cargo_shear("unused_renamed", true)?;
-    assert_eq!(exit_code, ExitCode::FAILURE);
+    assert_eq!(exit_code, ExitCode::SUCCESS);
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
     assert!(!manifest.dependencies.contains_key("anyhow_v1"));
@@ -855,7 +855,7 @@ fn unused_table_detection() -> Result<(), Box<dyn Error>> {
 #[test]
 fn unused_table_fix() -> Result<(), Box<dyn Error>> {
     let (exit_code, _, temp_dir) = run_cargo_shear("unused_table", true)?;
-    assert_eq!(exit_code, ExitCode::FAILURE);
+    assert_eq!(exit_code, ExitCode::SUCCESS);
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
     assert!(!manifest.dependencies.contains_key("anyhow"));
@@ -898,7 +898,7 @@ fn unused_workspace_detection() -> Result<(), Box<dyn Error>> {
 #[test]
 fn unused_workspace_fix() -> Result<(), Box<dyn Error>> {
     let (exit_code, _, temp_dir) = run_cargo_shear("unused_workspace", true)?;
-    assert_eq!(exit_code, ExitCode::FAILURE);
+    assert_eq!(exit_code, ExitCode::SUCCESS);
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
     let workspace = &manifest.workspace.as_ref().unwrap().dependencies;
@@ -942,7 +942,7 @@ fn unused_workspace_renamed_detection() -> Result<(), Box<dyn Error>> {
 #[test]
 fn unused_workspace_renamed_fix() -> Result<(), Box<dyn Error>> {
     let (exit_code, _, temp_dir) = run_cargo_shear("unused_workspace_renamed", true)?;
-    assert_eq!(exit_code, ExitCode::FAILURE);
+    assert_eq!(exit_code, ExitCode::SUCCESS);
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
     let workspace = &manifest.workspace.as_ref().unwrap().dependencies;
