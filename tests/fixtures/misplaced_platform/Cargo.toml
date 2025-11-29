@@ -1,0 +1,8 @@
+[package]
+name = "misplaced_platform"
+version = "0.1.0"
+edition = "2024"
+
+[target.'cfg(unix)'.dependencies]
+# Misplaced
+anyhow = "1.0"

@@ -6,10 +6,15 @@
 //!
 //! - Package-level dependencies (`[dependencies]`, `[dev-dependencies]`, etc.)
 //! - Workspace dependencies (`[workspace.dependencies]`)
+//! - Target specific dependencies (`[target.'cfg(...)'.dependencies]`)
 //! - Feature flags that reference removed dependencies
 
 use rustc_hash::FxHashSet;
 use toml_edit::{DocumentMut, Item, Table};
+
+use crate::package_processor::{
+    DepLocation, MisplacedDependency, UnusedDependency, UnusedWorkspaceDependency,
+};
 
 /// Provides methods to edit Cargo.toml files and remove unused dependencies.
 pub struct CargoTomlEditor;
@@ -17,74 +22,108 @@ pub struct CargoTomlEditor;
 impl CargoTomlEditor {
     /// Remove unused dependencies from a manifest.
     ///
-    /// This method will:
-    /// 1. Remove dependencies from `[dependencies]`, `[dev-dependencies]`, and `[build-dependencies]`
-    /// 2. Remove dependencies from `[workspace.dependencies]` if in a workspace root
-    /// 3. Update feature flags to remove references to removed dependencies
+    /// # Returns
     ///
-    /// # Arguments
-    ///
-    /// * `manifest` - The manifest document to edit
-    /// * `unused_deps` - Set of unused dependency keys
+    /// The number of dependencies removed.
+    pub fn remove_dependencies(
+        manifest: &mut DocumentMut,
+        unused_deps: &FxHashSet<UnusedDependency>,
+    ) -> usize {
+        let mut removed = FxHashSet::default();
+
+        for dep in unused_deps {
+            let success = match &dep.location {
+                DepLocation::Root(table) => manifest
+                    .get_mut(&table.to_string())
+                    .and_then(|item| item.as_table_mut())
+                    .and_then(|deps| deps.remove(&dep.name))
+                    .is_some(),
+
+                DepLocation::Target { cfg, table } => manifest
+                    .get_mut("target")
+                    .and_then(|item| item.as_table_mut())
+                    .and_then(|targets| targets.get_mut(cfg))
+                    .and_then(|item| item.as_table_mut())
+                    .and_then(|target| target.get_mut(&table.to_string()))
+                    .and_then(|item| item.as_table_mut())
+                    .and_then(|deps| deps.remove(&dep.name))
+                    .is_some(),
+            };
+
+            if success {
+                removed.insert(dep.name.as_str());
+            }
+        }
+
+        let count = removed.len();
+        Self::fix_features(manifest, &removed);
+        count
+    }
+
+    /// Remove unused workspace dependencies from a manifest.
     ///
     /// # Returns
     ///
-    /// The number of dependencies that were removed
-    pub fn remove_dependencies(
+    /// The number of dependencies removed.
+    pub fn remove_workspace_deps(
         manifest: &mut DocumentMut,
-        unused_deps: &FxHashSet<String>,
+        unused_deps: &FxHashSet<UnusedWorkspaceDependency>,
     ) -> usize {
-        if unused_deps.is_empty() {
-            return 0;
+        let mut removed = FxHashSet::default();
+
+        for dep in unused_deps {
+            let success = manifest
+                .get_mut("workspace")
+                .and_then(|item| item.as_table_mut())
+                .and_then(|workspace| workspace.get_mut("dependencies"))
+                .and_then(|item| item.as_table_mut())
+                .and_then(|deps| deps.remove(&dep.name))
+                .is_some();
+
+            if success {
+                removed.insert(dep.name.as_str());
+            }
         }
 
-        Self::remove_workspace_dependencies(manifest, unused_deps);
-        Self::remove_package_dependencies(manifest, unused_deps);
-        Self::remove_target_dependencies(manifest, unused_deps);
-        Self::fix_features(manifest, unused_deps);
-
-        unused_deps.len()
+        let count = removed.len();
+        Self::fix_features(manifest, &removed);
+        count
     }
 
     /// Move dependencies from `[dependencies]` to `[dev-dependencies]`.
     ///
-    /// This method will:
-    /// 1. Remove dependencies from `[dependencies]`
-    /// 2. Insert them into `[dev-dependencies]`
-    ///
-    /// # Arguments
-    ///
-    /// * `manifest` - The manifest document to edit
-    /// * `misplaced_deps` - Set of misplaced dependency keys
-    ///
     /// # Returns
     ///
-    /// The number of dependencies that were moved
+    /// The number of dependencies moved.
     pub fn move_to_dev_dependencies(
         manifest: &mut DocumentMut,
-        misplaced_deps: &FxHashSet<String>,
+        misplaced_deps: &FxHashSet<MisplacedDependency>,
     ) -> usize {
-        if misplaced_deps.is_empty() {
-            return 0;
-        }
+        let mut count = 0;
 
-        // Remove from `[dependencies]`
-        let mut moved = Vec::new();
-        if let Some(dependencies) =
-            manifest.get_mut("dependencies").and_then(|item| item.as_table_mut())
-        {
-            for dep in misplaced_deps {
-                if let Some(value) = dependencies.remove(dep.as_str()) {
-                    moved.push((dep.clone(), value));
-                }
+        for dep in misplaced_deps {
+            let success = match &dep.location {
+                DepLocation::Root(_) => Self::move_root_to_dev(manifest, dep),
+                DepLocation::Target { .. } => Self::move_target_to_dev(manifest, dep),
+            };
+
+            if success {
+                count += 1;
             }
         }
 
-        if moved.is_empty() {
-            return 0;
-        }
+        count
+    }
 
-        let count = moved.len();
+    fn move_root_to_dev(manifest: &mut DocumentMut, dep: &MisplacedDependency) -> bool {
+        // Remove from `[dependencies]`
+        let Some(value) = manifest
+            .get_mut("dependencies")
+            .and_then(|item| item.as_table_mut())
+            .and_then(|deps| deps.remove(&dep.name))
+        else {
+            return false;
+        };
 
         // Ensure `[dev-dependencies]` exists
         if !manifest.contains_key("dev-dependencies") {
@@ -95,68 +134,71 @@ impl CargoTomlEditor {
         if let Some(dev_deps) =
             manifest.get_mut("dev-dependencies").and_then(|item| item.as_table_mut())
         {
-            for (dep, value) in moved {
-                dev_deps.insert(&dep, value);
-            }
+            dev_deps.insert(&dep.name, value);
+            return true;
         }
 
-        count
+        false
     }
 
-    fn remove_workspace_dependencies(manifest: &mut DocumentMut, unused_deps: &FxHashSet<String>) {
-        if let Some(dependencies) = manifest
-            .get_mut("workspace")
+    fn move_target_to_dev(manifest: &mut DocumentMut, dep: &MisplacedDependency) -> bool {
+        let DepLocation::Target { cfg, .. } = &dep.location else {
+            return false;
+        };
+
+        let Some(target) = manifest
+            .get_mut("target")
             .and_then(|item| item.as_table_mut())
-            .and_then(|table| table.get_mut("dependencies"))
+            .and_then(|targets| targets.get_mut(cfg))
             .and_then(|item| item.as_table_mut())
+        else {
+            return false;
+        };
+
+        // Remove from `[target.'cfg(...)'.dependencies]`
+        let Some(value) = target
+            .get_mut("dependencies")
+            .and_then(|item| item.as_table_mut())
+            .and_then(|deps| deps.remove(&dep.name))
+        else {
+            return false;
+        };
+
+        // Ensure `[target.'cfg(...)'.dev-dependencies]` exists
+        if !target.contains_key("dev-dependencies") {
+            target["dev-dependencies"] = Item::Table(Table::new());
+        }
+
+        // Insert into `[target.'cfg(...)'.dev-dependencies]`
+        if let Some(dev_deps) =
+            target.get_mut("dev-dependencies").and_then(|item| item.as_table_mut())
         {
-            dependencies.retain(|k, _| !unused_deps.contains(k));
+            dev_deps.insert(&dep.name, value);
+            return true;
         }
+
+        false
     }
 
-    fn remove_package_dependencies(manifest: &mut DocumentMut, unused_deps: &FxHashSet<String>) {
-        for table_name in ["dependencies", "dev-dependencies", "build-dependencies"] {
-            if let Some(dependencies) =
-                manifest.get_mut(table_name).and_then(|item| item.as_table_mut())
-            {
-                dependencies.retain(|k, _| !unused_deps.contains(k));
-            }
-        }
-    }
-
-    fn remove_target_dependencies(manifest: &mut DocumentMut, unused_deps: &FxHashSet<String>) {
-        let Some(target) = manifest.get_mut("target").and_then(|item| item.as_table_mut()) else {
+    fn fix_features(manifest: &mut DocumentMut, unused_deps: &FxHashSet<&str>) {
+        let Some(features) = manifest.get_mut("features").and_then(|item| item.as_table_mut())
+        else {
             return;
         };
 
-        for (_, item) in target.iter_mut() {
-            let Some(table) = item.as_table_mut() else {
+        for (_, deps) in features.iter_mut() {
+            let Some(list) = deps.as_array_mut() else {
                 continue;
             };
 
-            for name in ["dependencies", "dev-dependencies", "build-dependencies"] {
-                if let Some(dependencies) = table.get_mut(name).and_then(|item| item.as_table_mut())
-                {
-                    dependencies.retain(|k, _| !unused_deps.contains(k));
-                }
-            }
-        }
-    }
+            list.retain(|value| {
+                let Some(value) = value.as_str() else {
+                    return true;
+                };
 
-    fn fix_features(manifest: &mut DocumentMut, unused_deps: &FxHashSet<String>) {
-        if let Some(features) = manifest.get_mut("features").and_then(|item| item.as_table_mut()) {
-            for (_feature_name, dependencies) in features.iter_mut() {
-                if let Some(dependencies) = dependencies.as_array_mut() {
-                    dependencies.retain(|dep| {
-                        dep.as_str().is_none_or(|dep_str| {
-                            dep_str.strip_prefix("dep:").map_or_else(
-                                || !unused_deps.contains(dep_str),
-                                |dep_name| !unused_deps.contains(dep_name),
-                            )
-                        })
-                    });
-                }
-            }
+                let dep = value.strip_prefix("dep:").unwrap_or(value);
+                !unused_deps.contains(dep)
+            });
         }
     }
 }

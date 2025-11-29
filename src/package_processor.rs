@@ -34,17 +34,94 @@
 //! Here: `rustls-pki-types`
 
 use std::{
-    env,
+    borrow::Cow,
+    env, fmt,
     path::{Path, PathBuf},
 };
 
 use anyhow::{Result, anyhow};
 use cargo_metadata::{Metadata, NodeDep, Package};
 use cargo_toml::{Dependency, DepsSet, Manifest};
-use cargo_util_schemas::core::PackageIdSpec;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::dependency_analyzer::DependencyAnalyzer;
+
+/// Which table a dependency is in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DepTable {
+    /// `[dependencies]`
+    Normal,
+
+    /// `[dev-dependencies]`
+    Dev,
+
+    /// `[build-dependencies]`
+    Build,
+}
+
+impl fmt::Display for DepTable {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Normal => f.write_str("dependencies"),
+            Self::Dev => f.write_str("dev-dependencies"),
+            Self::Build => f.write_str("build-dependencies"),
+        }
+    }
+}
+
+/// Location of a dependency in Cargo.toml.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum DepLocation {
+    /// Package level dependency table.
+    /// e.g. `[dependencies]`
+    Root(DepTable),
+
+    /// Target specific dependency table.
+    /// e.g. `[target.cfg(unix).dependencies]`
+    Target { cfg: String, table: DepTable },
+}
+
+impl DepLocation {
+    const fn is_normal(&self) -> bool {
+        matches!(self, Self::Root(DepTable::Normal) | Self::Target { table: DepTable::Normal, .. })
+    }
+}
+
+impl fmt::Display for DepLocation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Root(table) => write!(f, "{table}"),
+            Self::Target { cfg, table } => write!(f, "target.'{cfg}'.{table}"),
+        }
+    }
+}
+
+/// An unused dependency.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct UnusedDependency {
+    /// The dependency key.
+    pub name: String,
+
+    /// Where the dependency is in the manifest.
+    pub location: DepLocation,
+}
+
+/// A misplaced dependency.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct MisplacedDependency {
+    /// The dependency key.
+    pub name: String,
+
+    /// Where the dependency is in the manifest.
+    pub location: DepLocation,
+}
+
+/// An unused workspace dependency.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct UnusedWorkspaceDependency {
+    /// The dependency key.
+    pub name: String,
+}
 
 /// Processes packages to identify unused dependencies.
 ///
@@ -59,24 +136,24 @@ pub struct PackageProcessor {
 /// Result of processing a package.
 #[derive(Default)]
 pub struct PackageProcessResult {
-    /// Unused dependency keys.
-    pub unused_dependencies: FxHashSet<String>,
-
     /// Used package names.
     pub used_packages: FxHashSet<String>,
 
+    /// Unused dependencies.
+    pub unused_dependencies: FxHashSet<UnusedDependency>,
+
+    /// Misplaced dependencies.
+    pub misplaced_dependencies: FxHashSet<MisplacedDependency>,
+
     /// Redundant ignores.
     pub redundant_ignores: FxHashSet<String>,
-
-    /// Dependencies in [dependencies] that should be in [dev-dependencies].
-    pub misplaced_dependencies: FxHashSet<String>,
 }
 
 /// Result of processing a workspace.
 #[derive(Default)]
 pub struct WorkspaceProcessResult {
-    /// Unused workspace dependency keys.
-    pub unused_dependencies: FxHashSet<String>,
+    /// Unused workspace dependencies.
+    pub unused_dependencies: FxHashSet<UnusedWorkspaceDependency>,
 
     /// Redundant workspace ignores.
     pub redundant_ignores: FxHashSet<String>,
@@ -111,7 +188,8 @@ impl PackageProcessor {
             .find(|node| node.id == package.id)
             .ok_or_else(|| anyhow!("Package not found: {}", package.name))?;
 
-        let import_to_pkg = Self::import_to_pkg_map(&resolved.deps)?;
+        let import_to_pkg = Self::import_to_pkg_map(metadata, &resolved.deps)?;
+        let pkg_to_import = Self::pkg_to_import_map(&import_to_pkg);
         let used_imports = self.analyzer.analyze_package(package, manifest)?;
         let all_used_imports = used_imports.all_imports();
 
@@ -121,37 +199,42 @@ impl PackageProcessor {
             .map(|dep| dep.replace('-', "_"))
             .collect();
 
-        let mut unused_dependencies = FxHashSet::default();
         let mut used_packages = FxHashSet::default();
+        let mut unused_dependencies = FxHashSet::default();
         let mut misplaced_dependencies = FxHashSet::default();
 
-        for (import, pkg) in &import_to_pkg {
-            let dep = Self::find_dep(manifest, import);
-
-            let is_used = all_used_imports.contains(import);
-            if is_used {
-                used_packages.insert(pkg.clone());
+        for (&import, &pkg) in &import_to_pkg {
+            if all_used_imports.contains(import) {
+                used_packages.insert(pkg.to_owned());
             }
+        }
 
-            if ignored_imports.contains(import) {
+        for (dep, dependency, location) in Self::all_dependencies(manifest) {
+            let pkg = dependency
+                .detail()
+                .and_then(|d| d.package.as_ref())
+                .map_or(dep.as_str(), String::as_str);
+
+            let import = Self::resolve_import_name(&pkg_to_import, dep, pkg);
+            if ignored_imports.contains(&*import) {
                 continue;
             }
 
+            let is_used = all_used_imports.contains(&*import);
             if !is_used {
-                unused_dependencies.insert(dep);
+                unused_dependencies.insert(UnusedDependency { name: dep.clone(), location });
                 continue;
             }
 
-            if !manifest.dependencies.contains_key(&dep) {
-                continue;
-            }
+            if location.is_normal() {
+                let used_in_normal = used_imports.normal.contains(&*import);
+                let used_in_dev = used_imports.dev.contains(&*import);
+                let is_optional = dependency.optional();
 
-            let used_in_normal = used_imports.normal.contains(import);
-            let used_in_dev = used_imports.dev.contains(import);
-            let is_optional = manifest.dependencies.get(&dep).is_some_and(Dependency::optional);
-
-            if !used_in_normal && used_in_dev && !is_optional {
-                misplaced_dependencies.insert(dep);
+                if !used_in_normal && used_in_dev && !is_optional {
+                    misplaced_dependencies
+                        .insert(MisplacedDependency { name: dep.clone(), location });
+                }
             }
         }
 
@@ -159,7 +242,7 @@ impl PackageProcessor {
         for ignored_dep in &package_ignored_deps {
             let ignored_import = ignored_dep.replace('-', "_");
 
-            let doesnt_exist = !import_to_pkg.contains_key(&ignored_import);
+            let doesnt_exist = !import_to_pkg.contains_key(ignored_import.as_str());
             let is_used = all_used_imports.contains(&ignored_import);
 
             if doesnt_exist || is_used {
@@ -168,10 +251,10 @@ impl PackageProcessor {
         }
 
         Ok(PackageProcessResult {
-            unused_dependencies,
             used_packages,
-            redundant_ignores,
+            unused_dependencies,
             misplaced_dependencies,
+            redundant_ignores,
         })
     }
 
@@ -201,7 +284,7 @@ impl PackageProcessor {
             }
 
             if !workspace_used_pkgs.contains(pkg) {
-                unused_dependencies.insert(dep.clone());
+                unused_dependencies.insert(UnusedWorkspaceDependency { name: dep.clone() });
             }
         }
 
@@ -233,13 +316,29 @@ impl PackageProcessor {
     }
 
     /// Build a map from import names to package names from resolved dependencies.
-    fn import_to_pkg_map(imports: &[NodeDep]) -> Result<FxHashMap<String, String>> {
+    fn import_to_pkg_map<'a>(
+        metadata: &'a Metadata,
+        imports: &'a [NodeDep],
+    ) -> Result<FxHashMap<&'a str, &'a str>> {
         imports
             .iter()
             .map(|import| {
-                Self::parse_package_id(&import.pkg.repr).map(|pkg| (import.name.clone(), pkg))
+                let pkg = metadata
+                    .packages
+                    .iter()
+                    .find(|p| p.id == import.pkg)
+                    .ok_or_else(|| anyhow!("Package not found: {}", import.pkg.repr))?;
+
+                Ok((import.name.as_str(), pkg.name.as_str()))
             })
             .collect()
+    }
+
+    /// Build a map from package names to import names.
+    fn pkg_to_import_map<'a>(
+        import_to_pkg: &FxHashMap<&'a str, &'a str>,
+    ) -> FxHashMap<&'a str, &'a str> {
+        import_to_pkg.iter().map(|(&import, &pkg)| (pkg, import)).collect()
     }
 
     /// Build a map from dependency keys to package names from a `DepsSet`.
@@ -256,34 +355,59 @@ impl PackageProcessor {
             .collect()
     }
 
-    /// Find the dependency key for an import name, checking if it exists in the manifest.
-    fn find_dep(manifest: &Manifest, import: &str) -> String {
-        // Look for either a hyphen or underscore version of the import.
-        let dep = import.replace('_', "-");
-
-        let exists = manifest.dependencies.contains_key(&dep)
-            || manifest.dev_dependencies.contains_key(&dep)
-            || manifest.build_dependencies.contains_key(&dep)
-            || manifest.target.values().any(|target| target.dependencies.contains_key(&dep));
-
-        if exists { dep } else { import.to_owned() }
+    /// Resolve the import name for a dependency.
+    fn resolve_import_name<'a>(
+        pkg_to_import: &'a FxHashMap<&str, &str>,
+        dep: &'a str,
+        pkg: &str,
+    ) -> Cow<'a, str> {
+        pkg_to_import
+            .get(pkg)
+            .map_or_else(|| Cow::Owned(dep.replace('-', "_")), |&import| Cow::Borrowed(import))
     }
 
-    /// Parse a package ID string to extract the package name.
-    ///
-    /// Package IDs can have different formats depending on the Rust version:
-    /// - Pre-1.77: `memchr 2.7.1 (registry+https://github.com/rust-lang/crates.io-index)`
-    /// - 1.77+: `registry+https://github.com/rust-lang/crates.io-index#memchr@2.7.1`
-    fn parse_package_id(repr: &str) -> Result<String> {
-        if repr.contains(' ') {
-            repr.split(' ')
-                .next()
-                .map(ToString::to_string)
-                .ok_or_else(|| anyhow!("Parse error: {repr} should have a space"))
-        } else {
-            PackageIdSpec::parse(repr)
-                .map(|id| id.name().to_owned())
-                .map_err(|e| anyhow!("Parse error: {e}"))
+    /// Iterate over all dependencies in a manifest, including target specific ones.
+    fn all_dependencies(manifest: &Manifest) -> Vec<(&String, &Dependency, DepLocation)> {
+        let mut deps = Vec::new();
+
+        for (dep, dependency) in &manifest.dependencies {
+            deps.push((dep, dependency, DepLocation::Root(DepTable::Normal)));
         }
+
+        for (dep, dependency) in &manifest.dev_dependencies {
+            deps.push((dep, dependency, DepLocation::Root(DepTable::Dev)));
+        }
+
+        for (dep, dependency) in &manifest.build_dependencies {
+            deps.push((dep, dependency, DepLocation::Root(DepTable::Build)));
+        }
+
+        for (cfg, target) in &manifest.target {
+            for (dep, dependency) in &target.dependencies {
+                deps.push((
+                    dep,
+                    dependency,
+                    DepLocation::Target { cfg: cfg.clone(), table: DepTable::Normal },
+                ));
+            }
+
+            for (dep, dependency) in &target.dev_dependencies {
+                deps.push((
+                    dep,
+                    dependency,
+                    DepLocation::Target { cfg: cfg.clone(), table: DepTable::Dev },
+                ));
+            }
+
+            for (dep, dependency) in &target.build_dependencies {
+                deps.push((
+                    dep,
+                    dependency,
+                    DepLocation::Target { cfg: cfg.clone(), table: DepTable::Build },
+                ));
+            }
+        }
+
+        deps
     }
 }

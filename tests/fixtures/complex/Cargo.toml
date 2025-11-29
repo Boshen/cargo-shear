@@ -1,0 +1,68 @@
+[package]
+name = "complex"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+unused-optional = ["dep:itoa"]
+unused-optional-feature = ["once_cell/std"]
+unused-optional-weak = ["memchr?/std"]
+misplaced-optional = ["dep:smallvec"]
+misplaced-optional-feature = ["hashbrown/serde"]
+misplaced-optional-weak = ["ahash?/std"]
+
+[dependencies]
+# Unused
+either = "1.0"
+
+# Unused Optional
+itoa = { version = "1.0", optional = true }
+
+# Unused Optional Feature
+once_cell = { version = "1.0", optional = true }
+
+# Unused Optional Feature Weak
+memchr = { version = "2.7", optional = true }
+
+# Unused Renamed
+bitflags_v2 = { package = "bitflags", version = "2.0" }
+
+# Unused Suppressed
+regex-syntax = "0.8"
+
+# Misplaced
+fastrand = "2.0"
+
+# Misplaced Optional
+smallvec = { version = "1.0", optional = true }
+
+# Misplaced Optional Feature
+hashbrown = { version = "0.15", optional = true }
+
+# Misplaced Optional Feature Weak
+ahash = { version = "0.8", optional = true }
+
+# Misplaced Renamed
+ryu_v1 = { package = "ryu", version = "1.0" }
+
+# Misplaced Suppressed
+slab = "0.4"
+
+[dev-dependencies]
+# Unused Dev
+serde = "1.0"
+
+[build-dependencies]
+# Unused Build
+version_check = "0.9"
+
+[target.'cfg(windows)'.dependencies]
+# Unused Platform
+winapi = "0.3"
+
+# Unused Table
+[dependencies.cfg-if]
+version = "1.0"
+
+[package.metadata.cargo-shear]
+ignored = ["regex-syntax", "slab", "fake-crate"]

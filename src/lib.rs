@@ -362,15 +362,15 @@ impl<W: Write> CargoShear<W> {
 
         if unused_count > 0 {
             writeln!(self.writer, "  unused dependencies:")?;
-            for misplaced_dep in &result.unused_dependencies {
-                writeln!(self.writer, "    {misplaced_dep}")?;
+            for unused_dep in &result.unused_dependencies {
+                writeln!(self.writer, "    {}", unused_dep.name)?;
             }
         }
 
         if misplaced_count > 0 {
             writeln!(self.writer, "  move to dev-dependencies:")?;
             for misplaced_dep in &result.misplaced_dependencies {
-                writeln!(self.writer, "    {misplaced_dep}")?;
+                writeln!(self.writer, "    {}", misplaced_dep.name)?;
             }
         }
 
@@ -436,7 +436,7 @@ impl<W: Write> CargoShear<W> {
         writeln!(self.writer, "root -- {path}:")?;
         writeln!(self.writer, "  unused dependencies:")?;
         for unused_dep in &result.unused_dependencies {
-            writeln!(self.writer, "    {unused_dep}")?;
+            writeln!(self.writer, "    {}", unused_dep.name)?;
         }
         writeln!(self.writer)?;
 
@@ -462,7 +462,7 @@ impl<W: Write> CargoShear<W> {
         let mut manifest = DocumentMut::from_str(&content)?;
 
         let fixed =
-            CargoTomlEditor::remove_dependencies(&mut manifest, &result.unused_dependencies);
+            CargoTomlEditor::remove_workspace_deps(&mut manifest, &result.unused_dependencies);
 
         fs::write(manifest_path, manifest.to_string())?;
         self.fixed_dependencies += fixed;

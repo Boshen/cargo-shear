@@ -115,6 +115,81 @@ fn clean_workspace_fix() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// Complex fixture with one of each issue type of issue.
+#[test]
+fn complex_detection() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _) = run_cargo_shear("complex", false)?;
+    assert_eq!(exit_code, ExitCode::FAILURE);
+
+    insta::assert_snapshot!(output, @r#"
+    Analyzing .
+
+    warning: 'slab' in [package.metadata.cargo-shear] for package 'complex' is ignored but not needed; remove it unless you're suppressing a known false positive.
+
+    warning: 'fake-crate' in [package.metadata.cargo-shear] for package 'complex' is ignored but not needed; remove it unless you're suppressing a known false positive.
+
+    complex -- Cargo.toml:
+      unused dependencies:
+        either
+        serde
+        bitflags_v2
+        winapi
+        cfg-if
+        version_check
+      move to dev-dependencies:
+        ryu_v1
+        fastrand
+
+
+    cargo-shear may have detected unused dependencies incorrectly due to its limitations.
+    They can be ignored by adding the crate name to the package's Cargo.toml:
+
+    [package.metadata.cargo-shear]
+    ignored = ["crate-name"]
+
+    or in the workspace Cargo.toml:
+
+    [workspace.metadata.cargo-shear]
+    ignored = ["crate-name"]
+
+    To automatically fix issues, run with --fix
+    "#);
+
+    Ok(())
+}
+
+// Complex fixture should fix all fixable issues.
+#[test]
+fn complex_fix() -> Result<(), Box<dyn Error>> {
+    let (exit_code, _, temp_dir) = run_cargo_shear("complex", true)?;
+    assert_eq!(exit_code, ExitCode::FAILURE);
+
+    let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
+    let windows = manifest.target.get("cfg(windows)");
+
+    // Fixed
+    assert!(!manifest.dependencies.contains_key("either"));
+    assert!(!manifest.dependencies.contains_key("bitflags_v2"));
+    assert!(!manifest.dependencies.contains_key("cfg-if"));
+    assert!(!manifest.dev_dependencies.contains_key("serde"));
+    assert!(!manifest.build_dependencies.contains_key("version_check"));
+    assert!(!windows.is_some_and(|table| table.dependencies.contains_key("winapi")));
+    assert!(manifest.dev_dependencies.contains_key("fastrand"));
+    assert!(manifest.dev_dependencies.contains_key("ryu_v1"));
+
+    // Can't Fix
+    assert!(manifest.dependencies.contains_key("itoa"));
+    assert!(manifest.dependencies.contains_key("once_cell"));
+    assert!(manifest.dependencies.contains_key("memchr"));
+    assert!(manifest.dependencies.contains_key("regex-syntax"));
+    assert!(manifest.dependencies.contains_key("smallvec"));
+    assert!(manifest.dependencies.contains_key("hashbrown"));
+    assert!(manifest.dependencies.contains_key("ahash"));
+    assert!(manifest.dependencies.contains_key("slab"));
+
+    Ok(())
+}
+
 // `anyhow` is unused but suppressed via package ignore config.
 #[test]
 fn ignored() -> Result<(), Box<dyn Error>> {
@@ -279,6 +354,51 @@ fn misplaced_optional_fix() -> Result<(), Box<dyn Error>> {
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
     assert!(manifest.dependencies.contains_key("anyhow"));
     assert!(!manifest.dev_dependencies.contains_key("anyhow"));
+
+    Ok(())
+}
+
+// `anyhow` is only used in tests but declared in target specific `dependencies`.
+#[test]
+fn misplaced_platform_detection() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _) = run_cargo_shear("misplaced_platform", false)?;
+    assert_eq!(exit_code, ExitCode::FAILURE);
+
+    insta::assert_snapshot!(output, @r#"
+    Analyzing .
+
+    misplaced_platform -- Cargo.toml:
+      move to dev-dependencies:
+        anyhow
+
+
+    cargo-shear may have detected unused dependencies incorrectly due to its limitations.
+    They can be ignored by adding the crate name to the package's Cargo.toml:
+
+    [package.metadata.cargo-shear]
+    ignored = ["crate-name"]
+
+    or in the workspace Cargo.toml:
+
+    [workspace.metadata.cargo-shear]
+    ignored = ["crate-name"]
+
+    To automatically fix issues, run with --fix
+    "#);
+
+    Ok(())
+}
+
+// `anyhow` should be moved from target specific `dependencies` to `dev-dependencies`.
+#[test]
+fn misplaced_platform_fix() -> Result<(), Box<dyn Error>> {
+    let (exit_code, _, temp_dir) = run_cargo_shear("misplaced_platform", true)?;
+    assert_eq!(exit_code, ExitCode::FAILURE);
+
+    let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
+    let unix = manifest.target.get("cfg(unix)").expect("cfg(unix) target should exist");
+    assert!(unix.dev_dependencies.contains_key("anyhow"));
+    assert!(!unix.dependencies.contains_key("anyhow"));
 
     Ok(())
 }
@@ -820,6 +940,49 @@ fn unused_renamed_fix() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// Dependency `criterion2` (lib.name = "criterion") is unused.
+#[test]
+fn unused_libname_detection() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _) = run_cargo_shear("unused_libname", false)?;
+    assert_eq!(exit_code, ExitCode::FAILURE);
+
+    insta::assert_snapshot!(output, @r#"
+    Analyzing .
+
+    unused_libname -- Cargo.toml:
+      unused dependencies:
+        criterion2
+
+
+    cargo-shear may have detected unused dependencies incorrectly due to its limitations.
+    They can be ignored by adding the crate name to the package's Cargo.toml:
+
+    [package.metadata.cargo-shear]
+    ignored = ["crate-name"]
+
+    or in the workspace Cargo.toml:
+
+    [workspace.metadata.cargo-shear]
+    ignored = ["crate-name"]
+
+    To automatically fix issues, run with --fix
+    "#);
+
+    Ok(())
+}
+
+// Unused dependency `criterion2` (lib.name = "criterion") should be removed.
+#[test]
+fn unused_libname_fix() -> Result<(), Box<dyn Error>> {
+    let (exit_code, _, temp_dir) = run_cargo_shear("unused_libname", true)?;
+    assert_eq!(exit_code, ExitCode::FAILURE);
+
+    let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
+    assert!(!manifest.dependencies.contains_key("criterion2"));
+
+    Ok(())
+}
+
 // Table syntax `anyhow` is unused.
 #[test]
 fn unused_table_detection() -> Result<(), Box<dyn Error>> {
@@ -947,6 +1110,50 @@ fn unused_workspace_renamed_fix() -> Result<(), Box<dyn Error>> {
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
     let workspace = &manifest.workspace.as_ref().unwrap().dependencies;
     assert!(!workspace.contains_key("anyhow_v1"));
+
+    Ok(())
+}
+
+// Workspace dependency `criterion2` (lib.name = "criterion") is unused.
+#[test]
+fn unused_workspace_libname_detection() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _) = run_cargo_shear("unused_workspace_libname", false)?;
+    assert_eq!(exit_code, ExitCode::FAILURE);
+
+    insta::assert_snapshot!(output, @r#"
+    Analyzing .
+
+    root -- ./Cargo.toml:
+      unused dependencies:
+        criterion2
+
+
+    cargo-shear may have detected unused dependencies incorrectly due to its limitations.
+    They can be ignored by adding the crate name to the package's Cargo.toml:
+
+    [package.metadata.cargo-shear]
+    ignored = ["crate-name"]
+
+    or in the workspace Cargo.toml:
+
+    [workspace.metadata.cargo-shear]
+    ignored = ["crate-name"]
+
+    To automatically fix issues, run with --fix
+    "#);
+
+    Ok(())
+}
+
+// Unused workspace dependency `criterion2` (lib.name = "criterion") should be removed.
+#[test]
+fn unused_workspace_libname_fix() -> Result<(), Box<dyn Error>> {
+    let (exit_code, _, temp_dir) = run_cargo_shear("unused_workspace_libname", true)?;
+    assert_eq!(exit_code, ExitCode::FAILURE);
+
+    let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
+    let workspace = &manifest.workspace.as_ref().unwrap().dependencies;
+    assert!(!workspace.contains_key("criterion2"));
 
     Ok(())
 }
