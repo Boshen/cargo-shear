@@ -80,8 +80,9 @@ dependencies = [
  "ra_ap_syntax",
  "rayon",
  "rustc-hash 2.1.1",
- "serde_json",
+ "serde",
  "tempfile",
+ "toml",
  "toml_edit",
  "walkdir",
 ]

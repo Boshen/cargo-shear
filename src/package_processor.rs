@@ -35,66 +35,19 @@
 
 use std::{
     borrow::Cow,
-    env, fmt,
+    env,
     path::{Path, PathBuf},
 };
 
 use anyhow::{Result, anyhow};
 use cargo_metadata::{Metadata, NodeDep, Package};
-use cargo_toml::{Dependency, DepsSet, Manifest};
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::dependency_analyzer::{DependencyAnalyzer, FeatureRef};
-
-/// Which table a dependency is in.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum DepTable {
-    /// `[dependencies]`
-    Normal,
-
-    /// `[dev-dependencies]`
-    Dev,
-
-    /// `[build-dependencies]`
-    Build,
-}
-
-impl fmt::Display for DepTable {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Normal => f.write_str("dependencies"),
-            Self::Dev => f.write_str("dev-dependencies"),
-            Self::Build => f.write_str("build-dependencies"),
-        }
-    }
-}
-
-/// Location of a dependency in Cargo.toml.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum DepLocation {
-    /// Package level dependency table.
-    /// e.g. `[dependencies]`
-    Root(DepTable),
-
-    /// Target specific dependency table.
-    /// e.g. `[target.cfg(unix).dependencies]`
-    Target { cfg: String, table: DepTable },
-}
-
-impl DepLocation {
-    const fn is_normal(&self) -> bool {
-        matches!(self, Self::Root(DepTable::Normal) | Self::Target { table: DepTable::Normal, .. })
-    }
-}
-
-impl fmt::Display for DepLocation {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Root(table) => write!(f, "{table}"),
-            Self::Target { cfg, table } => write!(f, "target.'{cfg}'.{table}"),
-        }
-    }
-}
+pub use crate::manifest::DepLocation;
+use crate::{
+    dependency_analyzer::{DependencyAnalyzer, FeatureRef},
+    manifest::{DepsSet, Manifest},
+};
 
 /// An unused dependency.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -217,17 +170,15 @@ impl PackageProcessor {
     }
 
     /// Process a package to find unused/misplaced dependencies and track used packages.
-    #[expect(clippy::too_many_lines, reason = "Main processing logic, not worth splitting up")]
     pub fn process_package(
         &self,
         metadata: &Metadata,
         package: &Package,
         manifest: &Manifest,
+        workspace_manifest: &Manifest,
     ) -> Result<PackageProcessResult> {
-        let package_ignored_deps =
-            DependencyAnalyzer::get_ignored_dependency_keys(&package.metadata);
-        let workspace_ignored_deps =
-            DependencyAnalyzer::get_ignored_dependency_keys(&metadata.workspace_metadata);
+        let package_ignored_deps = &manifest.package.metadata.cargo_shear.ignored;
+        let workspace_ignored_deps = &workspace_manifest.workspace.metadata.cargo_shear.ignored;
 
         let resolved = metadata
             .resolve
@@ -247,8 +198,8 @@ impl PackageProcessor {
 
         let ignored_imports: FxHashSet<String> = package_ignored_deps
             .iter()
-            .chain(&workspace_ignored_deps)
-            .map(|dep| dep.replace('-', "_"))
+            .chain(workspace_ignored_deps)
+            .map(|dep| dep.get_ref().replace('-', "_"))
             .collect();
 
         let mut used_packages = FxHashSet::default();
@@ -264,18 +215,15 @@ impl PackageProcessor {
             }
         }
 
-        for (dep, dependency, location) in Self::all_dependencies(manifest) {
-            let pkg = dependency
-                .detail()
-                .and_then(|d| d.package.as_ref())
-                .map_or(dep.as_str(), String::as_str);
+        for (dep, dependency, location) in manifest.all_dependencies() {
+            let pkg = dependency.get_ref().package().unwrap_or_else(|| dep.get_ref().as_str());
 
-            let import = Self::resolve_import_name(&pkg_to_import, dep, pkg);
+            let import = Self::resolve_import_name(&pkg_to_import, dep.get_ref(), pkg);
             if ignored_imports.contains(&*import) {
                 continue;
             }
 
-            let is_optional = dependency.optional();
+            let is_optional = dependency.get_ref().optional();
 
             let used_in_normal = used_imports.normal.contains(&*import);
             let used_in_dev = used_imports.dev.contains(&*import);
@@ -288,7 +236,7 @@ impl PackageProcessor {
             if !used_in_code {
                 if is_optional {
                     unused_optional_dependencies.insert(UnusedOptionalDependency {
-                        name: dep.clone(),
+                        name: dep.get_ref().clone(),
                         location,
                         features: features.cloned().unwrap_or_default(),
                     });
@@ -298,12 +246,13 @@ impl PackageProcessor {
 
                 if used_in_features {
                     unused_feature_dependencies.insert(UnusedFeatureDependency {
-                        name: dep.clone(),
+                        name: dep.get_ref().clone(),
                         location,
                         features: features.cloned().unwrap_or_default(),
                     });
                 } else {
-                    unused_dependencies.insert(UnusedDependency { name: dep.clone(), location });
+                    unused_dependencies
+                        .insert(UnusedDependency { name: dep.get_ref().clone(), location });
                 }
 
                 continue;
@@ -312,26 +261,27 @@ impl PackageProcessor {
             if location.is_normal() && !used_in_normal && used_in_dev {
                 if is_optional {
                     misplaced_optional_dependencies.insert(MisplacedOptionalDependency {
-                        name: dep.clone(),
+                        name: dep.get_ref().clone(),
                         location,
                         features: features.cloned().unwrap_or_default(),
                     });
                 } else {
                     misplaced_dependencies
-                        .insert(MisplacedDependency { name: dep.clone(), location });
+                        .insert(MisplacedDependency { name: dep.get_ref().clone(), location });
                 }
             }
         }
 
         let mut redundant_ignores = FxHashSet::default();
-        for ignored_dep in &package_ignored_deps {
+        for ignored_dep in package_ignored_deps {
+            let ignored_dep = ignored_dep.get_ref();
             let ignored_import = ignored_dep.replace('-', "_");
 
             let doesnt_exist = !import_to_pkg.contains_key(ignored_import.as_str());
             let is_used = all_used_imports.contains(&ignored_import);
 
             if doesnt_exist || is_used {
-                redundant_ignores.insert((*ignored_dep).to_owned());
+                redundant_ignores.insert(ignored_dep.clone());
             }
         }
 
@@ -356,18 +306,17 @@ impl PackageProcessor {
             return WorkspaceProcessResult::default();
         }
 
-        let Some(workspace) = &manifest.workspace else {
+        if manifest.workspace.dependencies.is_empty() {
             return WorkspaceProcessResult::default();
-        };
+        }
 
-        let ignored_deps =
-            DependencyAnalyzer::get_ignored_dependency_keys(&metadata.workspace_metadata);
+        let ignored_deps = &manifest.workspace.metadata.cargo_shear.ignored;
 
-        let dep_to_pkg = Self::dep_to_pkg_map(&workspace.dependencies);
+        let dep_to_pkg = Self::dep_to_pkg_map(&manifest.workspace.dependencies);
 
         let mut unused_dependencies = FxHashSet::default();
         for (dep, pkg) in &dep_to_pkg {
-            if ignored_deps.contains(dep.as_str()) {
+            if ignored_deps.iter().any(|d| d.get_ref() == dep) {
                 continue;
             }
 
@@ -377,13 +326,14 @@ impl PackageProcessor {
         }
 
         let mut redundant_ignores = FxHashSet::default();
-        for ignored_dep in &ignored_deps {
-            let doesnt_exist = !dep_to_pkg.contains_key(*ignored_dep);
+        for ignored_dep in ignored_deps {
+            let ignored_dep = ignored_dep.get_ref();
+            let doesnt_exist = !dep_to_pkg.contains_key(ignored_dep);
             let is_used =
-                dep_to_pkg.get(*ignored_dep).is_some_and(|pkg| workspace_used_pkgs.contains(pkg));
+                dep_to_pkg.get(ignored_dep).is_some_and(|pkg| workspace_used_pkgs.contains(pkg));
 
             if doesnt_exist || is_used {
-                redundant_ignores.insert((*ignored_dep).to_owned());
+                redundant_ignores.insert(ignored_dep.clone());
             }
         }
 
@@ -433,11 +383,8 @@ impl PackageProcessor {
     fn dep_to_pkg_map(deps: &DepsSet) -> FxHashMap<String, String> {
         deps.iter()
             .map(|(dep, dependency)| {
-                let pkg = dependency
-                    .detail()
-                    .and_then(|detail| detail.package.as_ref())
-                    .map_or_else(|| dep.to_owned(), Clone::clone);
-
+                let dep = dep.get_ref();
+                let pkg = dependency.get_ref().package().map_or_else(|| dep.clone(), str::to_owned);
                 (dep.clone(), pkg)
             })
             .collect()
@@ -452,50 +399,5 @@ impl PackageProcessor {
         pkg_to_import
             .get(pkg)
             .map_or_else(|| Cow::Owned(dep.replace('-', "_")), |&import| Cow::Borrowed(import))
-    }
-
-    /// Iterate over all dependencies in a manifest, including target specific ones.
-    fn all_dependencies(manifest: &Manifest) -> Vec<(&String, &Dependency, DepLocation)> {
-        let mut deps = Vec::new();
-
-        for (dep, dependency) in &manifest.dependencies {
-            deps.push((dep, dependency, DepLocation::Root(DepTable::Normal)));
-        }
-
-        for (dep, dependency) in &manifest.dev_dependencies {
-            deps.push((dep, dependency, DepLocation::Root(DepTable::Dev)));
-        }
-
-        for (dep, dependency) in &manifest.build_dependencies {
-            deps.push((dep, dependency, DepLocation::Root(DepTable::Build)));
-        }
-
-        for (cfg, target) in &manifest.target {
-            for (dep, dependency) in &target.dependencies {
-                deps.push((
-                    dep,
-                    dependency,
-                    DepLocation::Target { cfg: cfg.clone(), table: DepTable::Normal },
-                ));
-            }
-
-            for (dep, dependency) in &target.dev_dependencies {
-                deps.push((
-                    dep,
-                    dependency,
-                    DepLocation::Target { cfg: cfg.clone(), table: DepTable::Dev },
-                ));
-            }
-
-            for (dep, dependency) in &target.build_dependencies {
-                deps.push((
-                    dep,
-                    dependency,
-                    DepLocation::Target { cfg: cfg.clone(), table: DepTable::Build },
-                ));
-            }
-        }
-
-        deps
     }
 }

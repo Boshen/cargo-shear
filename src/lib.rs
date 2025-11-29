@@ -33,6 +33,7 @@
 mod cargo_toml_editor;
 mod dependency_analyzer;
 mod import_collector;
+mod manifest;
 mod package_processor;
 #[cfg(test)]
 mod tests;
@@ -48,13 +49,13 @@ use std::{
 use anyhow::Result;
 use bpaf::Bpaf;
 use cargo_metadata::{CargoOpt, Metadata, MetadataCommand, Package};
-use cargo_toml::Manifest;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use rustc_hash::FxHashSet;
 use toml_edit::DocumentMut;
 
 use crate::{
     cargo_toml_editor::CargoTomlEditor,
+    manifest::Manifest,
     package_processor::{PackageProcessResult, PackageProcessor, WorkspaceProcessResult},
 };
 
@@ -274,6 +275,10 @@ impl<W: Write> CargoShear<W> {
 
         let processor = PackageProcessor::new(self.options.expand);
 
+        let workspace_manifest_path = metadata.workspace_root.as_std_path().join("Cargo.toml");
+        let workspace_content = fs::read_to_string(&workspace_manifest_path)?;
+        let workspace_manifest: Manifest = toml::from_str(&workspace_content)?;
+
         let packages = metadata.workspace_packages();
         let packages: Vec<_> = packages
             .into_iter()
@@ -299,8 +304,14 @@ impl<W: Write> CargoShear<W> {
             .par_iter()
             .map(|package| {
                 let manifest_path = package.manifest_path.as_std_path();
-                let manifest = Manifest::from_path(manifest_path)?;
-                let result = processor.process_package(&metadata, package, &manifest)?;
+                let content = fs::read_to_string(manifest_path)?;
+                let manifest: Manifest = toml::from_str(&content)?;
+                let result = processor.process_package(
+                    &metadata,
+                    package,
+                    &manifest,
+                    &workspace_manifest,
+                )?;
                 Ok::<_, anyhow::Error>((*package, manifest_path, result))
             })
             .collect::<Result<Vec<_>>>()?;
@@ -316,17 +327,14 @@ impl<W: Write> CargoShear<W> {
         }
 
         // Process workspace
-        let manifest_path = metadata.workspace_root.as_std_path().join("Cargo.toml");
-        let workspace_manifest = Manifest::from_path(&manifest_path)?;
-
         let workspace_result = PackageProcessor::process_workspace(
             &workspace_manifest,
             &metadata,
             &workspace_used_pkgs,
         );
 
-        self.report_workspace_issues(&manifest_path, &workspace_result)?;
-        self.fix_workspace_issues(&manifest_path, &workspace_result)?;
+        self.report_workspace_issues(&workspace_manifest_path, &workspace_result)?;
+        self.fix_workspace_issues(&workspace_manifest_path, &workspace_result)?;
 
         Ok(())
     }
