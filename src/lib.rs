@@ -341,7 +341,7 @@ impl<W: Write> CargoShear<W> {
         for ignored_dep in &result.redundant_ignores {
             writeln!(
                 self.writer,
-                "warning: '{ignored_dep}' is redundant in [package.metadata.cargo-shear] for package '{}'.\n",
+                "warning: '{ignored_dep}' in [package.metadata.cargo-shear] for package '{}' is ignored but not needed; remove it unless you're suppressing a known false positive.\n",
                 package.name
             )?;
         }
@@ -420,7 +420,7 @@ impl<W: Write> CargoShear<W> {
         for ignored_dep in &result.redundant_ignores {
             writeln!(
                 self.writer,
-                "warning: '{ignored_dep}' is redundant in [workspace.metadata.cargo-shear].\n"
+                "warning: '{ignored_dep}' in [workspace.metadata.cargo-shear] is ignored but not needed; remove it unless you're suppressing a known false positive.\n"
             )?;
         }
 

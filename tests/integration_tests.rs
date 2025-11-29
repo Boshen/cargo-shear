@@ -139,7 +139,7 @@ fn ignored_invalid() -> Result<(), Box<dyn Error>> {
     insta::assert_snapshot!(output, @r"
     Analyzing .
 
-    warning: 'anywho' is redundant in [package.metadata.cargo-shear] for package 'ignored_invalid'.
+    warning: 'anywho' in [package.metadata.cargo-shear] for package 'ignored_invalid' is ignored but not needed; remove it unless you're suppressing a known false positive.
 
     No issues detected!
     ");
@@ -156,7 +156,7 @@ fn ignored_redundant() -> Result<(), Box<dyn Error>> {
     insta::assert_snapshot!(output, @r"
     Analyzing .
 
-    warning: 'anyhow' is redundant in [package.metadata.cargo-shear] for package 'ignored_redundant'.
+    warning: 'anyhow' in [package.metadata.cargo-shear] for package 'ignored_redundant' is ignored but not needed; remove it unless you're suppressing a known false positive.
 
     No issues detected!
     ");
@@ -188,7 +188,7 @@ fn ignored_workspace_redundant() -> Result<(), Box<dyn Error>> {
     insta::assert_snapshot!(output, @r"
     Analyzing .
 
-    warning: 'anyhow' is redundant in [workspace.metadata.cargo-shear].
+    warning: 'anyhow' in [workspace.metadata.cargo-shear] is ignored but not needed; remove it unless you're suppressing a known false positive.
 
     No issues detected!
     ");
