@@ -1,0 +1,46 @@
+[changelog]
+body = """
+
+## [{{ version }}]\
+    {%- if release_link -%}\
+        ({{ release_link }})\
+    {% endif %} \
+    - {{ timestamp | date(format="%Y-%m-%d") }}
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | upper_first }}
+    {% for commit in commits %}
+        {%- if commit.scope -%}
+            - *({{commit.scope}})* {% if commit.breaking %}[**breaking**] {% endif %}\
+                {{ commit.message }}{{ self::username(commit=commit) }}\
+                {%- if commit.links %} \
+                    ({% for link in commit.links %}[{{link.text}}]({{link.href}}) {% endfor -%})\
+                {% endif %}
+        {% else -%}
+            - {% if commit.breaking %}[**breaking**] {% endif %}{{ commit.message }}{{ self::username(commit=commit) }}
+        {% endif -%}
+    {% endfor -%}
+{% endfor %}
+{%- if remote.contributors %}
+### Contributors
+{% for contributor in remote.contributors %}
+    * @{{ contributor.username }}
+{%- endfor %}
+{% endif -%}
+{%- macro username(commit) -%}
+    {% if commit.remote.username %} (by @{{ commit.remote.username }}){% endif -%}
+{% endmacro -%}
+"""
+
+commit_parsers = [
+  { message = "^feat", group = "<!-- 0 -->🚀 Features" },
+  { message = "^fix", group = "<!-- 1 -->🐛 Bug Fixes" },
+  { message = "^refactor", group = "<!-- 2 -->🚜 Refactor" },
+  { message = "^doc", group = "<!-- 3 -->📚 Documentation" },
+  { message = "^perf", group = "<!-- 4 -->⚡ Performance" },
+  { message = "^style", group = "<!-- 5 -->🎨 Styling" },
+  { message = "^test", group = "<!-- 6 -->🧪 Testing" },
+  { message = "^chore|^ci|^deps", skip = true },
+  { body = ".*security", group = "<!-- 7 -->🛡️ Security" },
+  { message = "^revert", group = "<!-- 8 -->◀️ Revert" },
+  { message = ".*", group = "<!-- 9 -->💼 Other" },
+]
