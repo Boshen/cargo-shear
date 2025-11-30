@@ -20,10 +20,78 @@ use anyhow::{Result, anyhow};
 use cargo_metadata::{Package, Target, TargetKind};
 use cargo_toml::Manifest;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 use walkdir::{DirEntry, WalkDir};
 
 use crate::import_collector::collect_imports;
+
+/// How a dependency is referenced in `[features]`.
+///
+/// See: <https://doc.rust-lang.org/cargo/reference/features.html>
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum FeatureRef {
+    /// Implicit feature from an optional dependency.
+    /// Cargo only creates an implicit feature for an optional dependency if there are no `dep:` references to it.
+    ///
+    /// ```toml
+    /// [dependencies]
+    /// foo = { version = "1.0", optional = true }
+    /// ```
+    Implicit,
+
+    /// Explicit dependency reference.
+    ///
+    /// ```toml
+    /// [features]
+    /// feature = ["dep:foo"]
+    /// ```
+    Explicit { feature: String },
+
+    /// Dependency feature enablement.
+    ///
+    /// ```toml
+    /// [features]
+    /// feature = ["foo/bar"]
+    /// ```
+    DepFeature { feature: String },
+
+    /// Weak dependency feature enablement.
+    ///
+    /// ```toml
+    /// [features]
+    /// feature = ["foo?/bar"]
+    /// ```
+    WeakDepFeature { feature: String },
+}
+
+impl FeatureRef {
+    fn parse(feature: &str, value: &str) -> Option<(String, Self)> {
+        // Handle `dep:foo` syntax
+        if let Some(dep) = value.strip_prefix("dep:") {
+            let import = dep.replace('-', "_");
+            return Some((import, Self::Explicit { feature: feature.to_owned() }));
+        }
+
+        // Handle `foo/bar` and `foo?/bar` syntax
+        if let Some((dep, _)) = value.split_once('/') {
+            let is_weak = dep.ends_with('?');
+
+            let dep = dep.trim_end_matches('?');
+            let import = dep.replace('-', "_");
+
+            let feature = if is_weak {
+                Self::WeakDepFeature { feature: feature.to_owned() }
+            } else {
+                Self::DepFeature { feature: feature.to_owned() }
+            };
+
+            return Some((import, feature));
+        }
+
+        // Assume this is enabling another feature
+        None
+    }
+}
 
 /// Categorized imports based on where they are used.
 #[derive(Debug, Default)]
@@ -36,11 +104,19 @@ pub struct CategorizedImports {
 
     /// Imports used in build scripts.
     pub build: FxHashSet<String>,
+
+    /// Mapping of imports to any relevant features.
+    pub features: FxHashMap<String, Vec<FeatureRef>>,
 }
 
 impl CategorizedImports {
     pub fn all_imports(&self) -> FxHashSet<String> {
-        self.normal.union(&self.dev).chain(&self.build).cloned().collect()
+        self.normal
+            .union(&self.dev)
+            .chain(&self.build)
+            .chain(self.features.keys())
+            .cloned()
+            .collect()
     }
 }
 
@@ -66,22 +142,19 @@ impl DependencyAnalyzer {
         package: &Package,
         manifest: &Manifest,
     ) -> Result<CategorizedImports> {
-        let mut categorized = if self.expand_macros {
-            Self::analyze_with_expansion(package)?
+        let mut categorized = CategorizedImports::default();
+
+        if self.expand_macros {
+            Self::analyze_with_expansion(&mut categorized, package)?;
         } else {
-            Self::analyze_from_files(package)?
-        };
+            Self::analyze_from_files(&mut categorized, package)?;
+        }
 
-        // Features can only be normal dependencies
-        let features = Self::analyze_features(manifest);
-        categorized.normal.extend(features);
-
+        Self::analyze_features(&mut categorized, manifest);
         Ok(categorized)
     }
 
-    fn analyze_from_files(package: &Package) -> Result<CategorizedImports> {
-        let mut categorized = CategorizedImports::default();
-
+    fn analyze_from_files(categorized: &mut CategorizedImports, package: &Package) -> Result<()> {
         for target in &package.targets {
             let target_kind = target.kind.first().ok_or_else(|| anyhow!("Target has no kind"))?;
             let rust_files = Self::get_target_rust_files(target);
@@ -95,14 +168,17 @@ impl DependencyAnalyzer {
                 .into_iter()
                 .fold(FxHashSet::default(), |a, b| a.union(&b).cloned().collect());
 
-            Self::categorize_imports(&mut categorized, target_kind, imports);
+            Self::categorize_imports(categorized, target_kind, imports);
         }
 
-        Ok(categorized)
+        Ok(())
     }
 
-    fn analyze_with_expansion(package: &Package) -> Result<CategorizedImports> {
-        let mut categorized = Self::analyze_from_files(package)?;
+    fn analyze_with_expansion(
+        categorized: &mut CategorizedImports,
+        package: &Package,
+    ) -> Result<()> {
+        Self::analyze_from_files(categorized, package)?;
 
         for target in &package.targets {
             let target_kind =
@@ -156,10 +232,10 @@ impl DependencyAnalyzer {
             }
 
             let imports = collect_imports(&output_str);
-            Self::categorize_imports(&mut categorized, target_kind, imports);
+            Self::categorize_imports(categorized, target_kind, imports);
         }
 
-        Ok(categorized)
+        Ok(())
     }
 
     /// Collect all Rust source files for a target.
@@ -213,30 +289,11 @@ impl DependencyAnalyzer {
     }
 
     /// Collect import names for dependencies referenced in features.
-    ///
-    /// This handles:
-    /// - Explicit features (e.g. `["dep:foo"]`)
-    /// - Feature enablement (e.g. `["foo/std"]`)
-    /// - Weak feature enablement (e.g. `["foo?/std"]`)
-    /// - Implicit dependencies (e.g. `foo = { optional = true }`)
-    ///
-    /// We convert these dependency keys into imports, in order to simplify merging with discovered source code imports.
-    fn analyze_features(manifest: &Manifest) -> FxHashSet<String> {
-        let mut imports = FxHashSet::default();
-
-        // Collect explicit features
-        for features in manifest.features.values() {
-            for feature in features {
-                if let Some(dep) = feature.strip_prefix("dep:") {
-                    let import = dep.replace('-', "_");
-                    imports.insert(import);
-                    continue;
-                }
-
-                if let Some((dep, _)) = feature.split_once('/') {
-                    let dep = dep.trim_end_matches('?');
-                    let import = dep.replace('-', "_");
-                    imports.insert(import);
+    fn analyze_features(categorized: &mut CategorizedImports, manifest: &Manifest) {
+        for (feature, values) in &manifest.features {
+            for value in values {
+                if let Some((import, feature)) = FeatureRef::parse(feature, value) {
+                    categorized.features.entry(import).or_default().push(feature);
                 }
             }
         }
@@ -245,11 +302,15 @@ impl DependencyAnalyzer {
         for (dep, details) in &manifest.dependencies {
             if details.optional() {
                 let import = dep.replace('-', "_");
-                imports.insert(import);
+                let has_explicit = categorized.features.get(&import).is_some_and(|features| {
+                    features.iter().any(|feature| matches!(feature, FeatureRef::Explicit { .. }))
+                });
+
+                if !has_explicit {
+                    categorized.features.entry(import).or_default().push(FeatureRef::Implicit);
+                }
             }
         }
-
-        imports
     }
 
     /// Extract the list of ignored deps from metadata.

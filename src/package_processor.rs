@@ -44,7 +44,7 @@ use cargo_metadata::{Metadata, NodeDep, Package};
 use cargo_toml::{Dependency, DepsSet, Manifest};
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::dependency_analyzer::DependencyAnalyzer;
+use crate::dependency_analyzer::{DependencyAnalyzer, FeatureRef};
 
 /// Which table a dependency is in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -106,6 +106,32 @@ pub struct UnusedDependency {
     pub location: DepLocation,
 }
 
+/// An unused optional dependency.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct UnusedOptionalDependency {
+    /// The dependency key.
+    pub name: String,
+
+    /// Where the dependency is in the manifest.
+    pub location: DepLocation,
+
+    /// Features referencing this dependency.
+    pub features: Vec<FeatureRef>,
+}
+
+/// An unused dependency only referenced in features.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct UnusedFeatureDependency {
+    /// The dependency key.
+    pub name: String,
+
+    /// Where the dependency is in the manifest.
+    pub location: DepLocation,
+
+    /// Features referencing this dependency.
+    pub features: Vec<FeatureRef>,
+}
+
 /// A misplaced dependency.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MisplacedDependency {
@@ -114,6 +140,19 @@ pub struct MisplacedDependency {
 
     /// Where the dependency is in the manifest.
     pub location: DepLocation,
+}
+
+/// A misplaced optional dependency.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct MisplacedOptionalDependency {
+    /// The dependency key.
+    pub name: String,
+
+    /// Where the dependency is in the manifest.
+    pub location: DepLocation,
+
+    /// Features referencing this dependency.
+    pub features: Vec<FeatureRef>,
 }
 
 /// An unused workspace dependency.
@@ -142,8 +181,20 @@ pub struct PackageProcessResult {
     /// Unused dependencies.
     pub unused_dependencies: FxHashSet<UnusedDependency>,
 
+    /// Unused optional dependencies.
+    #[expect(dead_code, reason = "Tracked for future warnings")]
+    pub unused_optional_dependencies: FxHashSet<UnusedOptionalDependency>,
+
+    /// Unused dependencies only referenced in features.
+    #[expect(dead_code, reason = "Tracked for future warnings")]
+    pub unused_feature_dependencies: FxHashSet<UnusedFeatureDependency>,
+
     /// Misplaced dependencies.
     pub misplaced_dependencies: FxHashSet<MisplacedDependency>,
+
+    /// Misplaced optional dependencies.
+    #[expect(dead_code, reason = "Tracked for future warnings")]
+    pub misplaced_optional_dependencies: FxHashSet<MisplacedOptionalDependency>,
 
     /// Redundant ignores.
     pub redundant_ignores: FxHashSet<String>,
@@ -166,6 +217,7 @@ impl PackageProcessor {
     }
 
     /// Process a package to find unused/misplaced dependencies and track used packages.
+    #[expect(clippy::too_many_lines, reason = "Main processing logic, not worth splitting up")]
     pub fn process_package(
         &self,
         metadata: &Metadata,
@@ -201,7 +253,10 @@ impl PackageProcessor {
 
         let mut used_packages = FxHashSet::default();
         let mut unused_dependencies = FxHashSet::default();
+        let mut unused_optional_dependencies = FxHashSet::default();
+        let mut unused_feature_dependencies = FxHashSet::default();
         let mut misplaced_dependencies = FxHashSet::default();
+        let mut misplaced_optional_dependencies = FxHashSet::default();
 
         for (&import, &pkg) in &import_to_pkg {
             if all_used_imports.contains(import) {
@@ -220,18 +275,48 @@ impl PackageProcessor {
                 continue;
             }
 
-            let is_used = all_used_imports.contains(&*import);
-            if !is_used {
-                unused_dependencies.insert(UnusedDependency { name: dep.clone(), location });
+            let is_optional = dependency.optional();
+
+            let used_in_normal = used_imports.normal.contains(&*import);
+            let used_in_dev = used_imports.dev.contains(&*import);
+            let used_in_build = used_imports.build.contains(&*import);
+
+            let features = used_imports.features.get(&*import);
+            let used_in_features = features.is_some();
+
+            let used_in_code = used_in_normal || used_in_dev || used_in_build;
+            if !used_in_code {
+                if is_optional {
+                    unused_optional_dependencies.insert(UnusedOptionalDependency {
+                        name: dep.clone(),
+                        location,
+                        features: features.cloned().unwrap_or_default(),
+                    });
+
+                    continue;
+                }
+
+                if used_in_features {
+                    unused_feature_dependencies.insert(UnusedFeatureDependency {
+                        name: dep.clone(),
+                        location,
+                        features: features.cloned().unwrap_or_default(),
+                    });
+                } else {
+                    unused_dependencies.insert(UnusedDependency { name: dep.clone(), location });
+                }
+
                 continue;
             }
 
-            if location.is_normal() {
-                let used_in_normal = used_imports.normal.contains(&*import);
-                let used_in_dev = used_imports.dev.contains(&*import);
-                let is_optional = dependency.optional();
-
-                if !used_in_normal && used_in_dev && !is_optional {
+            if location.is_normal() && !used_in_normal && used_in_dev {
+                if is_optional {
+                    misplaced_optional_dependencies.insert(MisplacedOptionalDependency {
+                        name: dep.clone(),
+                        location,
+                        features: features.cloned().unwrap_or_default(),
+                    });
+                } else {
                     misplaced_dependencies
                         .insert(MisplacedDependency { name: dep.clone(), location });
                 }
@@ -253,7 +338,10 @@ impl PackageProcessor {
         Ok(PackageProcessResult {
             used_packages,
             unused_dependencies,
+            unused_optional_dependencies,
+            unused_feature_dependencies,
             misplaced_dependencies,
+            misplaced_optional_dependencies,
             redundant_ignores,
         })
     }
