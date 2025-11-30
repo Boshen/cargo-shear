@@ -18,12 +18,11 @@ use std::{
 
 use anyhow::{Result, anyhow};
 use cargo_metadata::{Package, Target, TargetKind};
-use cargo_toml::Manifest;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use rustc_hash::{FxHashMap, FxHashSet};
 use walkdir::{DirEntry, WalkDir};
 
-use crate::import_collector::collect_imports;
+use crate::{import_collector::collect_imports, manifest::Manifest};
 
 /// How a dependency is referenced in `[features]`.
 ///
@@ -292,16 +291,17 @@ impl DependencyAnalyzer {
     fn analyze_features(categorized: &mut CategorizedImports, manifest: &Manifest) {
         for (feature, values) in &manifest.features {
             for value in values {
-                if let Some((import, feature)) = FeatureRef::parse(feature, value) {
-                    categorized.features.entry(import).or_default().push(feature);
+                if let Some((import, feat)) = FeatureRef::parse(feature.get_ref(), value.get_ref())
+                {
+                    categorized.features.entry(import).or_default().push(feat);
                 }
             }
         }
 
         // Collect implicit features from optional dependencies
         for (dep, details) in &manifest.dependencies {
-            if details.optional() {
-                let import = dep.replace('-', "_");
+            if details.get_ref().optional() {
+                let import = dep.get_ref().replace('-', "_");
                 let has_explicit = categorized.features.get(&import).is_some_and(|features| {
                     features.iter().any(|feature| matches!(feature, FeatureRef::Explicit { .. }))
                 });
@@ -311,18 +311,5 @@ impl DependencyAnalyzer {
                 }
             }
         }
-    }
-
-    /// Extract the list of ignored deps from metadata.
-    pub fn get_ignored_dependency_keys(value: &serde_json::Value) -> FxHashSet<&str> {
-        value
-            .as_object()
-            .and_then(|object| object.get("cargo-shear"))
-            .and_then(|object| object.get("ignored"))
-            .and_then(|ignored| ignored.as_array())
-            .map(|ignored| {
-                ignored.iter().filter_map(|item| item.as_str()).collect::<FxHashSet<_>>()
-            })
-            .unwrap_or_default()
     }
 }
