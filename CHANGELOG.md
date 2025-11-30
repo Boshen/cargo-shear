@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0](https://github.com/Boshen/cargo-shear/compare/v1.6.6...v1.7.0) - 2025-11-30
+
+### Added
+
+- improve redundant ignore warning messages ([#333](https://github.com/Boshen/cargo-shear/pull/333))
+
+### Other
+
+- Replace `cargo_toml` with custom spanned structs  ([#338](https://github.com/Boshen/cargo-shear/pull/338))
+- Track feature references for dependencies, split out optionals  ([#335](https://github.com/Boshen/cargo-shear/pull/335))
+- Improve tracking of dependencies, and precision of TOML updates ([#334](https://github.com/Boshen/cargo-shear/pull/334))
+- collect import syntax tokens not string ([#328](https://github.com/Boshen/cargo-shear/pull/328))
+- Process packages in parallel using `rayon` ([#329](https://github.com/Boshen/cargo-shear/pull/329))
+- *(deps)* update crate-ci/typos action to v1.40.0 ([#330](https://github.com/Boshen/cargo-shear/pull/330))
+
 ## [1.6.6](https://github.com/Boshen/cargo-shear/compare/v1.6.5...v1.6.6) - 2025-11-26
 
 ### Fixed
