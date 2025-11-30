@@ -1,0 +1,7 @@
+[workspace]
+resolver = "3"
+members = ["app", "lib"]
+
+[workspace.dependencies]
+# Unused
+criterion2 = { version = "3.0", default-features = false }

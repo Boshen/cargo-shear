@@ -1,0 +1,8 @@
+[package]
+name = "unused_libname"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Unused
+criterion2 = { version = "3.0", default-features = false }
