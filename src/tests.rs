@@ -2,7 +2,11 @@ use std::{fmt::Write, process::ExitCode};
 
 use rustc_hash::FxHashSet;
 
-use crate::{CargoShear, CargoShearOptions, default_path, import_collector::collect_imports};
+use crate::{
+    CargoShear, CargoShearOptions, default_path,
+    import_collector::collect_imports,
+    output::{ColorMode, OutputFormat},
+};
 
 #[track_caller]
 fn test(source_text: &str) {
@@ -90,6 +94,8 @@ fn test_lib() {
             exclude: vec![],
             path: default_path().unwrap(),
             expand: false,
+            format: OutputFormat::Auto,
+            color: ColorMode::Never,
         },
     );
     let exit_code = shear.run();
@@ -311,6 +317,8 @@ fn cargo_shear_with_different_options() {
             exclude: vec![],
             path: default_path().unwrap(),
             expand: false,
+            format: OutputFormat::Auto,
+            color: ColorMode::Never,
         },
     );
     let exit_code = shear.run();
@@ -331,6 +339,8 @@ fn cargo_shear_with_package_filter() {
             exclude: vec![],
             path: default_path().unwrap(),
             expand: false,
+            format: OutputFormat::Auto,
+            color: ColorMode::Never,
         },
     );
     let exit_code = shear.run();
@@ -351,6 +361,8 @@ fn cargo_shear_with_exclude_filter() {
             exclude: vec!["some-package".to_owned()],
             path: default_path().unwrap(),
             expand: false,
+            format: OutputFormat::Auto,
+            color: ColorMode::Never,
         },
     );
     let exit_code = shear.run();
@@ -369,6 +381,8 @@ fn cargo_shear_options_creation() {
         exclude: vec!["exclude1".to_owned()],
         path: std::path::PathBuf::from("/tmp"),
         expand: true,
+        format: OutputFormat::Auto,
+        color: ColorMode::Never,
     };
 
     let shear = CargoShear::new(std::io::sink(), options.clone());
@@ -530,6 +544,8 @@ fn test_cargo_shear_new() {
         exclude: vec![],
         path: default_path().unwrap(),
         expand: false,
+        format: OutputFormat::Auto,
+        color: ColorMode::Never,
     };
     let _shear = CargoShear::new(std::io::sink(), options);
     // Just verify it can be created without panicking

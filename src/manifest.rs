@@ -34,6 +34,15 @@ impl DepLocation {
     pub const fn is_normal(&self) -> bool {
         matches!(self, Self::Root(DepTable::Normal) | Self::Target { table: DepTable::Normal, .. })
     }
+
+    /// Move this location to a different table.
+    #[must_use]
+    pub fn as_table(&self, new: DepTable) -> Self {
+        match self {
+            Self::Root(_) => Self::Root(new),
+            Self::Target { cfg, .. } => Self::Target { cfg: cfg.clone(), table: new },
+        }
+    }
 }
 
 impl fmt::Display for DepLocation {
@@ -48,7 +57,7 @@ impl fmt::Display for DepLocation {
 #[derive(Debug, Deserialize, Clone)]
 #[serde(untagged)]
 pub enum Dependency {
-    #[expect(unused, reason = "TODO")]
+    #[expect(unused, reason = "Needed for deserialization")]
     Simple(String),
     Detailed(DependencyDetail),
 }

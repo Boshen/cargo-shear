@@ -12,8 +12,9 @@
 use rustc_hash::FxHashSet;
 use toml_edit::{DocumentMut, Item, Table};
 
-use crate::package_processor::{
-    DepLocation, MisplacedDependency, UnusedDependency, UnusedWorkspaceDependency,
+use crate::{
+    manifest::DepLocation,
+    package_processor::{MisplacedDependency, UnusedDependency, UnusedWorkspaceDependency},
 };
 
 /// Provides methods to edit Cargo.toml files and remove unused dependencies.
@@ -27,7 +28,7 @@ impl CargoTomlEditor {
     /// The number of dependencies removed.
     pub fn remove_dependencies(
         manifest: &mut DocumentMut,
-        unused_deps: &FxHashSet<UnusedDependency>,
+        unused_deps: &[UnusedDependency],
     ) -> usize {
         let mut removed = FxHashSet::default();
 
@@ -36,7 +37,7 @@ impl CargoTomlEditor {
                 DepLocation::Root(table) => manifest
                     .get_mut(&table.to_string())
                     .and_then(|item| item.as_table_mut())
-                    .and_then(|deps| deps.remove(&dep.name))
+                    .and_then(|deps| deps.remove(dep.name.get_ref()))
                     .is_some(),
 
                 DepLocation::Target { cfg, table } => manifest
@@ -46,12 +47,12 @@ impl CargoTomlEditor {
                     .and_then(|item| item.as_table_mut())
                     .and_then(|target| target.get_mut(&table.to_string()))
                     .and_then(|item| item.as_table_mut())
-                    .and_then(|deps| deps.remove(&dep.name))
+                    .and_then(|deps| deps.remove(dep.name.get_ref()))
                     .is_some(),
             };
 
             if success {
-                removed.insert(dep.name.as_str());
+                removed.insert(dep.name.get_ref().as_str());
             }
         }
 
@@ -67,7 +68,7 @@ impl CargoTomlEditor {
     /// The number of dependencies removed.
     pub fn remove_workspace_deps(
         manifest: &mut DocumentMut,
-        unused_deps: &FxHashSet<UnusedWorkspaceDependency>,
+        unused_deps: &[UnusedWorkspaceDependency],
     ) -> usize {
         let mut removed = FxHashSet::default();
 
@@ -77,11 +78,11 @@ impl CargoTomlEditor {
                 .and_then(|item| item.as_table_mut())
                 .and_then(|workspace| workspace.get_mut("dependencies"))
                 .and_then(|item| item.as_table_mut())
-                .and_then(|deps| deps.remove(&dep.name))
+                .and_then(|deps| deps.remove(dep.name.get_ref()))
                 .is_some();
 
             if success {
-                removed.insert(dep.name.as_str());
+                removed.insert(dep.name.get_ref().as_str());
             }
         }
 
@@ -97,7 +98,7 @@ impl CargoTomlEditor {
     /// The number of dependencies moved.
     pub fn move_to_dev_dependencies(
         manifest: &mut DocumentMut,
-        misplaced_deps: &FxHashSet<MisplacedDependency>,
+        misplaced_deps: &[MisplacedDependency],
     ) -> usize {
         let mut count = 0;
 
@@ -120,7 +121,7 @@ impl CargoTomlEditor {
         let Some(value) = manifest
             .get_mut("dependencies")
             .and_then(|item| item.as_table_mut())
-            .and_then(|deps| deps.remove(&dep.name))
+            .and_then(|deps| deps.remove(dep.name.get_ref()))
         else {
             return false;
         };
@@ -134,7 +135,7 @@ impl CargoTomlEditor {
         if let Some(dev_deps) =
             manifest.get_mut("dev-dependencies").and_then(|item| item.as_table_mut())
         {
-            dev_deps.insert(&dep.name, value);
+            dev_deps.insert(dep.name.get_ref(), value);
             return true;
         }
 
@@ -159,7 +160,7 @@ impl CargoTomlEditor {
         let Some(value) = target
             .get_mut("dependencies")
             .and_then(|item| item.as_table_mut())
-            .and_then(|deps| deps.remove(&dep.name))
+            .and_then(|deps| deps.remove(dep.name.get_ref()))
         else {
             return false;
         };
@@ -173,7 +174,7 @@ impl CargoTomlEditor {
         if let Some(dev_deps) =
             target.get_mut("dev-dependencies").and_then(|item| item.as_table_mut())
         {
-            dev_deps.insert(&dep.name, value);
+            dev_deps.insert(dep.name.get_ref(), value);
             return true;
         }
 
