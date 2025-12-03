@@ -54,11 +54,12 @@ use cargo_metadata::{CargoOpt, MetadataCommand};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use toml_edit::DocumentMut;
 
+pub use crate::output::{ColorMode, OutputFormat};
 use crate::{
     cargo_toml_editor::CargoTomlEditor,
     diagnostics::ShearAnalysis,
     manifest::Manifest,
-    output::{ColorMode, OutputFormat, Renderer},
+    output::Renderer,
     package_processor::{PackageAnalysis, PackageProcessor, WorkspaceAnalysis},
 };
 
@@ -127,21 +128,84 @@ pub struct CargoShearOptions {
 }
 
 impl CargoShearOptions {
-    /// Create a new `CargoShearOptions` for testing purposes
+    /// Create new options with the given path.
     #[must_use]
-    pub const fn new_for_test(path: PathBuf, fix: bool) -> Self {
+    pub fn new(path: PathBuf) -> Self {
         Self {
-            fix,
+            path,
+            fix: false,
             expand: false,
             locked: false,
             offline: false,
             frozen: false,
             package: vec![],
             exclude: vec![],
-            format: OutputFormat::Auto,
-            color: ColorMode::Never,
-            path,
+            format: OutputFormat::default(),
+            color: ColorMode::default(),
         }
+    }
+
+    /// Enable fix mode.
+    #[must_use]
+    pub const fn with_fix(mut self) -> Self {
+        self.fix = true;
+        self
+    }
+
+    /// Enable macro expansion.
+    #[must_use]
+    pub const fn with_expand(mut self) -> Self {
+        self.expand = true;
+        self
+    }
+
+    /// Enable locked mode.
+    #[must_use]
+    pub const fn with_locked(mut self) -> Self {
+        self.locked = true;
+        self
+    }
+
+    /// Enable offline mode.
+    #[must_use]
+    pub const fn with_offline(mut self) -> Self {
+        self.offline = true;
+        self
+    }
+
+    /// Enable frozen mode.
+    #[must_use]
+    pub const fn with_frozen(mut self) -> Self {
+        self.frozen = true;
+        self
+    }
+
+    /// Set packages to check.
+    #[must_use]
+    pub fn with_packages(mut self, packages: Vec<String>) -> Self {
+        self.package = packages;
+        self
+    }
+
+    /// Set packages to exclude.
+    #[must_use]
+    pub fn with_excludes(mut self, excludes: Vec<String>) -> Self {
+        self.exclude = excludes;
+        self
+    }
+
+    /// Set output format.
+    #[must_use]
+    pub const fn with_format(mut self, format: OutputFormat) -> Self {
+        self.format = format;
+        self
+    }
+
+    /// Set color mode.
+    #[must_use]
+    pub const fn with_color(mut self, color: ColorMode) -> Self {
+        self.color = color;
+        self
     }
 }
 
@@ -299,18 +363,25 @@ impl<W: Write> CargoShear<W> {
             self.analysis.add_package_result(&path, content, &result, fixed);
         }
 
-        // Process workspace
-        let workspace_result = PackageProcessor::process_workspace(
-            &workspace_manifest,
-            &metadata,
-            &self.analysis.packages,
-        );
+        // Only analyze workspace if we're targeting all packages.
+        if self.options.package.is_empty() && self.options.exclude.is_empty() {
+            let workspace_result = PackageProcessor::process_workspace(
+                &workspace_manifest,
+                &metadata,
+                &self.analysis.packages,
+            );
 
-        let relative =
-            workspace_manifest_path.strip_prefix(&root).unwrap_or(&workspace_manifest_path);
+            let relative =
+                workspace_manifest_path.strip_prefix(&root).unwrap_or(&workspace_manifest_path);
 
-        let fixed = self.fix_workspace_issues(&workspace_manifest_path, &workspace_result)?;
-        self.analysis.add_workspace_result(relative, workspace_content, &workspace_result, fixed);
+            let fixed = self.fix_workspace_issues(&workspace_manifest_path, &workspace_result)?;
+            self.analysis.add_workspace_result(
+                relative,
+                workspace_content,
+                &workspace_result,
+                fixed,
+            );
+        }
 
         Ok(())
     }

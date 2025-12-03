@@ -2,62 +2,69 @@
 
 use std::{error::Error, fs, io, path::Path, process::ExitCode};
 
-use cargo_shear::{CargoShear, CargoShearOptions};
+use cargo_shear::{CargoShear, CargoShearOptions, ColorMode};
 use cargo_toml::Manifest;
 use tempfile::TempDir;
 
-/// Helper function to copy a fixture to a temporary directory for testing
-fn copy_fixture_to_temp(fixture_path: &str) -> io::Result<TempDir> {
-    let full_path =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("fixtures").join(fixture_path);
-
-    let temp_dir = TempDir::new()?;
-    copy_dir_recursive(&full_path, temp_dir.path())?;
-
-    Ok(temp_dir)
+/// Test runner for `cargo-shear`.
+struct CargoShearRunner {
+    fixture: String,
+    options_fn: Box<dyn FnOnce(CargoShearOptions) -> CargoShearOptions>,
 }
 
-/// Recursively copy a directory
-fn copy_dir_recursive(src: &Path, dst: &Path) -> io::Result<()> {
-    if src.is_dir() {
-        fs::create_dir_all(dst)?;
-        for entry in fs::read_dir(src)? {
-            let entry = entry?;
-            let src_path = entry.path();
-            let dst_path = dst.join(entry.file_name());
-            copy_dir_recursive(&src_path, &dst_path)?;
-        }
-    } else {
-        fs::copy(src, dst)?;
+impl CargoShearRunner {
+    fn new(fixture: &str) -> Self {
+        Self { fixture: fixture.to_owned(), options_fn: Box::new(std::convert::identity) }
     }
 
-    Ok(())
-}
+    fn options(self, f: impl FnOnce(CargoShearOptions) -> CargoShearOptions + 'static) -> Self {
+        Self {
+            fixture: self.fixture,
+            options_fn: Box::new(|options| f((self.options_fn)(options))),
+        }
+    }
 
-/// Run cargo-shear on a fixture and return the exit code, output and directory
-fn run_cargo_shear(
-    fixture_path: &str,
-    fix: bool,
-) -> Result<(ExitCode, String, TempDir), Box<dyn Error>> {
-    let temp_dir = copy_fixture_to_temp(fixture_path)?;
-    let options = CargoShearOptions::new_for_test(temp_dir.path().to_path_buf(), fix);
+    /// Run cargo-shear and return the results.
+    fn run(self) -> Result<(ExitCode, String, TempDir), Box<dyn Error>> {
+        let full_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests")
+            .join("fixtures")
+            .join(&self.fixture);
 
-    let mut output = Vec::new();
-    let shear = CargoShear::new(&mut output, options);
-    let exit_code = shear.run();
+        let temp_dir = TempDir::new()?;
+        Self::copy_dir_recursive(&full_path, temp_dir.path())?;
 
-    // Redact any mentions of the temp dir, for stable snapshots.
-    let mut output = String::from_utf8(output)?;
-    let path = temp_dir.path().to_string_lossy();
-    output = output.replace(&*path, ".");
+        let options = (self.options_fn)(
+            CargoShearOptions::new(temp_dir.path().to_path_buf()).with_color(ColorMode::Never),
+        );
 
-    Ok((exit_code, output, temp_dir))
+        let mut output = Vec::new();
+        let shear = CargoShear::new(&mut output, options);
+        let exit_code = shear.run();
+        let output = String::from_utf8(output)?;
+
+        Ok((exit_code, output, temp_dir))
+    }
+
+    fn copy_dir_recursive(src: &Path, dst: &Path) -> io::Result<()> {
+        if src.is_dir() {
+            fs::create_dir_all(dst)?;
+            for entry in fs::read_dir(src)? {
+                let entry = entry?;
+                Self::copy_dir_recursive(&entry.path(), &dst.join(entry.file_name()))?;
+            }
+        } else {
+            fs::copy(src, dst)?;
+        }
+
+        Ok(())
+    }
 }
 
 // `anyhow` is declared and used, so nothing should be flagged.
 #[test]
 fn clean_detection() -> Result<(), Box<dyn Error>> {
-    let (exit_code, output, _) = run_cargo_shear("clean", false)?;
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("clean").run()?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
     insta::assert_snapshot!(output, @r"
@@ -72,7 +79,8 @@ fn clean_detection() -> Result<(), Box<dyn Error>> {
 // All dependencies are used, so none should be removed when fixing.
 #[test]
 fn clean_fix() -> Result<(), Box<dyn Error>> {
-    let (exit_code, _, temp_dir) = run_cargo_shear("clean", true)?;
+    let (exit_code, _output, temp_dir) =
+        CargoShearRunner::new("clean").options(CargoShearOptions::with_fix).run()?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
@@ -87,7 +95,7 @@ fn clean_fix() -> Result<(), Box<dyn Error>> {
 // Workspace dependency `anyhow` is inherited and used by a workspace member.
 #[test]
 fn clean_workspace_detection() -> Result<(), Box<dyn Error>> {
-    let (exit_code, output, _) = run_cargo_shear("clean_workspace", false)?;
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("clean_workspace").run()?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
     insta::assert_snapshot!(output, @r"
@@ -102,7 +110,8 @@ fn clean_workspace_detection() -> Result<(), Box<dyn Error>> {
 // All workspace dependencies are in use and should not be removed.
 #[test]
 fn clean_workspace_fix() -> Result<(), Box<dyn Error>> {
-    let (exit_code, _, temp_dir) = run_cargo_shear("clean_workspace", true)?;
+    let (exit_code, _output, temp_dir) =
+        CargoShearRunner::new("clean_workspace").options(CargoShearOptions::with_fix).run()?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
@@ -119,7 +128,7 @@ fn clean_workspace_fix() -> Result<(), Box<dyn Error>> {
 #[test]
 #[expect(clippy::too_many_lines, reason = "Output stress test")]
 fn complex_detection() -> Result<(), Box<dyn Error>> {
-    let (exit_code, output, _) = run_cargo_shear("complex", false)?;
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("complex").run()?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     insta::assert_snapshot!(output, @r#"
@@ -417,7 +426,8 @@ fn complex_detection() -> Result<(), Box<dyn Error>> {
 // Complex fixture should fix all fixable issues.
 #[test]
 fn complex_fix() -> Result<(), Box<dyn Error>> {
-    let (exit_code, _, temp_dir) = run_cargo_shear("complex", true)?;
+    let (exit_code, _output, temp_dir) =
+        CargoShearRunner::new("complex").options(CargoShearOptions::with_fix).run()?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
@@ -446,10 +456,142 @@ fn complex_fix() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// When using --package, workspace analysis is skipped.
+#[test]
+fn filter_workspace_package_detection() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("filter_workspace")
+        .options(|options| options.with_packages(vec!["app".into()]))
+        .run()?;
+    assert_eq!(exit_code, ExitCode::FAILURE);
+
+    insta::assert_snapshot!(output, @r#"
+    shear/unused_dependency
+
+      × unused dependency `thiserror`
+       ╭─[app/Cargo.toml:8:1]
+     7 │ # Unused
+     8 │ thiserror = "2.0"
+       · ────┬────
+       ·     ╰── not used in code
+       ╰────
+      help: remove this dependency
+
+    shear/summary
+
+      ✗ 1 error
+
+    Advice:
+      ☞ run with `--fix` to fix 1 issue
+      ☞ to suppress an issue within a package
+       ╭─[Cargo.toml:2:12]
+     1 │ [package.metadata.cargo-shear]
+     2 │ ignored = ["crate-name"]
+       ·            ──────┬─────
+       ·                  ╰── add the crate name here
+       ╰────
+      ☞ to suppress an issue across a workspace
+       ╭─[Cargo.toml:2:12]
+     1 │ [workspace.metadata.cargo-shear]
+     2 │ ignored = ["crate-name"]
+       ·            ──────┬─────
+       ·                  ╰── add the crate name here
+       ╰────
+    "#);
+
+    Ok(())
+}
+
+// When using --package, only targeted package issues are fixed.
+#[test]
+fn filter_workspace_package_fix() -> Result<(), Box<dyn Error>> {
+    let (exit_code, _output, temp_dir) = CargoShearRunner::new("filter_workspace")
+        .options(|options| options.with_fix().with_packages(vec!["app".into()]))
+        .run()?;
+    assert_eq!(exit_code, ExitCode::FAILURE);
+
+    let app = Manifest::from_path(temp_dir.path().join("app/Cargo.toml"))?;
+    assert!(!app.dependencies.contains_key("thiserror"));
+
+    let lib = Manifest::from_path(temp_dir.path().join("lib/Cargo.toml"))?;
+    assert!(lib.dependencies.contains_key("anyhow"));
+
+    let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
+    let workspace = &manifest.workspace.as_ref().unwrap().dependencies;
+    assert!(workspace.contains_key("anyhow"));
+
+    Ok(())
+}
+
+// When using --exclude, workspace analysis is skipped.
+#[test]
+fn filter_workspace_exclude_detection() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("filter_workspace")
+        .options(|options| options.with_excludes(vec!["lib".into()]))
+        .run()?;
+    assert_eq!(exit_code, ExitCode::FAILURE);
+
+    insta::assert_snapshot!(output, @r#"
+    shear/unused_dependency
+
+      × unused dependency `thiserror`
+       ╭─[app/Cargo.toml:8:1]
+     7 │ # Unused
+     8 │ thiserror = "2.0"
+       · ────┬────
+       ·     ╰── not used in code
+       ╰────
+      help: remove this dependency
+
+    shear/summary
+
+      ✗ 1 error
+
+    Advice:
+      ☞ run with `--fix` to fix 1 issue
+      ☞ to suppress an issue within a package
+       ╭─[Cargo.toml:2:12]
+     1 │ [package.metadata.cargo-shear]
+     2 │ ignored = ["crate-name"]
+       ·            ──────┬─────
+       ·                  ╰── add the crate name here
+       ╰────
+      ☞ to suppress an issue across a workspace
+       ╭─[Cargo.toml:2:12]
+     1 │ [workspace.metadata.cargo-shear]
+     2 │ ignored = ["crate-name"]
+       ·            ──────┬─────
+       ·                  ╰── add the crate name here
+       ╰────
+    "#);
+
+    Ok(())
+}
+
+// When using --exclude, only targeted package issues are fixed.
+#[test]
+fn filter_workspace_exclude_fix() -> Result<(), Box<dyn Error>> {
+    let (exit_code, _output, temp_dir) = CargoShearRunner::new("filter_workspace")
+        .options(|options| options.with_fix().with_excludes(vec!["lib".into()]))
+        .run()?;
+    assert_eq!(exit_code, ExitCode::FAILURE);
+
+    let app = Manifest::from_path(temp_dir.path().join("app/Cargo.toml"))?;
+    assert!(!app.dependencies.contains_key("thiserror"));
+
+    let lib = Manifest::from_path(temp_dir.path().join("lib/Cargo.toml"))?;
+    assert!(lib.dependencies.contains_key("anyhow"));
+
+    let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
+    let workspace = &manifest.workspace.as_ref().unwrap().dependencies;
+    assert!(workspace.contains_key("anyhow"));
+
+    Ok(())
+}
+
 // `anyhow` is unused but suppressed via package ignore config.
 #[test]
 fn ignored() -> Result<(), Box<dyn Error>> {
-    let (exit_code, output, _) = run_cargo_shear("ignored", false)?;
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("ignored").run()?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
     insta::assert_snapshot!(output, @r"
@@ -464,7 +606,7 @@ fn ignored() -> Result<(), Box<dyn Error>> {
 // `anywho` is in the ignored list but doesn't exist as a dependency.
 #[test]
 fn ignored_invalid() -> Result<(), Box<dyn Error>> {
-    let (exit_code, output, _) = run_cargo_shear("ignored_invalid", false)?;
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("ignored_invalid").run()?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
     insta::assert_snapshot!(output, @r#"
@@ -506,7 +648,7 @@ fn ignored_invalid() -> Result<(), Box<dyn Error>> {
 // `anyhow` is in the ignored list but is actually being used.
 #[test]
 fn ignored_redundant() -> Result<(), Box<dyn Error>> {
-    let (exit_code, output, _) = run_cargo_shear("ignored_redundant", false)?;
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("ignored_redundant").run()?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
     insta::assert_snapshot!(output, @r#"
@@ -548,7 +690,7 @@ fn ignored_redundant() -> Result<(), Box<dyn Error>> {
 // `anyhow` is unused but suppressed via workspace ignore config.
 #[test]
 fn ignored_workspace() -> Result<(), Box<dyn Error>> {
-    let (exit_code, output, _) = run_cargo_shear("ignored_workspace", false)?;
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("ignored_workspace").run()?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
     insta::assert_snapshot!(output, @r"
@@ -563,7 +705,8 @@ fn ignored_workspace() -> Result<(), Box<dyn Error>> {
 // `anyhow` is in the workspace ignored list but is actually being used.
 #[test]
 fn ignored_workspace_redundant() -> Result<(), Box<dyn Error>> {
-    let (exit_code, output, _) = run_cargo_shear("ignored_workspace_redundant", false)?;
+    let (exit_code, output, _temp_dir) =
+        CargoShearRunner::new("ignored_workspace_redundant").run()?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
     insta::assert_snapshot!(output, @r#"
@@ -605,7 +748,7 @@ fn ignored_workspace_redundant() -> Result<(), Box<dyn Error>> {
 // Both `anyhow` (workspace ignore) and `thiserror` (package ignore) are unused, but ignored.
 #[test]
 fn ignored_workspace_merged() -> Result<(), Box<dyn Error>> {
-    let (exit_code, output, _) = run_cargo_shear("ignored_workspace_merged", false)?;
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("ignored_workspace_merged").run()?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
     insta::assert_snapshot!(output, @r"
@@ -620,7 +763,7 @@ fn ignored_workspace_merged() -> Result<(), Box<dyn Error>> {
 // `anyhow` is only used in tests but declared in `dependencies` instead of `dev-dependencies`.
 #[test]
 fn misplaced_detection() -> Result<(), Box<dyn Error>> {
-    let (exit_code, output, _) = run_cargo_shear("misplaced", false)?;
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("misplaced").run()?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     insta::assert_snapshot!(output, @r#"
@@ -663,7 +806,8 @@ fn misplaced_detection() -> Result<(), Box<dyn Error>> {
 // `anyhow` should be moved from `dependencies` to `dev-dependencies`.
 #[test]
 fn misplaced_fix() -> Result<(), Box<dyn Error>> {
-    let (exit_code, _, temp_dir) = run_cargo_shear("misplaced", true)?;
+    let (exit_code, _output, temp_dir) =
+        CargoShearRunner::new("misplaced").options(CargoShearOptions::with_fix).run()?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
@@ -676,7 +820,7 @@ fn misplaced_fix() -> Result<(), Box<dyn Error>> {
 // Optional `anyhow` is only used in tests but declared in `dependencies`.
 #[test]
 fn misplaced_optional_detection() -> Result<(), Box<dyn Error>> {
-    let (exit_code, output, _) = run_cargo_shear("misplaced_optional", false)?;
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("misplaced_optional").run()?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
     insta::assert_snapshot!(output, @r#"
@@ -731,7 +875,8 @@ fn misplaced_optional_detection() -> Result<(), Box<dyn Error>> {
 // Optional `anyhow` can't be moved to `dev-dependencies` since they don't support `optional = true`.
 #[test]
 fn misplaced_optional_fix() -> Result<(), Box<dyn Error>> {
-    let (exit_code, _, temp_dir) = run_cargo_shear("misplaced_optional", true)?;
+    let (exit_code, _output, temp_dir) =
+        CargoShearRunner::new("misplaced_optional").options(CargoShearOptions::with_fix).run()?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
@@ -744,7 +889,7 @@ fn misplaced_optional_fix() -> Result<(), Box<dyn Error>> {
 // `anyhow` is only used in tests but declared in target specific `dependencies`.
 #[test]
 fn misplaced_platform_detection() -> Result<(), Box<dyn Error>> {
-    let (exit_code, output, _) = run_cargo_shear("misplaced_platform", false)?;
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("misplaced_platform").run()?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     insta::assert_snapshot!(output, @r#"
@@ -787,7 +932,8 @@ fn misplaced_platform_detection() -> Result<(), Box<dyn Error>> {
 // `anyhow` should be moved from target specific `dependencies` to `dev-dependencies`.
 #[test]
 fn misplaced_platform_fix() -> Result<(), Box<dyn Error>> {
-    let (exit_code, _, temp_dir) = run_cargo_shear("misplaced_platform", true)?;
+    let (exit_code, _output, temp_dir) =
+        CargoShearRunner::new("misplaced_platform").options(CargoShearOptions::with_fix).run()?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
@@ -801,7 +947,7 @@ fn misplaced_platform_fix() -> Result<(), Box<dyn Error>> {
 // Renamed dependency `anyhow_v1` is only used in tests but declared in `dependencies`.
 #[test]
 fn misplaced_renamed_detection() -> Result<(), Box<dyn Error>> {
-    let (exit_code, output, _) = run_cargo_shear("misplaced_renamed", false)?;
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("misplaced_renamed").run()?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     insta::assert_snapshot!(output, @r#"
@@ -844,7 +990,8 @@ fn misplaced_renamed_detection() -> Result<(), Box<dyn Error>> {
 // Renamed `anyhow_v1` should be moved to `dev-dependencies` while maintaining package details.
 #[test]
 fn misplaced_renamed_fix() -> Result<(), Box<dyn Error>> {
-    let (exit_code, _, temp_dir) = run_cargo_shear("misplaced_renamed", true)?;
+    let (exit_code, _output, temp_dir) =
+        CargoShearRunner::new("misplaced_renamed").options(CargoShearOptions::with_fix).run()?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
@@ -861,7 +1008,7 @@ fn misplaced_renamed_fix() -> Result<(), Box<dyn Error>> {
 // Table syntax `anyhow` is only used in tests but declared in `dependencies`.
 #[test]
 fn misplaced_table_detection() -> Result<(), Box<dyn Error>> {
-    let (exit_code, output, _) = run_cargo_shear("misplaced_table", false)?;
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("misplaced_table").run()?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     insta::assert_snapshot!(output, @r#"
@@ -905,7 +1052,8 @@ fn misplaced_table_detection() -> Result<(), Box<dyn Error>> {
 // Table syntax `anyhow` should be moved to `dev-dependencies` while maintaining package details.
 #[test]
 fn misplaced_table_fix() -> Result<(), Box<dyn Error>> {
-    let (exit_code, _, temp_dir) = run_cargo_shear("misplaced_table", true)?;
+    let (exit_code, _output, temp_dir) =
+        CargoShearRunner::new("misplaced_table").options(CargoShearOptions::with_fix).run()?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
@@ -924,7 +1072,7 @@ fn misplaced_table_fix() -> Result<(), Box<dyn Error>> {
 #[test]
 #[ignore = "Cannot detect misplaced dependencies in unit tests"]
 fn misplaced_unit_detection() -> Result<(), Box<dyn Error>> {
-    let (exit_code, output, _) = run_cargo_shear("misplaced_unit", false)?;
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("misplaced_unit").run()?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
     insta::assert_snapshot!(output, @"");
@@ -936,7 +1084,8 @@ fn misplaced_unit_detection() -> Result<(), Box<dyn Error>> {
 #[test]
 #[ignore = "Cannot detect misplaced dependencies in unit tests"]
 fn misplaced_unit_fix() -> Result<(), Box<dyn Error>> {
-    let (exit_code, _, temp_dir) = run_cargo_shear("misplaced_unit", true)?;
+    let (exit_code, _output, temp_dir) =
+        CargoShearRunner::new("misplaced_unit").options(CargoShearOptions::with_fix).run()?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
@@ -949,7 +1098,7 @@ fn misplaced_unit_fix() -> Result<(), Box<dyn Error>> {
 // `anyhow` is unused.
 #[test]
 fn unused_detection() -> Result<(), Box<dyn Error>> {
-    let (exit_code, output, _) = run_cargo_shear("unused", false)?;
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("unused").run()?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     insta::assert_snapshot!(output, @r#"
@@ -992,7 +1141,8 @@ fn unused_detection() -> Result<(), Box<dyn Error>> {
 // Unused `anyhow` should be removed from `dependencies`.
 #[test]
 fn unused_fix() -> Result<(), Box<dyn Error>> {
-    let (exit_code, _, temp_dir) = run_cargo_shear("unused", true)?;
+    let (exit_code, _output, temp_dir) =
+        CargoShearRunner::new("unused").options(CargoShearOptions::with_fix).run()?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
@@ -1004,7 +1154,7 @@ fn unused_fix() -> Result<(), Box<dyn Error>> {
 // `anyhow` is unused in build scripts.
 #[test]
 fn unused_build_detection() -> Result<(), Box<dyn Error>> {
-    let (exit_code, output, _) = run_cargo_shear("unused_build", false)?;
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("unused_build").run()?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     insta::assert_snapshot!(output, @r#"
@@ -1047,7 +1197,8 @@ fn unused_build_detection() -> Result<(), Box<dyn Error>> {
 // Unused `anyhow` should be removed from `build-dependencies`.
 #[test]
 fn unused_build_fix() -> Result<(), Box<dyn Error>> {
-    let (exit_code, _, temp_dir) = run_cargo_shear("unused_build", true)?;
+    let (exit_code, _output, temp_dir) =
+        CargoShearRunner::new("unused_build").options(CargoShearOptions::with_fix).run()?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
@@ -1059,7 +1210,7 @@ fn unused_build_fix() -> Result<(), Box<dyn Error>> {
 // `anyhow` is unused in dev targets.
 #[test]
 fn unused_dev_detection() -> Result<(), Box<dyn Error>> {
-    let (exit_code, output, _) = run_cargo_shear("unused_dev", false)?;
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("unused_dev").run()?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     insta::assert_snapshot!(output, @r#"
@@ -1102,7 +1253,8 @@ fn unused_dev_detection() -> Result<(), Box<dyn Error>> {
 // Unused `anyhow` should be removed from `dev-dependencies`.
 #[test]
 fn unused_dev_fix() -> Result<(), Box<dyn Error>> {
-    let (exit_code, _, temp_dir) = run_cargo_shear("unused_dev", true)?;
+    let (exit_code, _output, temp_dir) =
+        CargoShearRunner::new("unused_dev").options(CargoShearOptions::with_fix).run()?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
@@ -1114,7 +1266,7 @@ fn unused_dev_fix() -> Result<(), Box<dyn Error>> {
 // `anyhow` is unused in code but referenced in a feature, so it can't be safely removed.
 #[test]
 fn unused_feature_detect() -> Result<(), Box<dyn Error>> {
-    let (exit_code, output, _) = run_cargo_shear("unused_feature", false)?;
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("unused_feature").run()?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
     insta::assert_snapshot!(output, @r#"
@@ -1165,7 +1317,8 @@ fn unused_feature_detect() -> Result<(), Box<dyn Error>> {
 // `anyhow` should remain since it's referenced in a feature, even though unused in code.
 #[test]
 fn unused_feature_fix() -> Result<(), Box<dyn Error>> {
-    let (exit_code, _, temp_dir) = run_cargo_shear("unused_feature", true)?;
+    let (exit_code, _output, temp_dir) =
+        CargoShearRunner::new("unused_feature").options(CargoShearOptions::with_fix).run()?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
@@ -1177,7 +1330,7 @@ fn unused_feature_fix() -> Result<(), Box<dyn Error>> {
 // `anyhow` is unused in code but referenced in a weak feature, so it can't be safely removed.
 #[test]
 fn unused_feature_weak_detect() -> Result<(), Box<dyn Error>> {
-    let (exit_code, output, _) = run_cargo_shear("unused_feature_weak", false)?;
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("unused_feature_weak").run()?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
     insta::assert_snapshot!(output, @r#"
@@ -1231,7 +1384,8 @@ fn unused_feature_weak_detect() -> Result<(), Box<dyn Error>> {
 // `anyhow` should remain since it's referenced in a weak feature, even though unused in code.
 #[test]
 fn unused_feature_weak_fix() -> Result<(), Box<dyn Error>> {
-    let (exit_code, _, temp_dir) = run_cargo_shear("unused_feature_weak", true)?;
+    let (exit_code, _output, temp_dir) =
+        CargoShearRunner::new("unused_feature_weak").options(CargoShearOptions::with_fix).run()?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
@@ -1243,7 +1397,7 @@ fn unused_feature_weak_fix() -> Result<(), Box<dyn Error>> {
 // `serde_json` (import `serde_json`) is not used in code.
 #[test]
 fn unused_naming_hyphen_detection() -> Result<(), Box<dyn Error>> {
-    let (exit_code, output, _) = run_cargo_shear("unused_naming_hyphen", false)?;
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("unused_naming_hyphen").run()?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     insta::assert_snapshot!(output, @r#"
@@ -1286,7 +1440,8 @@ fn unused_naming_hyphen_detection() -> Result<(), Box<dyn Error>> {
 // `serde_json` should be removed when fixing.
 #[test]
 fn unused_naming_hyphen_fix() -> Result<(), Box<dyn Error>> {
-    let (exit_code, _, temp_dir) = run_cargo_shear("unused_naming_hyphen", true)?;
+    let (exit_code, _output, temp_dir) =
+        CargoShearRunner::new("unused_naming_hyphen").options(CargoShearOptions::with_fix).run()?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
@@ -1298,7 +1453,7 @@ fn unused_naming_hyphen_fix() -> Result<(), Box<dyn Error>> {
 // `rustc-hash` (import `rustc_hash`) is not used in code.
 #[test]
 fn unused_naming_underscore_detection() -> Result<(), Box<dyn Error>> {
-    let (exit_code, output, _) = run_cargo_shear("unused_naming_underscore", false)?;
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("unused_naming_underscore").run()?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     insta::assert_snapshot!(output, @r#"
@@ -1341,7 +1496,9 @@ fn unused_naming_underscore_detection() -> Result<(), Box<dyn Error>> {
 // `rustc-hash` should be removed when fixing.
 #[test]
 fn unused_naming_underscore_fix() -> Result<(), Box<dyn Error>> {
-    let (exit_code, _, temp_dir) = run_cargo_shear("unused_naming_underscore", true)?;
+    let (exit_code, _output, temp_dir) = CargoShearRunner::new("unused_naming_underscore")
+        .options(CargoShearOptions::with_fix)
+        .run()?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
@@ -1353,7 +1510,7 @@ fn unused_naming_underscore_fix() -> Result<(), Box<dyn Error>> {
 // Optional `anyhow` enabled via `dep:anyhow` is unused but can't be removed without breaking the feature.
 #[test]
 fn unused_optional_detection() -> Result<(), Box<dyn Error>> {
-    let (exit_code, output, _) = run_cargo_shear("unused_optional", false)?;
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("unused_optional").run()?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
     insta::assert_snapshot!(output, @r#"
@@ -1407,7 +1564,8 @@ fn unused_optional_detection() -> Result<(), Box<dyn Error>> {
 // Unused optional `anyhow` enabled via `dep:anyhow` can't be removed since that would break the feature.
 #[test]
 fn unused_optional_fix() -> Result<(), Box<dyn Error>> {
-    let (exit_code, _, temp_dir) = run_cargo_shear("unused_optional", true)?;
+    let (exit_code, _output, temp_dir) =
+        CargoShearRunner::new("unused_optional").options(CargoShearOptions::with_fix).run()?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
@@ -1423,7 +1581,7 @@ fn unused_optional_fix() -> Result<(), Box<dyn Error>> {
 // Optional `anyhow` with implicit feature is unused but can't be removed without removing the feature.
 #[test]
 fn unused_optional_implicit_detection() -> Result<(), Box<dyn Error>> {
-    let (exit_code, output, _) = run_cargo_shear("unused_optional_implicit", false)?;
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("unused_optional_implicit").run()?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
     insta::assert_snapshot!(output, @r#"
@@ -1467,7 +1625,9 @@ fn unused_optional_implicit_detection() -> Result<(), Box<dyn Error>> {
 // Unused optional `anyhow` with implicit feature can't be removed since that would remove the feature.
 #[test]
 fn unused_optional_implicit_fix() -> Result<(), Box<dyn Error>> {
-    let (exit_code, _, temp_dir) = run_cargo_shear("unused_optional_implicit", true)?;
+    let (exit_code, _output, temp_dir) = CargoShearRunner::new("unused_optional_implicit")
+        .options(CargoShearOptions::with_fix)
+        .run()?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
@@ -1479,7 +1639,7 @@ fn unused_optional_implicit_fix() -> Result<(), Box<dyn Error>> {
 // Target specific `anyhow` is unused.
 #[test]
 fn unused_platform_detection() -> Result<(), Box<dyn Error>> {
-    let (exit_code, output, _) = run_cargo_shear("unused_platform", false)?;
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("unused_platform").run()?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     insta::assert_snapshot!(output, @r#"
@@ -1522,7 +1682,8 @@ fn unused_platform_detection() -> Result<(), Box<dyn Error>> {
 // Unused target specific `anyhow` should be removed.
 #[test]
 fn unused_platform_fix() -> Result<(), Box<dyn Error>> {
-    let (exit_code, _, temp_dir) = run_cargo_shear("unused_platform", true)?;
+    let (exit_code, _output, temp_dir) =
+        CargoShearRunner::new("unused_platform").options(CargoShearOptions::with_fix).run()?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
@@ -1535,7 +1696,7 @@ fn unused_platform_fix() -> Result<(), Box<dyn Error>> {
 // Renamed `anyhow_v1` is unused.
 #[test]
 fn unused_renamed_detection() -> Result<(), Box<dyn Error>> {
-    let (exit_code, output, _) = run_cargo_shear("unused_renamed", false)?;
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("unused_renamed").run()?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     insta::assert_snapshot!(output, @r#"
@@ -1578,7 +1739,8 @@ fn unused_renamed_detection() -> Result<(), Box<dyn Error>> {
 // Unused renamed `anyhow_v1` should be removed.
 #[test]
 fn unused_renamed_fix() -> Result<(), Box<dyn Error>> {
-    let (exit_code, _, temp_dir) = run_cargo_shear("unused_renamed", true)?;
+    let (exit_code, _output, temp_dir) =
+        CargoShearRunner::new("unused_renamed").options(CargoShearOptions::with_fix).run()?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
@@ -1590,7 +1752,7 @@ fn unused_renamed_fix() -> Result<(), Box<dyn Error>> {
 // Dependency `criterion2` (lib.name = "criterion") is unused.
 #[test]
 fn unused_libname_detection() -> Result<(), Box<dyn Error>> {
-    let (exit_code, output, _) = run_cargo_shear("unused_libname", false)?;
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("unused_libname").run()?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     insta::assert_snapshot!(output, @r#"
@@ -1633,7 +1795,8 @@ fn unused_libname_detection() -> Result<(), Box<dyn Error>> {
 // Unused dependency `criterion2` (lib.name = "criterion") should be removed.
 #[test]
 fn unused_libname_fix() -> Result<(), Box<dyn Error>> {
-    let (exit_code, _, temp_dir) = run_cargo_shear("unused_libname", true)?;
+    let (exit_code, _output, temp_dir) =
+        CargoShearRunner::new("unused_libname").options(CargoShearOptions::with_fix).run()?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
@@ -1645,7 +1808,7 @@ fn unused_libname_fix() -> Result<(), Box<dyn Error>> {
 // Table syntax `anyhow` is unused.
 #[test]
 fn unused_table_detection() -> Result<(), Box<dyn Error>> {
-    let (exit_code, output, _) = run_cargo_shear("unused_table", false)?;
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("unused_table").run()?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     insta::assert_snapshot!(output, @r#"
@@ -1689,7 +1852,8 @@ fn unused_table_detection() -> Result<(), Box<dyn Error>> {
 // Unused table syntax `anyhow` should be removed.
 #[test]
 fn unused_table_fix() -> Result<(), Box<dyn Error>> {
-    let (exit_code, _, temp_dir) = run_cargo_shear("unused_table", true)?;
+    let (exit_code, _output, temp_dir) =
+        CargoShearRunner::new("unused_table").options(CargoShearOptions::with_fix).run()?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
@@ -1701,7 +1865,7 @@ fn unused_table_fix() -> Result<(), Box<dyn Error>> {
 // Workspace dependency `anyhow` is not inherited by any workspace member.
 #[test]
 fn unused_workspace_detection() -> Result<(), Box<dyn Error>> {
-    let (exit_code, output, _) = run_cargo_shear("unused_workspace", false)?;
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("unused_workspace").run()?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     insta::assert_snapshot!(output, @r#"
@@ -1744,7 +1908,8 @@ fn unused_workspace_detection() -> Result<(), Box<dyn Error>> {
 // Unused workspace dependency `anyhow` should be removed.
 #[test]
 fn unused_workspace_fix() -> Result<(), Box<dyn Error>> {
-    let (exit_code, _, temp_dir) = run_cargo_shear("unused_workspace", true)?;
+    let (exit_code, _output, temp_dir) =
+        CargoShearRunner::new("unused_workspace").options(CargoShearOptions::with_fix).run()?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
@@ -1757,7 +1922,7 @@ fn unused_workspace_fix() -> Result<(), Box<dyn Error>> {
 // Renamed workspace dependency `anyhow_v1` is unused.
 #[test]
 fn unused_workspace_renamed_detection() -> Result<(), Box<dyn Error>> {
-    let (exit_code, output, _) = run_cargo_shear("unused_workspace_renamed", false)?;
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("unused_workspace_renamed").run()?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     insta::assert_snapshot!(output, @r#"
@@ -1800,7 +1965,9 @@ fn unused_workspace_renamed_detection() -> Result<(), Box<dyn Error>> {
 // Unused renamed workspace dependency `anyhow_v1` should be removed.
 #[test]
 fn unused_workspace_renamed_fix() -> Result<(), Box<dyn Error>> {
-    let (exit_code, _, temp_dir) = run_cargo_shear("unused_workspace_renamed", true)?;
+    let (exit_code, _output, temp_dir) = CargoShearRunner::new("unused_workspace_renamed")
+        .options(CargoShearOptions::with_fix)
+        .run()?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
@@ -1813,7 +1980,7 @@ fn unused_workspace_renamed_fix() -> Result<(), Box<dyn Error>> {
 // Workspace dependency `criterion2` (lib.name = "criterion") is unused.
 #[test]
 fn unused_workspace_libname_detection() -> Result<(), Box<dyn Error>> {
-    let (exit_code, output, _) = run_cargo_shear("unused_workspace_libname", false)?;
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("unused_workspace_libname").run()?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     insta::assert_snapshot!(output, @r#"
@@ -1856,7 +2023,9 @@ fn unused_workspace_libname_detection() -> Result<(), Box<dyn Error>> {
 // Unused workspace dependency `criterion2` (lib.name = "criterion") should be removed.
 #[test]
 fn unused_workspace_libname_fix() -> Result<(), Box<dyn Error>> {
-    let (exit_code, _, temp_dir) = run_cargo_shear("unused_workspace_libname", true)?;
+    let (exit_code, _output, temp_dir) = CargoShearRunner::new("unused_workspace_libname")
+        .options(CargoShearOptions::with_fix)
+        .run()?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
