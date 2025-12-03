@@ -33,27 +33,23 @@
 //!
 //! Here: `rustls-pki-types`
 
-use std::{
-    borrow::Cow,
-    env,
-    path::{Path, PathBuf},
-};
+use std::borrow::Cow;
 
 use anyhow::{Result, anyhow};
 use cargo_metadata::{Metadata, NodeDep, Package};
 use rustc_hash::{FxHashMap, FxHashSet};
+use toml::Spanned;
 
-pub use crate::manifest::DepLocation;
 use crate::{
     dependency_analyzer::{DependencyAnalyzer, FeatureRef},
-    manifest::{DepsSet, Manifest},
+    manifest::{DepLocation, DepsSet, Manifest},
 };
 
 /// An unused dependency.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct UnusedDependency {
     /// The dependency key.
-    pub name: String,
+    pub name: Spanned<String>,
 
     /// Where the dependency is in the manifest.
     pub location: DepLocation,
@@ -63,10 +59,7 @@ pub struct UnusedDependency {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct UnusedOptionalDependency {
     /// The dependency key.
-    pub name: String,
-
-    /// Where the dependency is in the manifest.
-    pub location: DepLocation,
+    pub name: Spanned<String>,
 
     /// Features referencing this dependency.
     pub features: Vec<FeatureRef>,
@@ -76,33 +69,7 @@ pub struct UnusedOptionalDependency {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct UnusedFeatureDependency {
     /// The dependency key.
-    pub name: String,
-
-    /// Where the dependency is in the manifest.
-    pub location: DepLocation,
-
-    /// Features referencing this dependency.
-    pub features: Vec<FeatureRef>,
-}
-
-/// A misplaced dependency.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct MisplacedDependency {
-    /// The dependency key.
-    pub name: String,
-
-    /// Where the dependency is in the manifest.
-    pub location: DepLocation,
-}
-
-/// A misplaced optional dependency.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct MisplacedOptionalDependency {
-    /// The dependency key.
-    pub name: String,
-
-    /// Where the dependency is in the manifest.
-    pub location: DepLocation,
+    pub name: Spanned<String>,
 
     /// Features referencing this dependency.
     pub features: Vec<FeatureRef>,
@@ -112,7 +79,44 @@ pub struct MisplacedOptionalDependency {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct UnusedWorkspaceDependency {
     /// The dependency key.
-    pub name: String,
+    pub name: Spanned<String>,
+}
+
+/// A misplaced dependency.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct MisplacedDependency {
+    /// The dependency key.
+    pub name: Spanned<String>,
+
+    /// Where the dependency is in the manifest.
+    pub location: DepLocation,
+}
+
+/// A misplaced optional dependency.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct MisplacedOptionalDependency {
+    /// The dependency key.
+    pub name: Spanned<String>,
+
+    /// Where the dependency is in the manifest.
+    pub location: DepLocation,
+
+    /// Features referencing this dependency.
+    pub features: Vec<FeatureRef>,
+}
+
+/// An unknown ignore.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct UnknownIgnore {
+    /// The dependency key.
+    pub name: Spanned<String>,
+}
+
+/// An redundant ignore.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct RedundantIgnore {
+    /// The dependency key.
+    pub name: Spanned<String>,
 }
 
 /// Processes packages to identify unused dependencies.
@@ -127,40 +131,43 @@ pub struct PackageProcessor {
 
 /// Result of processing a package.
 #[derive(Default)]
-pub struct PackageProcessResult {
+pub struct PackageAnalysis {
     /// Used package names.
     pub used_packages: FxHashSet<String>,
 
     /// Unused dependencies.
-    pub unused_dependencies: FxHashSet<UnusedDependency>,
+    pub unused_dependencies: Vec<UnusedDependency>,
 
     /// Unused optional dependencies.
-    #[expect(dead_code, reason = "Tracked for future warnings")]
-    pub unused_optional_dependencies: FxHashSet<UnusedOptionalDependency>,
+    pub unused_optional_dependencies: Vec<UnusedOptionalDependency>,
 
     /// Unused dependencies only referenced in features.
-    #[expect(dead_code, reason = "Tracked for future warnings")]
-    pub unused_feature_dependencies: FxHashSet<UnusedFeatureDependency>,
+    pub unused_feature_dependencies: Vec<UnusedFeatureDependency>,
 
     /// Misplaced dependencies.
-    pub misplaced_dependencies: FxHashSet<MisplacedDependency>,
+    pub misplaced_dependencies: Vec<MisplacedDependency>,
 
     /// Misplaced optional dependencies.
-    #[expect(dead_code, reason = "Tracked for future warnings")]
-    pub misplaced_optional_dependencies: FxHashSet<MisplacedOptionalDependency>,
+    pub misplaced_optional_dependencies: Vec<MisplacedOptionalDependency>,
+
+    /// Unknown ignores.
+    pub unknown_ignores: Vec<UnknownIgnore>,
 
     /// Redundant ignores.
-    pub redundant_ignores: FxHashSet<String>,
+    pub redundant_ignores: Vec<RedundantIgnore>,
 }
 
 /// Result of processing a workspace.
 #[derive(Default)]
-pub struct WorkspaceProcessResult {
+pub struct WorkspaceAnalysis {
     /// Unused workspace dependencies.
-    pub unused_dependencies: FxHashSet<UnusedWorkspaceDependency>,
+    pub unused_dependencies: Vec<UnusedWorkspaceDependency>,
+
+    /// Unknown workspace ignores.
+    pub unknown_ignores: Vec<UnknownIgnore>,
 
     /// Redundant workspace ignores.
-    pub redundant_ignores: FxHashSet<String>,
+    pub redundant_ignores: Vec<RedundantIgnore>,
 }
 
 impl PackageProcessor {
@@ -176,7 +183,9 @@ impl PackageProcessor {
         package: &Package,
         manifest: &Manifest,
         workspace_manifest: &Manifest,
-    ) -> Result<PackageProcessResult> {
+    ) -> Result<PackageAnalysis> {
+        let mut result = PackageAnalysis::default();
+
         let package_ignored_deps = &manifest.package.metadata.cargo_shear.ignored;
         let workspace_ignored_deps = &workspace_manifest.workspace.metadata.cargo_shear.ignored;
 
@@ -193,8 +202,10 @@ impl PackageProcessor {
 
         let import_to_pkg = Self::import_to_pkg_map(metadata, &resolved.deps)?;
         let pkg_to_import = Self::pkg_to_import_map(&import_to_pkg);
+
         let used_imports = self.analyzer.analyze_package(package, manifest)?;
-        let all_used_imports = used_imports.all_imports();
+        let code_imports = used_imports.code_imports();
+        let feature_imports = used_imports.feature_imports();
 
         let ignored_imports: FxHashSet<String> = package_ignored_deps
             .iter()
@@ -202,16 +213,9 @@ impl PackageProcessor {
             .map(|dep| dep.get_ref().replace('-', "_"))
             .collect();
 
-        let mut used_packages = FxHashSet::default();
-        let mut unused_dependencies = FxHashSet::default();
-        let mut unused_optional_dependencies = FxHashSet::default();
-        let mut unused_feature_dependencies = FxHashSet::default();
-        let mut misplaced_dependencies = FxHashSet::default();
-        let mut misplaced_optional_dependencies = FxHashSet::default();
-
         for (&import, &pkg) in &import_to_pkg {
-            if all_used_imports.contains(import) {
-                used_packages.insert(pkg.to_owned());
+            if code_imports.contains(import) || feature_imports.contains(import) {
+                result.used_packages.insert(pkg.to_owned());
             }
         }
 
@@ -223,77 +227,65 @@ impl PackageProcessor {
                 continue;
             }
 
-            let is_optional = dependency.get_ref().optional();
-
-            let used_in_normal = used_imports.normal.contains(&*import);
-            let used_in_dev = used_imports.dev.contains(&*import);
-            let used_in_build = used_imports.build.contains(&*import);
-
-            let features = used_imports.features.get(&*import);
-            let used_in_features = features.is_some();
-
-            let used_in_code = used_in_normal || used_in_dev || used_in_build;
-            if !used_in_code {
-                if is_optional {
-                    unused_optional_dependencies.insert(UnusedOptionalDependency {
-                        name: dep.get_ref().clone(),
-                        location,
-                        features: features.cloned().unwrap_or_default(),
+            if !code_imports.contains(&*import) {
+                if dependency.get_ref().optional() {
+                    result.unused_optional_dependencies.push(UnusedOptionalDependency {
+                        name: dep.clone(),
+                        features: used_imports.features.get(&*import).cloned().unwrap_or_default(),
                     });
 
                     continue;
                 }
 
-                if used_in_features {
-                    unused_feature_dependencies.insert(UnusedFeatureDependency {
-                        name: dep.get_ref().clone(),
-                        location,
-                        features: features.cloned().unwrap_or_default(),
+                if feature_imports.contains(&*import) {
+                    result.unused_feature_dependencies.push(UnusedFeatureDependency {
+                        name: dep.clone(),
+                        features: used_imports.features.get(&*import).cloned().unwrap_or_default(),
                     });
-                } else {
-                    unused_dependencies
-                        .insert(UnusedDependency { name: dep.get_ref().clone(), location });
+
+                    continue;
                 }
+
+                result
+                    .unused_dependencies
+                    .push(UnusedDependency { name: dep.clone(), location: location.clone() });
 
                 continue;
             }
 
-            if location.is_normal() && !used_in_normal && used_in_dev {
-                if is_optional {
-                    misplaced_optional_dependencies.insert(MisplacedOptionalDependency {
-                        name: dep.get_ref().clone(),
-                        location,
-                        features: features.cloned().unwrap_or_default(),
+            if location.is_normal()
+                && !used_imports.normal.contains(&*import)
+                && used_imports.dev.contains(&*import)
+            {
+                if dependency.get_ref().optional() {
+                    result.misplaced_optional_dependencies.push(MisplacedOptionalDependency {
+                        name: dep.clone(),
+                        location: location.clone(),
+                        features: used_imports.features.get(&*import).cloned().unwrap_or_default(),
                     });
                 } else {
-                    misplaced_dependencies
-                        .insert(MisplacedDependency { name: dep.get_ref().clone(), location });
+                    result.misplaced_dependencies.push(MisplacedDependency {
+                        name: dep.clone(),
+                        location: location.clone(),
+                    });
                 }
             }
         }
 
-        let mut redundant_ignores = FxHashSet::default();
         for ignored_dep in package_ignored_deps {
-            let ignored_dep = ignored_dep.get_ref();
-            let ignored_import = ignored_dep.replace('-', "_");
+            let ignored_import = ignored_dep.get_ref().replace('-', "_");
 
-            let doesnt_exist = !import_to_pkg.contains_key(ignored_import.as_str());
-            let is_used = all_used_imports.contains(&ignored_import);
+            if !import_to_pkg.contains_key(ignored_import.as_str()) {
+                result.unknown_ignores.push(UnknownIgnore { name: ignored_dep.clone() });
+                continue;
+            }
 
-            if doesnt_exist || is_used {
-                redundant_ignores.insert(ignored_dep.clone());
+            if code_imports.contains(&ignored_import) {
+                result.redundant_ignores.push(RedundantIgnore { name: ignored_dep.clone() });
             }
         }
 
-        Ok(PackageProcessResult {
-            used_packages,
-            unused_dependencies,
-            unused_optional_dependencies,
-            unused_feature_dependencies,
-            misplaced_dependencies,
-            misplaced_optional_dependencies,
-            redundant_ignores,
-        })
+        Ok(result)
     }
 
     /// Process workspace to find unused workspace dependencies.
@@ -301,56 +293,50 @@ impl PackageProcessor {
         manifest: &Manifest,
         metadata: &Metadata,
         workspace_used_pkgs: &FxHashSet<String>,
-    ) -> WorkspaceProcessResult {
+    ) -> WorkspaceAnalysis {
+        let mut result = WorkspaceAnalysis::default();
+
         if metadata.workspace_packages().len() <= 1 {
-            return WorkspaceProcessResult::default();
+            return result;
         }
 
         if manifest.workspace.dependencies.is_empty() {
-            return WorkspaceProcessResult::default();
+            return result;
         }
 
         let ignored_deps = &manifest.workspace.metadata.cargo_shear.ignored;
+        let ignored_dep_keys: FxHashSet<&str> =
+            ignored_deps.iter().map(|s| s.get_ref().as_str()).collect();
 
-        let dep_to_pkg = Self::dep_to_pkg_map(&manifest.workspace.dependencies);
-
-        let mut unused_dependencies = FxHashSet::default();
-        for (dep, pkg) in &dep_to_pkg {
-            if ignored_deps.iter().any(|d| d.get_ref() == dep) {
+        for (dep, dependency) in &manifest.workspace.dependencies {
+            if ignored_dep_keys.contains(dep.get_ref().as_str()) {
                 continue;
             }
 
-            if !workspace_used_pkgs.contains(pkg) {
-                unused_dependencies.insert(UnusedWorkspaceDependency { name: dep.clone() });
+            let pkg =
+                dependency.get_ref().package().map_or_else(|| dep.get_ref().clone(), str::to_owned);
+
+            if !workspace_used_pkgs.contains(&pkg) {
+                result.unused_dependencies.push(UnusedWorkspaceDependency { name: dep.clone() });
             }
         }
 
-        let mut redundant_ignores = FxHashSet::default();
+        let dep_to_pkg = Self::dep_to_pkg_map(&manifest.workspace.dependencies);
         for ignored_dep in ignored_deps {
-            let ignored_dep = ignored_dep.get_ref();
-            let doesnt_exist = !dep_to_pkg.contains_key(ignored_dep);
-            let is_used =
-                dep_to_pkg.get(ignored_dep).is_some_and(|pkg| workspace_used_pkgs.contains(pkg));
+            if !dep_to_pkg.contains_key(ignored_dep.get_ref()) {
+                result.unknown_ignores.push(UnknownIgnore { name: ignored_dep.clone() });
+                continue;
+            }
 
-            if doesnt_exist || is_used {
-                redundant_ignores.insert(ignored_dep.clone());
+            if dep_to_pkg
+                .get(ignored_dep.get_ref())
+                .is_some_and(|pkg| workspace_used_pkgs.contains(pkg))
+            {
+                result.redundant_ignores.push(RedundantIgnore { name: ignored_dep.clone() });
             }
         }
 
-        WorkspaceProcessResult { unused_dependencies, redundant_ignores }
-    }
-
-    /// Get the relative path for a manifest, preferring current dir over workspace root.
-    pub fn get_relative_path(manifest_path: &Path, workspace_root: &Path) -> PathBuf {
-        let dir = manifest_path.parent().unwrap_or(manifest_path);
-
-        let current_dir = env::current_dir().unwrap_or_default();
-
-        manifest_path
-            .strip_prefix(&current_dir)
-            .or_else(|_| manifest_path.strip_prefix(workspace_root))
-            .unwrap_or(dir)
-            .to_path_buf()
+        result
     }
 
     /// Build a map from import names to package names from resolved dependencies.

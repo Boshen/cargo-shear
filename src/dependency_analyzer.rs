@@ -20,6 +20,7 @@ use anyhow::{Result, anyhow};
 use cargo_metadata::{Package, Target, TargetKind};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use rustc_hash::{FxHashMap, FxHashSet};
+use toml::Spanned;
 use walkdir::{DirEntry, WalkDir};
 
 use crate::{import_collector::collect_imports, manifest::Manifest};
@@ -44,7 +45,7 @@ pub enum FeatureRef {
     /// [features]
     /// feature = ["dep:foo"]
     /// ```
-    Explicit { feature: String },
+    Explicit { feature: Spanned<String>, value: Spanned<String> },
 
     /// Dependency feature enablement.
     ///
@@ -52,7 +53,7 @@ pub enum FeatureRef {
     /// [features]
     /// feature = ["foo/bar"]
     /// ```
-    DepFeature { feature: String },
+    DepFeature { feature: Spanned<String>, value: Spanned<String> },
 
     /// Weak dependency feature enablement.
     ///
@@ -60,28 +61,31 @@ pub enum FeatureRef {
     /// [features]
     /// feature = ["foo?/bar"]
     /// ```
-    WeakDepFeature { feature: String },
+    WeakDepFeature { feature: Spanned<String>, value: Spanned<String> },
 }
 
 impl FeatureRef {
-    fn parse(feature: &str, value: &str) -> Option<(String, Self)> {
+    fn parse(feature: &Spanned<String>, value: &Spanned<String>) -> Option<(String, Self)> {
         // Handle `dep:foo` syntax
-        if let Some(dep) = value.strip_prefix("dep:") {
+        if let Some(dep) = value.as_ref().strip_prefix("dep:") {
             let import = dep.replace('-', "_");
-            return Some((import, Self::Explicit { feature: feature.to_owned() }));
+            return Some((
+                import,
+                Self::Explicit { feature: feature.clone(), value: value.clone() },
+            ));
         }
 
         // Handle `foo/bar` and `foo?/bar` syntax
-        if let Some((dep, _)) = value.split_once('/') {
+        if let Some((dep, _)) = value.as_ref().split_once('/') {
             let is_weak = dep.ends_with('?');
 
             let dep = dep.trim_end_matches('?');
             let import = dep.replace('-', "_");
 
             let feature = if is_weak {
-                Self::WeakDepFeature { feature: feature.to_owned() }
+                Self::WeakDepFeature { feature: feature.clone(), value: value.clone() }
             } else {
-                Self::DepFeature { feature: feature.to_owned() }
+                Self::DepFeature { feature: feature.clone(), value: value.clone() }
             };
 
             return Some((import, feature));
@@ -109,13 +113,15 @@ pub struct CategorizedImports {
 }
 
 impl CategorizedImports {
-    pub fn all_imports(&self) -> FxHashSet<String> {
-        self.normal
-            .union(&self.dev)
-            .chain(&self.build)
-            .chain(self.features.keys())
-            .cloned()
-            .collect()
+    /// All imports used in code (normal, dev, build).
+    pub fn code_imports(&self) -> FxHashSet<String> {
+        self.normal.union(&self.dev).chain(&self.build).cloned().collect()
+    }
+
+    /// All imports referenced only in features.
+    pub fn feature_imports(&self) -> FxHashSet<String> {
+        let code = self.code_imports();
+        self.features.keys().filter(|key| !code.contains(*key)).cloned().collect()
     }
 }
 
@@ -291,9 +297,8 @@ impl DependencyAnalyzer {
     fn analyze_features(categorized: &mut CategorizedImports, manifest: &Manifest) {
         for (feature, values) in &manifest.features {
             for value in values {
-                if let Some((import, feat)) = FeatureRef::parse(feature.get_ref(), value.get_ref())
-                {
-                    categorized.features.entry(import).or_default().push(feat);
+                if let Some((import, feature)) = FeatureRef::parse(feature, value) {
+                    categorized.features.entry(import).or_default().push(feature);
                 }
             }
         }

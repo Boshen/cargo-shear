@@ -32,8 +32,10 @@
 
 mod cargo_toml_editor;
 mod dependency_analyzer;
+mod diagnostics;
 mod import_collector;
 mod manifest;
+mod output;
 mod package_processor;
 #[cfg(test)]
 mod tests;
@@ -48,15 +50,16 @@ use std::{
 
 use anyhow::Result;
 use bpaf::Bpaf;
-use cargo_metadata::{CargoOpt, Metadata, MetadataCommand, Package};
+use cargo_metadata::{CargoOpt, MetadataCommand};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-use rustc_hash::FxHashSet;
 use toml_edit::DocumentMut;
 
 use crate::{
     cargo_toml_editor::CargoTomlEditor,
+    diagnostics::ShearAnalysis,
     manifest::Manifest,
-    package_processor::{PackageProcessResult, PackageProcessor, WorkspaceProcessResult},
+    output::{ColorMode, OutputFormat, Renderer},
+    package_processor::{PackageAnalysis, PackageProcessor, WorkspaceAnalysis},
 };
 
 const VERSION: &str = match option_env!("SHEAR_VERSION") {
@@ -108,6 +111,14 @@ pub struct CargoShearOptions {
     /// Can be specified multiple times to exclude multiple packages.
     exclude: Vec<String>,
 
+    /// Output format: auto
+    #[bpaf(long, fallback(OutputFormat::Auto))]
+    format: OutputFormat,
+
+    /// Color usage for output: auto, always, never
+    #[bpaf(long, fallback(ColorMode::Auto))]
+    color: ColorMode,
+
     /// Path to the project directory.
     ///
     /// Defaults to the current directory if not specified.
@@ -127,6 +138,8 @@ impl CargoShearOptions {
             frozen: false,
             package: vec![],
             exclude: vec![],
+            format: OutputFormat::Auto,
+            color: ColorMode::Never,
             path,
         }
     }
@@ -147,14 +160,8 @@ pub struct CargoShear<W> {
     /// Configuration options for the analysis
     options: CargoShearOptions,
 
-    /// Counter for total unused dependencies found
-    unused_dependencies: usize,
-
-    /// Counter for total misplaced dependencies found
-    misplaced_dependencies: usize,
-
-    /// Counter for dependencies that were fixed
-    fixed_dependencies: usize,
+    /// Result of the analysis.
+    analysis: ShearAnalysis,
 }
 
 impl<W: Write> CargoShear<W> {
@@ -175,14 +182,8 @@ impl<W: Write> CargoShear<W> {
     /// let shear = CargoShear::new(std::io::stdout(), options);
     /// ```
     #[must_use]
-    pub const fn new(writer: W, options: CargoShearOptions) -> Self {
-        Self {
-            writer,
-            options,
-            unused_dependencies: 0,
-            misplaced_dependencies: 0,
-            fixed_dependencies: 0,
-        }
+    pub fn new(writer: W, options: CargoShearOptions) -> Self {
+        Self { writer, options, analysis: ShearAnalysis::default() }
     }
 
     /// Run the dependency analysis and optionally fix unused dependencies.
@@ -201,54 +202,27 @@ impl<W: Write> CargoShear<W> {
     /// - `2` if an error occurred
     #[must_use]
     pub fn run(mut self) -> ExitCode {
-        let _ = writeln!(self.writer, "Analyzing {}", self.options.path.to_string_lossy());
-        let _ = writeln!(self.writer);
-
         match self.shear() {
             Ok(()) => {
-                let has_fixed = self.fixed_dependencies > 0;
+                let color = self.options.color.enabled();
+                let mut renderer = Renderer::new(&mut self.writer, self.options.format, color);
 
-                if has_fixed {
-                    let _ = writeln!(
-                        self.writer,
-                        "Fixed {} {}.\n",
-                        self.fixed_dependencies,
-                        if self.fixed_dependencies == 1 { "dependency" } else { "dependencies" }
-                    );
+                if let Err(err) = renderer.render(&self.analysis) {
+                    let _ = writeln!(self.writer, "error rendering report: {err:?}");
+                    return ExitCode::from(2);
                 }
 
-                let total_issues = self.unused_dependencies + self.misplaced_dependencies;
-                let has_issues = (total_issues - self.fixed_dependencies) > 0;
-
-                if has_issues {
-                    let _ = writeln!(
-                        self.writer,
-                        "\n\
-                        cargo-shear may have detected unused dependencies incorrectly due to its limitations.\n\
-                        They can be ignored by adding the crate name to the package's Cargo.toml:\n\n\
-                        [package.metadata.cargo-shear]\n\
-                        ignored = [\"crate-name\"]\n\n\
-                        or in the workspace Cargo.toml:\n\n\
-                        [workspace.metadata.cargo-shear]\n\
-                        ignored = [\"crate-name\"]\n"
-                    );
-
-                    if !self.options.fix {
-                        let _ =
-                            writeln!(self.writer, "To automatically fix issues, run with --fix");
-                    }
+                let has_errors = self.analysis.unused > 0 || self.analysis.misplaced > 0;
+                if self.options.fix && self.analysis.fixed > 0 && !has_errors {
+                    ExitCode::SUCCESS
+                } else if has_errors {
+                    ExitCode::FAILURE
                 } else {
-                    let _ = writeln!(self.writer, "No issues detected!");
+                    ExitCode::SUCCESS
                 }
-
-                ExitCode::from(u8::from(if self.options.fix { has_fixed } else { has_issues }))
             }
             Err(err) => {
-                let _ = writeln!(self.writer, "{err:?}");
-                let _ = writeln!(
-                    self.writer,
-                    "note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace"
-                );
+                let _ = writeln!(self.writer, "error: {err:?}");
                 ExitCode::from(2)
             }
         }
@@ -275,6 +249,7 @@ impl<W: Write> CargoShear<W> {
 
         let processor = PackageProcessor::new(self.options.expand);
 
+        let root = metadata.workspace_root.as_std_path().to_path_buf();
         let workspace_manifest_path = metadata.workspace_root.as_std_path().join("Cargo.toml");
         let workspace_content = fs::read_to_string(&workspace_manifest_path)?;
         let workspace_manifest: Manifest = toml::from_str(&workspace_content)?;
@@ -304,6 +279,8 @@ impl<W: Write> CargoShear<W> {
             .par_iter()
             .map(|package| {
                 let manifest_path = package.manifest_path.as_std_path();
+                let relative_path = manifest_path.strip_prefix(&root).unwrap_or(manifest_path);
+
                 let content = fs::read_to_string(manifest_path)?;
                 let manifest: Manifest = toml::from_str(&content)?;
                 let result = processor.process_package(
@@ -312,95 +289,39 @@ impl<W: Write> CargoShear<W> {
                     &manifest,
                     &workspace_manifest,
                 )?;
-                Ok::<_, anyhow::Error>((*package, manifest_path, result))
+                Ok::<_, anyhow::Error>((relative_path.to_path_buf(), content, result))
             })
             .collect::<Result<Vec<_>>>()?;
 
-        // Track all packages used across the workspace
-        let mut workspace_used_pkgs = FxHashSet::default();
-
-        for (package, manifest_path, result) in results {
-            self.report_package_issues(package, &result, &metadata)?;
-            self.fix_package_issues(manifest_path, &result)?;
-
-            workspace_used_pkgs.extend(result.used_packages);
+        for (path, content, result) in results {
+            let absolute_path = root.join(&path);
+            let fixed = self.fix_package_issues(&absolute_path, &result)?;
+            self.analysis.add_package_result(&path, content, &result, fixed);
         }
 
         // Process workspace
         let workspace_result = PackageProcessor::process_workspace(
             &workspace_manifest,
             &metadata,
-            &workspace_used_pkgs,
+            &self.analysis.packages,
         );
 
-        self.report_workspace_issues(&workspace_manifest_path, &workspace_result)?;
-        self.fix_workspace_issues(&workspace_manifest_path, &workspace_result)?;
+        let relative =
+            workspace_manifest_path.strip_prefix(&root).unwrap_or(&workspace_manifest_path);
+
+        let fixed = self.fix_workspace_issues(&workspace_manifest_path, &workspace_result)?;
+        self.analysis.add_workspace_result(relative, workspace_content, &workspace_result, fixed);
 
         Ok(())
     }
 
-    fn report_package_issues(
-        &mut self,
-        package: &Package,
-        result: &PackageProcessResult,
-        metadata: &Metadata,
-    ) -> Result<()> {
-        // Warn about redundant ignores
-        for ignored_dep in &result.redundant_ignores {
-            writeln!(
-                self.writer,
-                "warning: '{ignored_dep}' in [package.metadata.cargo-shear] for package '{}' is ignored but not needed; remove it unless you're suppressing a known false positive.\n",
-                package.name
-            )?;
-        }
-
-        let unused_count = result.unused_dependencies.len();
-        let misplaced_count = result.misplaced_dependencies.len();
-
-        if unused_count == 0 && misplaced_count == 0 {
-            return Ok(());
-        }
-
-        let relative_path = PackageProcessor::get_relative_path(
-            package.manifest_path.as_std_path(),
-            metadata.workspace_root.as_std_path(),
-        );
-
-        writeln!(self.writer, "{} -- {}:", package.name, relative_path.display())?;
-
-        if unused_count > 0 {
-            writeln!(self.writer, "  unused dependencies:")?;
-            for unused_dep in &result.unused_dependencies {
-                writeln!(self.writer, "    {}", unused_dep.name)?;
-            }
-        }
-
-        if misplaced_count > 0 {
-            writeln!(self.writer, "  move to dev-dependencies:")?;
-            for misplaced_dep in &result.misplaced_dependencies {
-                writeln!(self.writer, "    {}", misplaced_dep.name)?;
-            }
-        }
-
-        writeln!(self.writer)?;
-
-        self.unused_dependencies += unused_count;
-        self.misplaced_dependencies += misplaced_count;
-
-        Ok(())
-    }
-
-    fn fix_package_issues(
-        &mut self,
-        manifest_path: &Path,
-        result: &PackageProcessResult,
-    ) -> Result<()> {
+    fn fix_package_issues(&self, manifest_path: &Path, result: &PackageAnalysis) -> Result<usize> {
         if !self.options.fix {
-            return Ok(());
+            return Ok(0);
         }
 
         if result.misplaced_dependencies.is_empty() && result.unused_dependencies.is_empty() {
-            return Ok(());
+            return Ok(0);
         }
 
         let content = fs::read_to_string(manifest_path)?;
@@ -414,56 +335,20 @@ impl<W: Write> CargoShear<W> {
         );
 
         fs::write(manifest_path, manifest.to_string())?;
-        self.fixed_dependencies += fixed_unused + fixed_misplaced;
-
-        Ok(())
-    }
-
-    fn report_workspace_issues(
-        &mut self,
-        manifest_path: &Path,
-        result: &WorkspaceProcessResult,
-    ) -> Result<()> {
-        // Warn about redundant workspace ignores
-        for ignored_dep in &result.redundant_ignores {
-            writeln!(
-                self.writer,
-                "warning: '{ignored_dep}' in [workspace.metadata.cargo-shear] is ignored but not needed; remove it unless you're suppressing a known false positive.\n"
-            )?;
-        }
-
-        if result.unused_dependencies.is_empty() {
-            return Ok(());
-        }
-
-        let path = manifest_path
-            .strip_prefix(env::current_dir().unwrap_or_default())
-            .unwrap_or(manifest_path)
-            .to_string_lossy();
-
-        writeln!(self.writer, "root -- {path}:")?;
-        writeln!(self.writer, "  unused dependencies:")?;
-        for unused_dep in &result.unused_dependencies {
-            writeln!(self.writer, "    {}", unused_dep.name)?;
-        }
-        writeln!(self.writer)?;
-
-        self.unused_dependencies += result.unused_dependencies.len();
-
-        Ok(())
+        Ok(fixed_unused + fixed_misplaced)
     }
 
     fn fix_workspace_issues(
-        &mut self,
+        &self,
         manifest_path: &Path,
-        result: &WorkspaceProcessResult,
-    ) -> Result<()> {
+        result: &WorkspaceAnalysis,
+    ) -> Result<usize> {
         if !self.options.fix {
-            return Ok(());
+            return Ok(0);
         }
 
         if result.unused_dependencies.is_empty() {
-            return Ok(());
+            return Ok(0);
         }
 
         let content = fs::read_to_string(manifest_path)?;
@@ -473,8 +358,6 @@ impl<W: Write> CargoShear<W> {
             CargoTomlEditor::remove_workspace_deps(&mut manifest, &result.unused_dependencies);
 
         fs::write(manifest_path, manifest.to_string())?;
-        self.fixed_dependencies += fixed;
-
-        Ok(())
+        Ok(fixed)
     }
 }
