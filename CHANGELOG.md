@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.1](https://github.com/Boshen/cargo-shear/compare/v1.7.0...v1.7.1) - 2025-12-03
+
+### <!-- 9 -->💼 Other
+- Skip workspace analysis when package/exclude is specified ([#343](https://github.com/Boshen/cargo-shear/pull/343)) (by @CathalMullan)
+- Switch to `miette` for output, add new warnings ([#342](https://github.com/Boshen/cargo-shear/pull/342)) (by @CathalMullan)
+
+### Contributors
+
+* @CathalMullan
+* @renovate[bot]
+* @Boshen
+
 ## [1.7.0](https://github.com/Boshen/cargo-shear/compare/v1.6.6...v1.7.0) - 2025-11-30
 
 ### Added
