@@ -50,6 +50,31 @@ fn extern_crate() {
 }
 
 #[test]
+fn macro_extern_crate() {
+    test("my_macro! { extern crate foo; }");
+    test("my_macro!( extern crate foo; );");
+    test("my_macro![ extern crate foo; ];");
+}
+
+#[test]
+fn macro_use() {
+    test("my_macro! { use foo; }");
+    test("my_macro!( use foo; );");
+}
+
+#[test]
+fn macro_use_path() {
+    test("my_macro! { use foo::bar; }");
+    test("my_macro!( use foo::bar; );");
+}
+
+#[test]
+fn macro_use_group() {
+    test_multiple_deps("my_macro! { use {foo, bar}; }", &["foo", "bar"]);
+    test_multiple_deps("my_macro!( use {foo, bar}; );", &["foo", "bar"]);
+}
+
+#[test]
 fn meta_list_path() {
     test(r#"#[foo::instrument(level = "debug")] fn print_with_indent() {}"#);
 }
