@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.2](https://github.com/Boshen/cargo-shear/compare/v1.7.1...v1.7.2) - 2025-12-04
+
+### <!-- 9 -->💼 Other
+- Collect imports inside macros ([#346](https://github.com/Boshen/cargo-shear/pull/346)) (by @CathalMullan)
+
+### Contributors
+
+* @CathalMullan
+
 ## [1.7.1](https://github.com/Boshen/cargo-shear/compare/v1.7.0...v1.7.1) - 2025-12-03
 
 ### <!-- 9 -->💼 Other
