@@ -105,16 +105,25 @@ impl ImportCollector {
         }
     }
 
-    fn is_known_import(s: &str) -> bool {
-        matches!(s, "crate" | "super" | "self" | "std")
-    }
-
-    fn add_import(&mut self, s: &str) {
-        if !Self::is_known_import(s) {
-            // Handle raw identifiers
-            let clean = s.strip_prefix("r#").unwrap_or(s);
-            self.deps.insert(clean.to_owned());
+    fn add_import(&mut self, import: &str) {
+        if import.is_empty() {
+            return;
         }
+
+        // Handle known imports
+        if matches!(import, "crate" | "super" | "self" | "std") {
+            return;
+        }
+
+        // Handle raw identifiers
+        let clean = import.strip_prefix("r#").unwrap_or(import);
+
+        // Must start with letter or underscore
+        if !clean.chars().next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_') {
+            return;
+        }
+
+        self.deps.insert(clean.to_owned());
     }
 
     fn collect_use_tree(&mut self, tree: &UseTree) {
@@ -159,8 +168,7 @@ impl ImportCollector {
         self.add_import(ident.as_ref());
     }
 
-    // `println!("{}", foo::bar);`
-    //                 ^^^^^^^^ search for the `::` pattern
+    /// Collect imports from a token stream.
     fn collect_tokens(&mut self, node: &SyntaxNode) {
         let tokens: Vec<SyntaxToken> = node
             .descendants_with_tokens()
@@ -169,55 +177,104 @@ impl ImportCollector {
             .collect();
 
         for (i, token) in tokens.iter().enumerate() {
-            if i == 0 {
-                continue;
-            }
+            match token.kind() {
+                // `extern crate foo;`
+                SyntaxKind::CRATE_KW => {
+                    if i < 1 || tokens[i - 1].kind() != SyntaxKind::EXTERN_KW {
+                        continue;
+                    }
 
-            let is_path_sep = match token.kind() {
-                SyntaxKind::COLON2 => true,
-                SyntaxKind::COLON => {
-                    i + 1 < tokens.len() && tokens[i + 1].kind() == SyntaxKind::COLON
+                    let Some(next) = tokens.get(i + 1) else {
+                        continue;
+                    };
+
+                    if next.kind() != SyntaxKind::IDENT {
+                        continue;
+                    }
+
+                    self.add_import(next.text());
                 }
-                _ => false,
-            };
+                // `use foo;`
+                // `use {foo, bar};`
+                SyntaxKind::USE_KW => {
+                    let Some(next) = tokens.get(i + 1) else {
+                        continue;
+                    };
 
-            if is_path_sep {
-                // Check that prev token is NOT also preceded by ::
-                // (we only want the first segment of a path)
-                let preceded_by_path_sep = i >= 2 && {
-                    let before_prev = &tokens[i - 2];
-                    before_prev.kind() == SyntaxKind::COLON2
-                        || (before_prev.kind() == SyntaxKind::COLON
-                            && i >= 3
-                            && tokens[i - 3].kind() == SyntaxKind::COLON)
-                };
-
-                if !preceded_by_path_sep {
-                    let prev = &tokens[i - 1];
-                    if prev.kind() == SyntaxKind::IDENT && Self::is_valid_import_ident(prev.text())
-                    {
-                        self.add_import(prev.text());
+                    match next.kind() {
+                        SyntaxKind::IDENT => self.add_import(next.text()),
+                        SyntaxKind::L_CURLY => self.collect_use_group(&tokens[i + 2..]),
+                        _ => {}
                     }
                 }
+                // `foo::bar`
+                SyntaxKind::COLON2 => {
+                    self.collect_path_import(&tokens, i);
+                }
+                SyntaxKind::COLON => {
+                    let is_path_sep =
+                        tokens.get(i + 1).is_some_and(|t| t.kind() == SyntaxKind::COLON);
+
+                    if is_path_sep {
+                        self.collect_path_import(&tokens, i);
+                    }
+                }
+                _ => {}
             }
         }
     }
 
-    fn is_valid_import_ident(text: &str) -> bool {
-        if text.is_empty() {
-            return false;
+    /// Collect imports from `use {foo, bar};`
+    fn collect_use_group(&mut self, tokens: &[SyntaxToken]) {
+        let mut after_path_sep = false;
+        for token in tokens {
+            match token.kind() {
+                SyntaxKind::COLON2 | SyntaxKind::COLON => {
+                    after_path_sep = true;
+                }
+                SyntaxKind::COMMA => {
+                    after_path_sep = false;
+                }
+                SyntaxKind::IDENT => {
+                    if !after_path_sep {
+                        self.add_import(token.text());
+                    }
+                }
+                SyntaxKind::R_CURLY => {
+                    return;
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// Collect import from `foo::bar::baz`.
+    fn collect_path_import(&mut self, tokens: &[SyntaxToken], i: usize) {
+        if i < 1 {
+            return;
         }
 
-        // Skip known keywords
-        if Self::is_known_import(text) {
-            return false;
+        // Skip if not the first `::` in the path
+        if i >= 2 {
+            let before_prev = &tokens[i - 2];
+            if before_prev.kind() == SyntaxKind::COLON2 {
+                return;
+            }
+
+            if before_prev.kind() == SyntaxKind::COLON
+                && i >= 3
+                && tokens[i - 3].kind() == SyntaxKind::COLON
+            {
+                return;
+            }
         }
 
-        // Handle raw identifiers
-        let clean = text.strip_prefix("r#").unwrap_or(text);
+        let prev = &tokens[i - 1];
+        if prev.kind() != SyntaxKind::IDENT {
+            return;
+        }
 
-        // Must start with letter or underscore
-        clean.chars().next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        self.add_import(prev.text());
     }
 
     // #[serde(with = "foo")]
