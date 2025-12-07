@@ -9,12 +9,7 @@
 //! The analyzer walks through all source files in a package, collects import
 //! statements, and builds a set of used import names.
 
-use std::{
-    env,
-    ffi::OsString,
-    path::{Path, PathBuf},
-    process::Command,
-};
+use std::{env, ffi::OsString, path::PathBuf, process::Command};
 
 use anyhow::{Result, anyhow};
 use cargo_metadata::{Package, Target, TargetKind};
@@ -23,7 +18,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use toml::Spanned;
 use walkdir::{DirEntry, WalkDir};
 
-use crate::{import_collector::collect_imports, manifest::Manifest};
+use crate::{manifest::Manifest, source_parser::ParsedSource};
 
 /// How a dependency is referenced in `[features]`.
 ///
@@ -164,14 +159,13 @@ impl DependencyAnalyzer {
             let target_kind = target.kind.first().ok_or_else(|| anyhow!("Target has no kind"))?;
             let rust_files = Self::get_target_rust_files(target);
 
-            let deps_vec: Vec<FxHashSet<String>> = rust_files
+            let imports: FxHashSet<String> = rust_files
                 .par_iter()
-                .map(|path| Self::process_rust_source(path))
-                .collect::<Result<Vec<_>>>()?;
-
-            let imports = deps_vec
+                .map(|path| ParsedSource::from_path(path.as_path()))
+                .collect::<Result<Vec<_>, _>>()?
                 .into_iter()
-                .fold(FxHashSet::default(), |a, b| a.union(&b).cloned().collect());
+                .flat_map(|parsed| parsed.imports)
+                .collect();
 
             Self::categorize_imports(categorized, target_kind, imports);
         }
@@ -236,8 +230,8 @@ impl DependencyAnalyzer {
                 ));
             }
 
-            let imports = collect_imports(&output_str);
-            Self::categorize_imports(categorized, target_kind, imports);
+            let parsed = ParsedSource::from_str(&output_str);
+            Self::categorize_imports(categorized, target_kind, parsed.imports);
         }
 
         Ok(())
@@ -285,12 +279,6 @@ impl DependencyAnalyzer {
             | TargetKind::Unknown(_)
             | _ => categorized.normal.extend(imports),
         }
-    }
-
-    /// Parse a Rust source file and collect all import names.
-    fn process_rust_source(path: &Path) -> Result<FxHashSet<String>> {
-        let source_text = std::fs::read_to_string(path)?;
-        Ok(collect_imports(&source_text))
     }
 
     /// Collect import names for dependencies referenced in features.

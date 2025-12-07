@@ -33,10 +33,10 @@
 mod cargo_toml_editor;
 mod dependency_analyzer;
 mod diagnostics;
-mod import_collector;
 mod manifest;
 mod output;
 mod package_processor;
+mod source_parser;
 #[cfg(test)]
 mod tests;
 
