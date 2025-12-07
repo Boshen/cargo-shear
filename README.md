@@ -125,6 +125,7 @@ GitHub Actions Job Example:
 * -164 lines [astral-sh/uv](https://github.com/astral-sh/uv/pull/3527)
 * -86 lines [reqsign](https://github.com/Xuanwo/reqsign/pull/481)
 * -184 lines from [turbopack](https://github.com/vercel/next.js/pull/80121)
+* -625 lines from [openai/codex](https://github.com/openai/codex/pull/3338)
 
 ## [Sponsored By](https://github.com/sponsors/Boshen)
 
