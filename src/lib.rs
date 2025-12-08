@@ -308,6 +308,7 @@ impl<W: Write> CargoShear<W> {
             .features(CargoOpt::AllFeatures)
             .current_dir(&self.options.path)
             .other_options(extra_opts)
+            .verbose(true)
             .exec()
             .map_err(|e| anyhow::anyhow!("Metadata error: {e}"))?;
 
