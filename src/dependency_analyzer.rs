@@ -40,6 +40,11 @@ pub enum FeatureRef {
     /// [features]
     /// feature = ["dep:foo"]
     /// ```
+    ///
+    /// ```toml
+    /// [features]
+    /// feature = ["foo"]
+    /// ```
     Explicit { feature: Spanned<String>, value: Spanned<String> },
 
     /// Dependency feature enablement.
@@ -60,14 +65,11 @@ pub enum FeatureRef {
 }
 
 impl FeatureRef {
-    fn parse(feature: &Spanned<String>, value: &Spanned<String>) -> Option<(String, Self)> {
+    fn parse(feature: &Spanned<String>, value: &Spanned<String>) -> (String, Self) {
         // Handle `dep:foo` syntax
         if let Some(dep) = value.as_ref().strip_prefix("dep:") {
             let import = dep.replace('-', "_");
-            return Some((
-                import,
-                Self::Explicit { feature: feature.clone(), value: value.clone() },
-            ));
+            return (import, Self::Explicit { feature: feature.clone(), value: value.clone() });
         }
 
         // Handle `foo/bar` and `foo?/bar` syntax
@@ -83,11 +85,13 @@ impl FeatureRef {
                 Self::DepFeature { feature: feature.clone(), value: value.clone() }
             };
 
-            return Some((import, feature));
+            return (import, feature);
         }
 
-        // Assume this is enabling another feature
-        None
+        // Assume this is enabling another feature.
+        // May be a dependency, so worth tracking.
+        let import = value.as_ref().replace('-', "_");
+        (import, Self::Explicit { feature: feature.clone(), value: value.clone() })
     }
 }
 
@@ -285,9 +289,8 @@ impl DependencyAnalyzer {
     fn analyze_features(categorized: &mut CategorizedImports, manifest: &Manifest) {
         for (feature, values) in &manifest.features {
             for value in values {
-                if let Some((import, feature)) = FeatureRef::parse(feature, value) {
-                    categorized.features.entry(import).or_default().push(feature);
-                }
+                let (import, feature) = FeatureRef::parse(feature, value);
+                categorized.features.entry(import).or_default().push(feature);
             }
         }
 
