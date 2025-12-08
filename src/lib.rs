@@ -50,7 +50,8 @@ use std::{
 
 use anyhow::Result;
 use bpaf::Bpaf;
-use cargo_metadata::{CargoOpt, MetadataCommand};
+use cargo_metadata::{CargoOpt, Metadata, MetadataCommand, Package};
+use owo_colors::OwoColorize;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use toml_edit::DocumentMut;
 
@@ -339,24 +340,45 @@ impl<W: Write> CargoShear<W> {
             })
             .collect();
 
-        // Process packages in parallel
-        let results: Vec<_> = packages
-            .par_iter()
-            .map(|package| {
-                let manifest_path = package.manifest_path.as_std_path();
-                let relative_path = manifest_path.strip_prefix(&root).unwrap_or(manifest_path);
+        let total = packages.len();
+        let results: Vec<_> = if self.options.expand {
+            // Process packages sequentially, since expand needs to invoke `cargo build`.
+            packages
+                .iter()
+                .enumerate()
+                .map(|(index, package)| {
+                    eprintln!(
+                        "{:>12} {} [{}/{}]",
+                        "Expanding".bright_cyan().bold(),
+                        package.name,
+                        index + 1,
+                        total
+                    );
 
-                let content = fs::read_to_string(manifest_path)?;
-                let manifest: Manifest = toml::from_str(&content)?;
-                let result = processor.process_package(
-                    &metadata,
-                    package,
-                    &manifest,
-                    &workspace_manifest,
-                )?;
-                Ok::<_, anyhow::Error>((relative_path.to_path_buf(), content, result))
-            })
-            .collect::<Result<Vec<_>>>()?;
+                    Self::process_package(
+                        &root,
+                        &processor,
+                        &metadata,
+                        &workspace_manifest,
+                        package,
+                    )
+                })
+                .collect::<Result<Vec<_>>>()?
+        } else {
+            // Process packages in parallel
+            packages
+                .par_iter()
+                .map(|package| {
+                    Self::process_package(
+                        &root,
+                        &processor,
+                        &metadata,
+                        &workspace_manifest,
+                        package,
+                    )
+                })
+                .collect::<Result<Vec<_>>>()?
+        };
 
         for (path, content, result) in results {
             let absolute_path = root.join(&path);
@@ -385,6 +407,23 @@ impl<W: Write> CargoShear<W> {
         }
 
         Ok(())
+    }
+
+    fn process_package(
+        root: &Path,
+        processor: &PackageProcessor,
+        metadata: &Metadata,
+        workspace_manifest: &Manifest,
+        package: &Package,
+    ) -> Result<(PathBuf, String, PackageAnalysis)> {
+        let manifest_path = package.manifest_path.as_std_path();
+        let relative_path = manifest_path.strip_prefix(root).unwrap_or(manifest_path);
+
+        let content = fs::read_to_string(manifest_path)?;
+        let manifest: Manifest = toml::from_str(&content)?;
+        let result = processor.process_package(metadata, package, &manifest, workspace_manifest)?;
+
+        Ok((relative_path.to_path_buf(), content, result))
     }
 
     fn fix_package_issues(&self, manifest_path: &Path, result: &PackageAnalysis) -> Result<usize> {

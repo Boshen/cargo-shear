@@ -9,7 +9,12 @@
 //! The analyzer walks through all source files in a package, collects import
 //! statements, and builds a set of used import names.
 
-use std::{env, ffi::OsString, path::PathBuf, process::Command};
+use std::{
+    env,
+    ffi::OsString,
+    path::PathBuf,
+    process::{Command, Stdio},
+};
 
 use anyhow::{Result, anyhow};
 use cargo_metadata::{Package, Target, TargetKind};
@@ -210,20 +215,16 @@ impl DependencyAnalyzer {
                 .arg(&target_arg)
                 .arg("--all-features")
                 .arg("--profile=check")
-                .arg("--color=never")
                 .arg("--")
                 .arg("-Zunpretty=expanded")
                 .current_dir(package.manifest_path.parent().ok_or_else(|| {
                     anyhow!("Failed to get parent path: {}", package.manifest_path)
-                })?);
+                })?)
+                .stderr(Stdio::inherit());
 
             let output = cmd.output()?;
             if !output.status.success() {
-                return Err(anyhow!(
-                    "Cargo expand failed for {}:\n{}",
-                    target.name,
-                    String::from_utf8_lossy(&output.stderr)
-                ));
+                return Err(anyhow!("Cargo expand failed for {}", target.name));
             }
 
             let output_str = String::from_utf8(output.stdout)?;
