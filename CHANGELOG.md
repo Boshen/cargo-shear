@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.2](https://github.com/Boshen/cargo-shear/compare/v1.7.1...v1.7.2) - 2025-12-09
+
+### <!-- 4 -->⚡ Performance
+- Use simdutf8 for faster file reading ([#359](https://github.com/Boshen/cargo-shear/pull/359)) (by @Boshen)
+
+### <!-- 9 -->💼 Other
+- Show cargo build output when expanding ([#358](https://github.com/Boshen/cargo-shear/pull/358)) (by @CathalMullan)
+- Show cargo metadata output to users ([#356](https://github.com/Boshen/cargo-shear/pull/356)) (by @Boshen)
+- Fix feature ref diagnostic to include plain dep enablements ([#355](https://github.com/Boshen/cargo-shear/pull/355)) (by @CathalMullan)
+- Rewrite source parser to use `pulldown-cmark` for comment parsing ([#353](https://github.com/Boshen/cargo-shear/pull/353)) (by @CathalMullan)
+- Add OpenAI Codex to trophy case (by @Boshen)
+- Collect imports inside macros ([#346](https://github.com/Boshen/cargo-shear/pull/346)) (by @CathalMullan)
+
+### Contributors
+
+* @Boshen
+* @CathalMullan
+* @renovate[bot]
+
 ## [1.7.1](https://github.com/Boshen/cargo-shear/compare/v1.7.0...v1.7.1) - 2025-12-03
 
 ### <!-- 9 -->💼 Other
