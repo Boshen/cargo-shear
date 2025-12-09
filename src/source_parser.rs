@@ -18,6 +18,8 @@ use ra_ap_syntax::{
 };
 use rustc_hash::FxHashSet;
 
+use crate::util::read_to_string;
+
 /// Result of parsing a source file.
 #[derive(Debug, Default)]
 pub struct ParsedSource {
@@ -28,7 +30,7 @@ pub struct ParsedSource {
 impl ParsedSource {
     /// Parse a file.
     pub fn from_path(path: &StdPath) -> io::Result<Self> {
-        let source = std::fs::read_to_string(path)?;
+        let source = read_to_string(path)?;
         Ok(SourceParser::parse(&source))
     }
 

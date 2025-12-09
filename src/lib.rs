@@ -39,6 +39,7 @@ mod package_processor;
 mod source_parser;
 #[cfg(test)]
 mod tests;
+pub mod util;
 
 use std::{
     env, fs,
@@ -62,6 +63,7 @@ use crate::{
     manifest::Manifest,
     output::Renderer,
     package_processor::{PackageAnalysis, PackageProcessor, WorkspaceAnalysis},
+    util::read_to_string,
 };
 
 const VERSION: &str = match option_env!("SHEAR_VERSION") {
@@ -317,7 +319,7 @@ impl<W: Write> CargoShear<W> {
 
         let root = metadata.workspace_root.as_std_path().to_path_buf();
         let workspace_manifest_path = metadata.workspace_root.as_std_path().join("Cargo.toml");
-        let workspace_content = fs::read_to_string(&workspace_manifest_path)?;
+        let workspace_content = read_to_string(&workspace_manifest_path)?;
         let workspace_manifest: Manifest = toml::from_str(&workspace_content)?;
 
         let packages = metadata.workspace_packages();
@@ -419,7 +421,7 @@ impl<W: Write> CargoShear<W> {
         let manifest_path = package.manifest_path.as_std_path();
         let relative_path = manifest_path.strip_prefix(root).unwrap_or(manifest_path);
 
-        let content = fs::read_to_string(manifest_path)?;
+        let content = read_to_string(manifest_path)?;
         let manifest: Manifest = toml::from_str(&content)?;
         let result = processor.process_package(metadata, package, &manifest, workspace_manifest)?;
 
@@ -435,7 +437,7 @@ impl<W: Write> CargoShear<W> {
             return Ok(0);
         }
 
-        let content = fs::read_to_string(manifest_path)?;
+        let content = read_to_string(manifest_path)?;
         let mut manifest = DocumentMut::from_str(&content)?;
 
         let fixed_unused =
@@ -462,7 +464,7 @@ impl<W: Write> CargoShear<W> {
             return Ok(0);
         }
 
-        let content = fs::read_to_string(manifest_path)?;
+        let content = read_to_string(manifest_path)?;
         let mut manifest = DocumentMut::from_str(&content)?;
 
         let fixed =

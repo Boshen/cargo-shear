@@ -28,6 +28,7 @@ pulldown-cmark = { version = "0.13", default-features = false, features = [
 ] }
 rayon = "1.10.0"
 serde = { version = "1.0.228", features = ["derive"] }
+simdutf8 = "0.1.5"
 toml = { version = "0.9.8", features = ["serde"] }
 toml_edit = { version = "0.23.0", features = ["parse"] }
 anyhow = "1.0.97"
