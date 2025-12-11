@@ -1,0 +1,7 @@
+[package]
+name = "unlinked_ignored_redundant"
+version = "0.1.0"
+edition = "2024"
+
+[package.metadata.cargo-shear]
+ignored-paths = ["src/nonexistent.rs"]

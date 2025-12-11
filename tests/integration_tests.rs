@@ -404,19 +404,12 @@ fn complex_detection() -> Result<(), Box<dyn Error>> {
 
     Advice:
       ☞ run with `--fix` to fix 8 issues
-      ☞ to suppress an issue within a package
+      ☞ to suppress a dependency issue
        ╭─[Cargo.toml:2:12]
-     1 │ [package.metadata.cargo-shear]
+     1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
      2 │ ignored = ["crate-name"]
        ·            ──────┬─────
-       ·                  ╰── add the crate name here
-       ╰────
-      ☞ to suppress an issue across a workspace
-       ╭─[Cargo.toml:2:12]
-     1 │ [workspace.metadata.cargo-shear]
-     2 │ ignored = ["crate-name"]
-       ·            ──────┬─────
-       ·                  ╰── add the crate name here
+       ·                  ╰── add a crate name here
        ╰────
     "#);
 
@@ -482,19 +475,12 @@ fn filter_workspace_package_detection() -> Result<(), Box<dyn Error>> {
 
     Advice:
       ☞ run with `--fix` to fix 1 issue
-      ☞ to suppress an issue within a package
+      ☞ to suppress a dependency issue
        ╭─[Cargo.toml:2:12]
-     1 │ [package.metadata.cargo-shear]
+     1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
      2 │ ignored = ["crate-name"]
        ·            ──────┬─────
-       ·                  ╰── add the crate name here
-       ╰────
-      ☞ to suppress an issue across a workspace
-       ╭─[Cargo.toml:2:12]
-     1 │ [workspace.metadata.cargo-shear]
-     2 │ ignored = ["crate-name"]
-       ·            ──────┬─────
-       ·                  ╰── add the crate name here
+       ·                  ╰── add a crate name here
        ╰────
     "#);
 
@@ -548,19 +534,12 @@ fn filter_workspace_exclude_detection() -> Result<(), Box<dyn Error>> {
 
     Advice:
       ☞ run with `--fix` to fix 1 issue
-      ☞ to suppress an issue within a package
+      ☞ to suppress a dependency issue
        ╭─[Cargo.toml:2:12]
-     1 │ [package.metadata.cargo-shear]
+     1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
      2 │ ignored = ["crate-name"]
        ·            ──────┬─────
-       ·                  ╰── add the crate name here
-       ╰────
-      ☞ to suppress an issue across a workspace
-       ╭─[Cargo.toml:2:12]
-     1 │ [workspace.metadata.cargo-shear]
-     2 │ ignored = ["crate-name"]
-       ·            ──────┬─────
-       ·                  ╰── add the crate name here
+       ·                  ╰── add a crate name here
        ╰────
     "#);
 
@@ -624,22 +603,6 @@ fn ignored_invalid() -> Result<(), Box<dyn Error>> {
     shear/summary
 
       ⚠ 1 warning
-
-    Advice:
-      ☞ to suppress an issue within a package
-       ╭─[Cargo.toml:2:12]
-     1 │ [package.metadata.cargo-shear]
-     2 │ ignored = ["crate-name"]
-       ·            ──────┬─────
-       ·                  ╰── add the crate name here
-       ╰────
-      ☞ to suppress an issue across a workspace
-       ╭─[Cargo.toml:2:12]
-     1 │ [workspace.metadata.cargo-shear]
-     2 │ ignored = ["crate-name"]
-       ·            ──────┬─────
-       ·                  ╰── add the crate name here
-       ╰────
     "#);
 
     Ok(())
@@ -666,22 +629,6 @@ fn ignored_redundant() -> Result<(), Box<dyn Error>> {
     shear/summary
 
       ⚠ 1 warning
-
-    Advice:
-      ☞ to suppress an issue within a package
-       ╭─[Cargo.toml:2:12]
-     1 │ [package.metadata.cargo-shear]
-     2 │ ignored = ["crate-name"]
-       ·            ──────┬─────
-       ·                  ╰── add the crate name here
-       ╰────
-      ☞ to suppress an issue across a workspace
-       ╭─[Cargo.toml:2:12]
-     1 │ [workspace.metadata.cargo-shear]
-     2 │ ignored = ["crate-name"]
-       ·            ──────┬─────
-       ·                  ╰── add the crate name here
-       ╰────
     "#);
 
     Ok(())
@@ -724,22 +671,6 @@ fn ignored_workspace_redundant() -> Result<(), Box<dyn Error>> {
     shear/summary
 
       ⚠ 1 warning
-
-    Advice:
-      ☞ to suppress an issue within a package
-       ╭─[Cargo.toml:2:12]
-     1 │ [package.metadata.cargo-shear]
-     2 │ ignored = ["crate-name"]
-       ·            ──────┬─────
-       ·                  ╰── add the crate name here
-       ╰────
-      ☞ to suppress an issue across a workspace
-       ╭─[Cargo.toml:2:12]
-     1 │ [workspace.metadata.cargo-shear]
-     2 │ ignored = ["crate-name"]
-       ·            ──────┬─────
-       ·                  ╰── add the crate name here
-       ╰────
     "#);
 
     Ok(())
@@ -784,19 +715,12 @@ fn misplaced_detection() -> Result<(), Box<dyn Error>> {
 
     Advice:
       ☞ run with `--fix` to fix 1 issue
-      ☞ to suppress an issue within a package
+      ☞ to suppress a dependency issue
        ╭─[Cargo.toml:2:12]
-     1 │ [package.metadata.cargo-shear]
+     1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
      2 │ ignored = ["crate-name"]
        ·            ──────┬─────
-       ·                  ╰── add the crate name here
-       ╰────
-      ☞ to suppress an issue across a workspace
-       ╭─[Cargo.toml:2:12]
-     1 │ [workspace.metadata.cargo-shear]
-     2 │ ignored = ["crate-name"]
-       ·            ──────┬─────
-       ·                  ╰── add the crate name here
+       ·                  ╰── add a crate name here
        ╰────
     "#);
 
@@ -853,19 +777,12 @@ fn misplaced_optional_detection() -> Result<(), Box<dyn Error>> {
       ⚠ 1 warning
 
     Advice:
-      ☞ to suppress an issue within a package
+      ☞ to suppress a dependency issue
        ╭─[Cargo.toml:2:12]
-     1 │ [package.metadata.cargo-shear]
+     1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
      2 │ ignored = ["crate-name"]
        ·            ──────┬─────
-       ·                  ╰── add the crate name here
-       ╰────
-      ☞ to suppress an issue across a workspace
-       ╭─[Cargo.toml:2:12]
-     1 │ [workspace.metadata.cargo-shear]
-     2 │ ignored = ["crate-name"]
-       ·            ──────┬─────
-       ·                  ╰── add the crate name here
+       ·                  ╰── add a crate name here
        ╰────
     "#);
 
@@ -910,19 +827,12 @@ fn misplaced_platform_detection() -> Result<(), Box<dyn Error>> {
 
     Advice:
       ☞ run with `--fix` to fix 1 issue
-      ☞ to suppress an issue within a package
+      ☞ to suppress a dependency issue
        ╭─[Cargo.toml:2:12]
-     1 │ [package.metadata.cargo-shear]
+     1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
      2 │ ignored = ["crate-name"]
        ·            ──────┬─────
-       ·                  ╰── add the crate name here
-       ╰────
-      ☞ to suppress an issue across a workspace
-       ╭─[Cargo.toml:2:12]
-     1 │ [workspace.metadata.cargo-shear]
-     2 │ ignored = ["crate-name"]
-       ·            ──────┬─────
-       ·                  ╰── add the crate name here
+       ·                  ╰── add a crate name here
        ╰────
     "#);
 
@@ -968,19 +878,12 @@ fn misplaced_renamed_detection() -> Result<(), Box<dyn Error>> {
 
     Advice:
       ☞ run with `--fix` to fix 1 issue
-      ☞ to suppress an issue within a package
+      ☞ to suppress a dependency issue
        ╭─[Cargo.toml:2:12]
-     1 │ [package.metadata.cargo-shear]
+     1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
      2 │ ignored = ["crate-name"]
        ·            ──────┬─────
-       ·                  ╰── add the crate name here
-       ╰────
-      ☞ to suppress an issue across a workspace
-       ╭─[Cargo.toml:2:12]
-     1 │ [workspace.metadata.cargo-shear]
-     2 │ ignored = ["crate-name"]
-       ·            ──────┬─────
-       ·                  ╰── add the crate name here
+       ·                  ╰── add a crate name here
        ╰────
     "#);
 
@@ -1030,19 +933,12 @@ fn misplaced_table_detection() -> Result<(), Box<dyn Error>> {
 
     Advice:
       ☞ run with `--fix` to fix 1 issue
-      ☞ to suppress an issue within a package
+      ☞ to suppress a dependency issue
        ╭─[Cargo.toml:2:12]
-     1 │ [package.metadata.cargo-shear]
+     1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
      2 │ ignored = ["crate-name"]
        ·            ──────┬─────
-       ·                  ╰── add the crate name here
-       ╰────
-      ☞ to suppress an issue across a workspace
-       ╭─[Cargo.toml:2:12]
-     1 │ [workspace.metadata.cargo-shear]
-     2 │ ignored = ["crate-name"]
-       ·            ──────┬─────
-       ·                  ╰── add the crate name here
+       ·                  ╰── add a crate name here
        ╰────
     "#);
 
@@ -1095,6 +991,92 @@ fn misplaced_unit_fix() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// Both `orphan.rs` and `ignored.rs` are unlinked, but `ignored.rs` is suppressed.
+#[test]
+fn unlinked_ignored_detection() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("unlinked_ignored").run()?;
+    assert_eq!(exit_code, ExitCode::SUCCESS);
+
+    insta::assert_snapshot!(output, @r#"
+    shear/unlinked_files
+
+      ⚠ 1 unlinked file in `unlinked_ignored`
+      │ .
+      │ └── src
+      │     └── orphan.rs
+      help: delete this file
+
+    shear/summary
+
+      ⚠ 1 warning
+
+    Advice:
+      ☞ to suppress an unlinked file issue
+       ╭─[Cargo.toml:2:18]
+     1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
+     2 │ ignored-paths = ["tests/compile/*.rs"]
+       ·                  ──────────┬─────────
+       ·                            ╰── add a file pattern here
+       ╰────
+    "#);
+
+    Ok(())
+}
+
+// `src/nonexistent.rs` pattern doesn't match any unlinked files.
+#[test]
+fn unlinked_ignored_redundant_detection() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _temp_dir) =
+        CargoShearRunner::new("unlinked_ignored_redundant").run()?;
+    assert_eq!(exit_code, ExitCode::SUCCESS);
+
+    insta::assert_snapshot!(output, @r"
+    shear/redundant_ignore_path
+
+      ⚠ redundant ignored paths pattern `src/nonexistent.rs`
+      help: remove from ignored paths list
+
+    shear/summary
+
+      ⚠ 1 warning
+    ");
+
+    Ok(())
+}
+
+// Both `app/orphan.rs` and `lib/ignored.rs` are unlinked, but `**/ignored.rs` is suppressed.
+#[test]
+fn unlinked_ignored_workspace_detection() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _temp_dir) =
+        CargoShearRunner::new("unlinked_ignored_workspace").run()?;
+    assert_eq!(exit_code, ExitCode::SUCCESS);
+
+    insta::assert_snapshot!(output, @r#"
+    shear/unlinked_files
+
+      ⚠ 1 unlinked file in `app`
+      │ app
+      │ └── src
+      │     └── orphan.rs
+      help: delete this file
+
+    shear/summary
+
+      ⚠ 1 warning
+
+    Advice:
+      ☞ to suppress an unlinked file issue
+       ╭─[Cargo.toml:2:18]
+     1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
+     2 │ ignored-paths = ["tests/compile/*.rs"]
+       ·                  ──────────┬─────────
+       ·                            ╰── add a file pattern here
+       ╰────
+    "#);
+
+    Ok(())
+}
+
 // `anyhow` is unused.
 #[test]
 fn unused_detection() -> Result<(), Box<dyn Error>> {
@@ -1119,19 +1101,12 @@ fn unused_detection() -> Result<(), Box<dyn Error>> {
 
     Advice:
       ☞ run with `--fix` to fix 1 issue
-      ☞ to suppress an issue within a package
+      ☞ to suppress a dependency issue
        ╭─[Cargo.toml:2:12]
-     1 │ [package.metadata.cargo-shear]
+     1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
      2 │ ignored = ["crate-name"]
        ·            ──────┬─────
-       ·                  ╰── add the crate name here
-       ╰────
-      ☞ to suppress an issue across a workspace
-       ╭─[Cargo.toml:2:12]
-     1 │ [workspace.metadata.cargo-shear]
-     2 │ ignored = ["crate-name"]
-       ·            ──────┬─────
-       ·                  ╰── add the crate name here
+       ·                  ╰── add a crate name here
        ╰────
     "#);
 
@@ -1175,19 +1150,12 @@ fn unused_build_detection() -> Result<(), Box<dyn Error>> {
 
     Advice:
       ☞ run with `--fix` to fix 1 issue
-      ☞ to suppress an issue within a package
+      ☞ to suppress a dependency issue
        ╭─[Cargo.toml:2:12]
-     1 │ [package.metadata.cargo-shear]
+     1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
      2 │ ignored = ["crate-name"]
        ·            ──────┬─────
-       ·                  ╰── add the crate name here
-       ╰────
-      ☞ to suppress an issue across a workspace
-       ╭─[Cargo.toml:2:12]
-     1 │ [workspace.metadata.cargo-shear]
-     2 │ ignored = ["crate-name"]
-       ·            ──────┬─────
-       ·                  ╰── add the crate name here
+       ·                  ╰── add a crate name here
        ╰────
     "#);
 
@@ -1231,19 +1199,12 @@ fn unused_dev_detection() -> Result<(), Box<dyn Error>> {
 
     Advice:
       ☞ run with `--fix` to fix 1 issue
-      ☞ to suppress an issue within a package
+      ☞ to suppress a dependency issue
        ╭─[Cargo.toml:2:12]
-     1 │ [package.metadata.cargo-shear]
+     1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
      2 │ ignored = ["crate-name"]
        ·            ──────┬─────
-       ·                  ╰── add the crate name here
-       ╰────
-      ☞ to suppress an issue across a workspace
-       ╭─[Cargo.toml:2:12]
-     1 │ [workspace.metadata.cargo-shear]
-     2 │ ignored = ["crate-name"]
-       ·            ──────┬─────
-       ·                  ╰── add the crate name here
+       ·                  ╰── add a crate name here
        ╰────
     "#);
 
@@ -1295,19 +1256,12 @@ fn unused_feature_detect() -> Result<(), Box<dyn Error>> {
       ⚠ 1 warning
 
     Advice:
-      ☞ to suppress an issue within a package
+      ☞ to suppress a dependency issue
        ╭─[Cargo.toml:2:12]
-     1 │ [package.metadata.cargo-shear]
+     1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
      2 │ ignored = ["crate-name"]
        ·            ──────┬─────
-       ·                  ╰── add the crate name here
-       ╰────
-      ☞ to suppress an issue across a workspace
-       ╭─[Cargo.toml:2:12]
-     1 │ [workspace.metadata.cargo-shear]
-     2 │ ignored = ["crate-name"]
-       ·            ──────┬─────
-       ·                  ╰── add the crate name here
+       ·                  ╰── add a crate name here
        ╰────
     "#);
 
@@ -1362,19 +1316,12 @@ fn unused_feature_weak_detect() -> Result<(), Box<dyn Error>> {
       ⚠ 1 warning
 
     Advice:
-      ☞ to suppress an issue within a package
+      ☞ to suppress a dependency issue
        ╭─[Cargo.toml:2:12]
-     1 │ [package.metadata.cargo-shear]
+     1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
      2 │ ignored = ["crate-name"]
        ·            ──────┬─────
-       ·                  ╰── add the crate name here
-       ╰────
-      ☞ to suppress an issue across a workspace
-       ╭─[Cargo.toml:2:12]
-     1 │ [workspace.metadata.cargo-shear]
-     2 │ ignored = ["crate-name"]
-       ·            ──────┬─────
-       ·                  ╰── add the crate name here
+       ·                  ╰── add a crate name here
        ╰────
     "#);
 
@@ -1418,19 +1365,12 @@ fn unused_naming_hyphen_detection() -> Result<(), Box<dyn Error>> {
 
     Advice:
       ☞ run with `--fix` to fix 1 issue
-      ☞ to suppress an issue within a package
+      ☞ to suppress a dependency issue
        ╭─[Cargo.toml:2:12]
-     1 │ [package.metadata.cargo-shear]
+     1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
      2 │ ignored = ["crate-name"]
        ·            ──────┬─────
-       ·                  ╰── add the crate name here
-       ╰────
-      ☞ to suppress an issue across a workspace
-       ╭─[Cargo.toml:2:12]
-     1 │ [workspace.metadata.cargo-shear]
-     2 │ ignored = ["crate-name"]
-       ·            ──────┬─────
-       ·                  ╰── add the crate name here
+       ·                  ╰── add a crate name here
        ╰────
     "#);
 
@@ -1474,19 +1414,12 @@ fn unused_naming_underscore_detection() -> Result<(), Box<dyn Error>> {
 
     Advice:
       ☞ run with `--fix` to fix 1 issue
-      ☞ to suppress an issue within a package
+      ☞ to suppress a dependency issue
        ╭─[Cargo.toml:2:12]
-     1 │ [package.metadata.cargo-shear]
+     1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
      2 │ ignored = ["crate-name"]
        ·            ──────┬─────
-       ·                  ╰── add the crate name here
-       ╰────
-      ☞ to suppress an issue across a workspace
-       ╭─[Cargo.toml:2:12]
-     1 │ [workspace.metadata.cargo-shear]
-     2 │ ignored = ["crate-name"]
-       ·            ──────┬─────
-       ·                  ╰── add the crate name here
+       ·                  ╰── add a crate name here
        ╰────
     "#);
 
@@ -1542,19 +1475,12 @@ fn unused_optional_detection() -> Result<(), Box<dyn Error>> {
       ⚠ 1 warning
 
     Advice:
-      ☞ to suppress an issue within a package
+      ☞ to suppress a dependency issue
        ╭─[Cargo.toml:2:12]
-     1 │ [package.metadata.cargo-shear]
+     1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
      2 │ ignored = ["crate-name"]
        ·            ──────┬─────
-       ·                  ╰── add the crate name here
-       ╰────
-      ☞ to suppress an issue across a workspace
-       ╭─[Cargo.toml:2:12]
-     1 │ [workspace.metadata.cargo-shear]
-     2 │ ignored = ["crate-name"]
-       ·            ──────┬─────
-       ·                  ╰── add the crate name here
+       ·                  ╰── add a crate name here
        ╰────
     "#);
 
@@ -1603,19 +1529,12 @@ fn unused_optional_implicit_detection() -> Result<(), Box<dyn Error>> {
       ⚠ 1 warning
 
     Advice:
-      ☞ to suppress an issue within a package
+      ☞ to suppress a dependency issue
        ╭─[Cargo.toml:2:12]
-     1 │ [package.metadata.cargo-shear]
+     1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
      2 │ ignored = ["crate-name"]
        ·            ──────┬─────
-       ·                  ╰── add the crate name here
-       ╰────
-      ☞ to suppress an issue across a workspace
-       ╭─[Cargo.toml:2:12]
-     1 │ [workspace.metadata.cargo-shear]
-     2 │ ignored = ["crate-name"]
-       ·            ──────┬─────
-       ·                  ╰── add the crate name here
+       ·                  ╰── add a crate name here
        ╰────
     "#);
 
@@ -1660,19 +1579,12 @@ fn unused_platform_detection() -> Result<(), Box<dyn Error>> {
 
     Advice:
       ☞ run with `--fix` to fix 1 issue
-      ☞ to suppress an issue within a package
+      ☞ to suppress a dependency issue
        ╭─[Cargo.toml:2:12]
-     1 │ [package.metadata.cargo-shear]
+     1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
      2 │ ignored = ["crate-name"]
        ·            ──────┬─────
-       ·                  ╰── add the crate name here
-       ╰────
-      ☞ to suppress an issue across a workspace
-       ╭─[Cargo.toml:2:12]
-     1 │ [workspace.metadata.cargo-shear]
-     2 │ ignored = ["crate-name"]
-       ·            ──────┬─────
-       ·                  ╰── add the crate name here
+       ·                  ╰── add a crate name here
        ╰────
     "#);
 
@@ -1717,19 +1629,12 @@ fn unused_renamed_detection() -> Result<(), Box<dyn Error>> {
 
     Advice:
       ☞ run with `--fix` to fix 1 issue
-      ☞ to suppress an issue within a package
+      ☞ to suppress a dependency issue
        ╭─[Cargo.toml:2:12]
-     1 │ [package.metadata.cargo-shear]
+     1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
      2 │ ignored = ["crate-name"]
        ·            ──────┬─────
-       ·                  ╰── add the crate name here
-       ╰────
-      ☞ to suppress an issue across a workspace
-       ╭─[Cargo.toml:2:12]
-     1 │ [workspace.metadata.cargo-shear]
-     2 │ ignored = ["crate-name"]
-       ·            ──────┬─────
-       ·                  ╰── add the crate name here
+       ·                  ╰── add a crate name here
        ╰────
     "#);
 
@@ -1773,19 +1678,12 @@ fn unused_libname_detection() -> Result<(), Box<dyn Error>> {
 
     Advice:
       ☞ run with `--fix` to fix 1 issue
-      ☞ to suppress an issue within a package
+      ☞ to suppress a dependency issue
        ╭─[Cargo.toml:2:12]
-     1 │ [package.metadata.cargo-shear]
+     1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
      2 │ ignored = ["crate-name"]
        ·            ──────┬─────
-       ·                  ╰── add the crate name here
-       ╰────
-      ☞ to suppress an issue across a workspace
-       ╭─[Cargo.toml:2:12]
-     1 │ [workspace.metadata.cargo-shear]
-     2 │ ignored = ["crate-name"]
-       ·            ──────┬─────
-       ·                  ╰── add the crate name here
+       ·                  ╰── add a crate name here
        ╰────
     "#);
 
@@ -1830,19 +1728,12 @@ fn unused_table_detection() -> Result<(), Box<dyn Error>> {
 
     Advice:
       ☞ run with `--fix` to fix 1 issue
-      ☞ to suppress an issue within a package
+      ☞ to suppress a dependency issue
        ╭─[Cargo.toml:2:12]
-     1 │ [package.metadata.cargo-shear]
+     1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
      2 │ ignored = ["crate-name"]
        ·            ──────┬─────
-       ·                  ╰── add the crate name here
-       ╰────
-      ☞ to suppress an issue across a workspace
-       ╭─[Cargo.toml:2:12]
-     1 │ [workspace.metadata.cargo-shear]
-     2 │ ignored = ["crate-name"]
-       ·            ──────┬─────
-       ·                  ╰── add the crate name here
+       ·                  ╰── add a crate name here
        ╰────
     "#);
 
@@ -1886,19 +1777,12 @@ fn unused_workspace_detection() -> Result<(), Box<dyn Error>> {
 
     Advice:
       ☞ run with `--fix` to fix 1 issue
-      ☞ to suppress an issue within a package
+      ☞ to suppress a dependency issue
        ╭─[Cargo.toml:2:12]
-     1 │ [package.metadata.cargo-shear]
+     1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
      2 │ ignored = ["crate-name"]
        ·            ──────┬─────
-       ·                  ╰── add the crate name here
-       ╰────
-      ☞ to suppress an issue across a workspace
-       ╭─[Cargo.toml:2:12]
-     1 │ [workspace.metadata.cargo-shear]
-     2 │ ignored = ["crate-name"]
-       ·            ──────┬─────
-       ·                  ╰── add the crate name here
+       ·                  ╰── add a crate name here
        ╰────
     "#);
 
@@ -1943,19 +1827,12 @@ fn unused_workspace_renamed_detection() -> Result<(), Box<dyn Error>> {
 
     Advice:
       ☞ run with `--fix` to fix 1 issue
-      ☞ to suppress an issue within a package
+      ☞ to suppress a dependency issue
        ╭─[Cargo.toml:2:12]
-     1 │ [package.metadata.cargo-shear]
+     1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
      2 │ ignored = ["crate-name"]
        ·            ──────┬─────
-       ·                  ╰── add the crate name here
-       ╰────
-      ☞ to suppress an issue across a workspace
-       ╭─[Cargo.toml:2:12]
-     1 │ [workspace.metadata.cargo-shear]
-     2 │ ignored = ["crate-name"]
-       ·            ──────┬─────
-       ·                  ╰── add the crate name here
+       ·                  ╰── add a crate name here
        ╰────
     "#);
 
@@ -2001,19 +1878,12 @@ fn unused_workspace_libname_detection() -> Result<(), Box<dyn Error>> {
 
     Advice:
       ☞ run with `--fix` to fix 1 issue
-      ☞ to suppress an issue within a package
+      ☞ to suppress a dependency issue
        ╭─[Cargo.toml:2:12]
-     1 │ [package.metadata.cargo-shear]
+     1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
      2 │ ignored = ["crate-name"]
        ·            ──────┬─────
-       ·                  ╰── add the crate name here
-       ╰────
-      ☞ to suppress an issue across a workspace
-       ╭─[Cargo.toml:2:12]
-     1 │ [workspace.metadata.cargo-shear]
-     2 │ ignored = ["crate-name"]
-       ·            ──────┬─────
-       ·                  ╰── add the crate name here
+       ·                  ╰── add a crate name here
        ╰────
     "#);
 

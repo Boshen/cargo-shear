@@ -1,9 +1,4 @@
-//! Package processing module for cargo-shear.
-//!
-//! This module coordinates the analysis of individual packages and workspaces
-//! to identify unused dependencies. It combines dependency metadata from
-//! cargo with the actual usage analysis to determine which dependencies
-//! can be safely removed.
+//! Analyze packages to identify issues.
 //!
 //! # Terminology
 //!
@@ -33,16 +28,16 @@
 //!
 //! Here: `rustls-pki-types`
 
-use std::borrow::Cow;
+use std::path::{Path, PathBuf};
 
-use anyhow::{Result, anyhow};
-use cargo_metadata::{Metadata, NodeDep, Package};
-use rustc_hash::{FxHashMap, FxHashSet};
+use anyhow::Result;
+use rustc_hash::FxHashSet;
 use toml::Spanned;
 
 use crate::{
-    dependency_analyzer::{DependencyAnalyzer, FeatureRef},
-    manifest::{DepLocation, DepsSet, Manifest},
+    context::{PackageContext, WorkspaceContext},
+    manifest::{DepLocation, FeatureRef},
+    package_analyzer::PackageAnalyzer,
 };
 
 /// An unused dependency.
@@ -105,6 +100,13 @@ pub struct MisplacedOptionalDependency {
     pub features: Vec<FeatureRef>,
 }
 
+/// An unlinked file.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct UnlinkedFile {
+    /// The relative path to the unlinked file.
+    pub path: PathBuf,
+}
+
 /// An unknown ignore.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct UnknownIgnore {
@@ -112,21 +114,24 @@ pub struct UnknownIgnore {
     pub name: Spanned<String>,
 }
 
-/// An redundant ignore.
+/// A redundant ignore.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RedundantIgnore {
     /// The dependency key.
     pub name: Spanned<String>,
 }
 
-/// Processes packages to identify unused dependencies.
-///
-/// The processor uses a `DependencyAnalyzer` to determine which dependencies
-/// are actually used, then compares with the declared dependencies to find
-/// unused ones.
+/// A redundant ignored path pattern.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct RedundantIgnorePath {
+    /// The redundant glob pattern.
+    pub pattern: String,
+}
+
+/// Processes packages to identify issues.
 pub struct PackageProcessor {
-    /// The analyzer used to find used dependencies in source code
-    analyzer: DependencyAnalyzer,
+    /// Whether to use `cargo expand` to expand macros
+    expand_macros: bool,
 }
 
 /// Result of processing a package.
@@ -150,11 +155,17 @@ pub struct PackageAnalysis {
     /// Misplaced optional dependencies.
     pub misplaced_optional_dependencies: Vec<MisplacedOptionalDependency>,
 
+    /// Unlinked files.
+    pub unlinked_files: Vec<UnlinkedFile>,
+
     /// Unknown ignores.
     pub unknown_ignores: Vec<UnknownIgnore>,
 
     /// Redundant ignores.
     pub redundant_ignores: Vec<RedundantIgnore>,
+
+    /// Redundant ignored path patterns.
+    pub redundant_ignore_paths: Vec<RedundantIgnorePath>,
 }
 
 /// Result of processing a workspace.
@@ -173,57 +184,36 @@ pub struct WorkspaceAnalysis {
 impl PackageProcessor {
     /// Create a new package processor.
     pub const fn new(expand_macros: bool) -> Self {
-        Self { analyzer: DependencyAnalyzer::new(expand_macros) }
+        Self { expand_macros }
     }
 
-    /// Process a package to find unused/misplaced dependencies and track used packages.
-    pub fn process_package(
-        &self,
-        metadata: &Metadata,
-        package: &Package,
-        manifest: &Manifest,
-        workspace_manifest: &Manifest,
-    ) -> Result<PackageAnalysis> {
-        let mut result = PackageAnalysis::default();
+    /// Process a package to find package level issues.
+    pub fn process_package(&self, ctx: &PackageContext<'_>) -> Result<PackageAnalysis> {
+        let analyzer = PackageAnalyzer::new(ctx, self.expand_macros);
+        let used_imports = analyzer.analyze()?;
 
-        let package_ignored_deps = &manifest.package.metadata.cargo_shear.ignored;
-        let workspace_ignored_deps = &workspace_manifest.workspace.metadata.cargo_shear.ignored;
-
-        let resolved = metadata
-            .resolve
-            .as_ref()
-            .ok_or_else(|| {
-                anyhow!("`cargo_metadata::MetadataCommand::no_deps` should not be called.")
-            })?
-            .nodes
-            .iter()
-            .find(|node| node.id == package.id)
-            .ok_or_else(|| anyhow!("Package not found: {}", package.name))?;
-
-        let import_to_pkg = Self::import_to_pkg_map(metadata, &resolved.deps)?;
-        let pkg_to_import = Self::pkg_to_import_map(&import_to_pkg);
-
-        let used_imports = self.analyzer.analyze_package(package, manifest)?;
         let code_imports = used_imports.code_imports();
         let feature_imports = used_imports.feature_imports();
 
-        let ignored_imports: FxHashSet<String> = package_ignored_deps
-            .iter()
-            .chain(workspace_ignored_deps)
-            .map(|dep| dep.get_ref().replace('-', "_"))
-            .collect();
+        let mut result = PackageAnalysis::default();
 
-        for (&import, &pkg) in &import_to_pkg {
-            if code_imports.contains(import) || feature_imports.contains(import) {
-                result.used_packages.insert(pkg.to_owned());
+        // Collect used packages
+        for (import, pkg) in &ctx.import_to_pkg {
+            if code_imports.contains(import.as_str()) || feature_imports.contains(import.as_str()) {
+                result.used_packages.insert(pkg.clone());
             }
         }
 
-        for (dep, dependency, location) in manifest.all_dependencies() {
+        // Analyze dependencies
+        for (dep, dependency, location) in ctx.manifest.all_dependencies() {
             let pkg = dependency.get_ref().package().unwrap_or_else(|| dep.get_ref().as_str());
+            let import = ctx
+                .pkg_to_import
+                .get(pkg)
+                .cloned()
+                .unwrap_or_else(|| dep.get_ref().replace('-', "_"));
 
-            let import = Self::resolve_import_name(&pkg_to_import, dep.get_ref(), pkg);
-            if ignored_imports.contains(&*import) {
+            if ctx.ignored_imports.contains(&import) {
                 continue;
             }
 
@@ -272,10 +262,12 @@ impl PackageProcessor {
             }
         }
 
+        // Analyze ignores
+        let package_ignored_deps = &ctx.manifest.package.metadata.cargo_shear.ignored;
         for ignored_dep in package_ignored_deps {
             let ignored_import = ignored_dep.get_ref().replace('-', "_");
 
-            if !import_to_pkg.contains_key(ignored_import.as_str()) {
+            if !ctx.import_to_pkg.contains_key(&ignored_import) {
                 result.unknown_ignores.push(UnknownIgnore { name: ignored_dep.clone() });
                 continue;
             }
@@ -285,50 +277,72 @@ impl PackageProcessor {
             }
         }
 
+        // Analyze unlinked files
+        let unlinked_files: FxHashSet<PathBuf> = used_imports
+            .unlinked_files
+            .iter()
+            .filter_map(|path| path.strip_prefix(&ctx.directory).ok().map(Path::to_path_buf))
+            .collect();
+
+        let pkg_ignored_paths = &ctx.manifest.package.metadata.cargo_shear.ignored_paths;
+        let ws_ignored_paths = &ctx.workspace.manifest.workspace.metadata.cargo_shear.ignored_paths;
+
+        // Ensure ignores are relative to package directory
+        let root = ctx.directory.strip_prefix(&ctx.workspace.root).unwrap_or(&ctx.directory);
+
+        result.redundant_ignore_paths = pkg_ignored_paths
+            .iter()
+            .filter(|matcher| !unlinked_files.iter().any(|path| matcher.is_match(path)))
+            .map(|matcher| RedundantIgnorePath { pattern: matcher.glob().glob().to_owned() })
+            .collect();
+
+        result.unlinked_files = unlinked_files
+            .into_iter()
+            .filter(|path| {
+                !pkg_ignored_paths.iter().any(|globs| globs.is_match(path))
+                    && !ws_ignored_paths.iter().any(|globs| globs.is_match(root.join(path)))
+            })
+            .map(|path| UnlinkedFile { path })
+            .collect();
+
         Ok(result)
     }
 
-    /// Process workspace to find unused workspace dependencies.
+    /// Process workspace to find workspace level issues.
     pub fn process_workspace(
-        manifest: &Manifest,
-        metadata: &Metadata,
+        ctx: &WorkspaceContext,
         workspace_used_pkgs: &FxHashSet<String>,
     ) -> WorkspaceAnalysis {
         let mut result = WorkspaceAnalysis::default();
 
-        if metadata.workspace_packages().len() <= 1 {
+        if ctx.packages <= 1 {
             return result;
         }
 
-        if manifest.workspace.dependencies.is_empty() {
+        if ctx.manifest.workspace.dependencies.is_empty() {
             return result;
         }
 
-        let ignored_deps = &manifest.workspace.metadata.cargo_shear.ignored;
-        let ignored_dep_keys: FxHashSet<&str> =
-            ignored_deps.iter().map(|s| s.get_ref().as_str()).collect();
-
-        for (dep, dependency) in &manifest.workspace.dependencies {
-            if ignored_dep_keys.contains(dep.get_ref().as_str()) {
+        for (dep, dependency) in &ctx.manifest.workspace.dependencies {
+            if ctx.ignored_deps.contains(dep.get_ref()) {
                 continue;
             }
 
-            let pkg =
-                dependency.get_ref().package().map_or_else(|| dep.get_ref().clone(), str::to_owned);
-
-            if !workspace_used_pkgs.contains(&pkg) {
+            let pkg = dependency.get_ref().package().unwrap_or(dep.get_ref());
+            if !workspace_used_pkgs.contains(pkg) {
                 result.unused_dependencies.push(UnusedWorkspaceDependency { name: dep.clone() });
             }
         }
 
-        let dep_to_pkg = Self::dep_to_pkg_map(&manifest.workspace.dependencies);
+        let ignored_deps = &ctx.manifest.workspace.metadata.cargo_shear.ignored;
         for ignored_dep in ignored_deps {
-            if !dep_to_pkg.contains_key(ignored_dep.get_ref()) {
+            if !ctx.dep_to_pkg.contains_key(ignored_dep.get_ref()) {
                 result.unknown_ignores.push(UnknownIgnore { name: ignored_dep.clone() });
                 continue;
             }
 
-            if dep_to_pkg
+            if ctx
+                .dep_to_pkg
                 .get(ignored_dep.get_ref())
                 .is_some_and(|pkg| workspace_used_pkgs.contains(pkg))
             {
@@ -337,53 +351,5 @@ impl PackageProcessor {
         }
 
         result
-    }
-
-    /// Build a map from import names to package names from resolved dependencies.
-    fn import_to_pkg_map<'a>(
-        metadata: &'a Metadata,
-        imports: &'a [NodeDep],
-    ) -> Result<FxHashMap<&'a str, &'a str>> {
-        imports
-            .iter()
-            .map(|import| {
-                let pkg = metadata
-                    .packages
-                    .iter()
-                    .find(|p| p.id == import.pkg)
-                    .ok_or_else(|| anyhow!("Package not found: {}", import.pkg.repr))?;
-
-                Ok((import.name.as_str(), pkg.name.as_str()))
-            })
-            .collect()
-    }
-
-    /// Build a map from package names to import names.
-    fn pkg_to_import_map<'a>(
-        import_to_pkg: &FxHashMap<&'a str, &'a str>,
-    ) -> FxHashMap<&'a str, &'a str> {
-        import_to_pkg.iter().map(|(&import, &pkg)| (pkg, import)).collect()
-    }
-
-    /// Build a map from dependency keys to package names from a `DepsSet`.
-    fn dep_to_pkg_map(deps: &DepsSet) -> FxHashMap<String, String> {
-        deps.iter()
-            .map(|(dep, dependency)| {
-                let dep = dep.get_ref();
-                let pkg = dependency.get_ref().package().map_or_else(|| dep.clone(), str::to_owned);
-                (dep.clone(), pkg)
-            })
-            .collect()
-    }
-
-    /// Resolve the import name for a dependency.
-    fn resolve_import_name<'a>(
-        pkg_to_import: &'a FxHashMap<&str, &str>,
-        dep: &'a str,
-        pkg: &str,
-    ) -> Cow<'a, str> {
-        pkg_to_import
-            .get(pkg)
-            .map_or_else(|| Cow::Owned(dep.replace('-', "_")), |&import| Cow::Borrowed(import))
     }
 }
