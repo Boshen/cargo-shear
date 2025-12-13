@@ -79,25 +79,19 @@ impl ShearAnalysis {
             self.insert(ShearDiagnostic::misplaced_optional_dependency(finding, &src));
         }
 
-        if !result.unlinked_files.is_empty() {
-            let root = ctx
-                .directory
-                .strip_prefix(&ctx.workspace.root)
-                .ok()
-                .filter(|path| !path.as_os_str().is_empty())
-                .map_or_else(|| ".".to_owned(), |path| path.display().to_string());
+        // Calculate root path for file diagnostics
+        let root = ctx
+            .directory
+            .strip_prefix(&ctx.workspace.root)
+            .ok()
+            .filter(|path| !path.as_os_str().is_empty())
+            .map_or_else(|| ".".to_owned(), |path| path.display().to_string());
 
+        if !result.unlinked_files.is_empty() {
             self.insert(ShearDiagnostic::unlinked_files(&result.unlinked_files, &ctx.name, &root));
         }
 
         if !result.empty_files.is_empty() {
-            let root = ctx
-                .directory
-                .strip_prefix(&ctx.workspace.root)
-                .ok()
-                .filter(|path| !path.as_os_str().is_empty())
-                .map_or_else(|| ".".to_owned(), |path| path.display().to_string());
-
             self.insert(ShearDiagnostic::empty_files(&result.empty_files, &ctx.name, &root));
         }
 
@@ -320,9 +314,9 @@ impl ShearDiagnostic {
             diagnostics.iter().map(|file| file.path.display().to_string()).collect();
 
         let help = if paths.len() == 1 {
-            "delete this file or add content".to_owned()
+            "delete this file".to_owned()
         } else {
-            "delete these files or add content".to_owned()
+            "delete these files".to_owned()
         };
 
         Self {

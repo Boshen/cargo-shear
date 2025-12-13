@@ -1000,7 +1000,7 @@ fn unlinked_ignored_detection() -> Result<(), Box<dyn Error>> {
       ⚠ 1 warning
 
     Advice:
-      ☞ to suppress an unlinked file issue
+      ☞ to suppress a file issue
        ╭─[Cargo.toml:2:18]
      1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
      2 │ ignored-paths = ["tests/compile/*.rs"]
@@ -1054,7 +1054,7 @@ fn unlinked_ignored_workspace_detection() -> Result<(), Box<dyn Error>> {
       ⚠ 1 warning
 
     Advice:
-      ☞ to suppress an unlinked file issue
+      ☞ to suppress a file issue
        ╭─[Cargo.toml:2:18]
      1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
      2 │ ignored-paths = ["tests/compile/*.rs"]
@@ -1081,14 +1081,14 @@ fn empty_files_detection() -> Result<(), Box<dyn Error>> {
       │     ├── comments.rs
       │     ├── empty.rs
       │     └── whitespace.rs
-      help: delete these files or add content
+      help: delete these files
 
     shear/summary
 
       ⚠ 1 warning
 
     Advice:
-      ☞ to suppress an unlinked file issue
+      ☞ to suppress a file issue
        ╭─[Cargo.toml:2:18]
      1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
      2 │ ignored-paths = ["tests/compile/*.rs"]

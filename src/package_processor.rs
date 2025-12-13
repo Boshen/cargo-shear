@@ -198,6 +198,7 @@ impl PackageProcessor {
     }
 
     /// Process a package to find package level issues.
+    #[expect(clippy::too_many_lines, reason = "Complex function handling multiple diagnostic types")]
     pub fn process_package(&self, ctx: &PackageContext<'_>) -> Result<PackageAnalysis> {
         let analyzer = PackageAnalyzer::new(ctx, self.expand_macros);
         let used_imports = analyzer.analyze()?;
