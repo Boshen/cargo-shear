@@ -997,9 +997,6 @@ mod tests {
         // Parse as expanded code
         let parsed = ParsedSource::from_expanded_str(source, Path::new("lib.rs"));
 
-        // Debug: print what was collected
-        println!("Collected imports: {:?}", parsed.imports);
-
         // Should NOT collect 'tracing' (absolute path ::tracing)
         // Should collect 'foo' (relative path foo::bar)
         assert_eq!(parsed.imports, FxHashSet::from_iter(["foo".to_owned()]));
