@@ -2,7 +2,7 @@
 
 use std::{error::Error, fs, io, path::Path, process::ExitCode};
 
-use cargo_shear::{CargoShear, CargoShearOptions, ColorMode};
+use cargo_shear::{CargoShear, CargoShearOptions, ColorMode, OutputFormat};
 use cargo_toml::Manifest;
 use tempfile::TempDir;
 
@@ -1924,6 +1924,43 @@ fn unused_workspace_libname_fix() -> Result<(), Box<dyn Error>> {
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
     let workspace = &manifest.workspace.as_ref().unwrap().dependencies;
     assert!(!workspace.contains_key("criterion2"));
+
+    Ok(())
+}
+
+// JSON output format should produce valid JSON with structured diagnostic data.
+#[test]
+fn json_output_format() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("unused")
+        .options(|options| options.with_format(OutputFormat::Json))
+        .run()?;
+    assert_eq!(exit_code, ExitCode::FAILURE);
+
+    // Parse the output as JSON to ensure it's valid
+    let json: serde_json::Value = serde_json::from_str(&output)?;
+
+    // Verify structure
+    assert!(json.get("summary").is_some());
+    assert!(json.get("findings").is_some());
+
+    // Verify summary
+    let summary = json.get("summary").unwrap();
+    assert_eq!(summary.get("errors").unwrap().as_u64(), Some(1));
+    assert_eq!(summary.get("warnings").unwrap().as_u64(), Some(0));
+    assert_eq!(summary.get("fixed").unwrap().as_u64(), Some(0));
+
+    // Verify findings
+    let findings = json.get("findings").unwrap().as_array().unwrap();
+    assert_eq!(findings.len(), 1);
+
+    let finding = &findings[0];
+    assert_eq!(finding.get("code").unwrap().as_str(), Some("shear/unused_dependency"));
+    assert_eq!(finding.get("severity").unwrap().as_str(), Some("error"));
+    assert_eq!(finding.get("message").unwrap().as_str(), Some("unused dependency `anyhow`"));
+    assert_eq!(finding.get("file").unwrap().as_str(), Some("Cargo.toml"));
+    assert!(finding.get("location").is_some());
+    assert!(finding.get("help").is_some());
+    assert!(finding.get("fix").is_some());
 
     Ok(())
 }

@@ -1,6 +1,6 @@
 use std::io;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use crate::diagnostics::ShearAnalysis;
 
@@ -17,7 +17,7 @@ impl<W: io::Write> JsonRenderer<W> {
     pub fn render(&mut self, analysis: &ShearAnalysis) -> io::Result<()> {
         let output = JsonOutput::from_analysis(analysis);
         serde_json::to_writer_pretty(&mut self.writer, &output)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+            .map_err(io::Error::other)?;
         writeln!(self.writer)?;
         Ok(())
     }
@@ -62,7 +62,7 @@ pub struct Summary {
 /// A single finding/diagnostic.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Finding {
-    /// The diagnostic code (e.g., "shear/unused_dependency").
+    /// The diagnostic code (e.g., "`shear/unused_dependency`").
     pub code: String,
 
     /// The severity level: "error" or "warning".
@@ -104,12 +104,10 @@ impl Finding {
 
         let message = kind.message();
 
-        let file = diagnostic.file_name().map(|s| s.to_owned());
+        let file = diagnostic.file_name().map(std::borrow::ToOwned::to_owned);
 
-        let location = diagnostic.span().map(|span| Location {
-            offset: span.offset(),
-            length: span.len(),
-        });
+        let location =
+            diagnostic.span().map(|span| Location { offset: span.offset(), length: span.len() });
 
         let help = diagnostic.help().map(|h| h.to_string());
 

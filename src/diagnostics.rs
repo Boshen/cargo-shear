@@ -183,11 +183,11 @@ pub struct ShearDiagnostic {
 impl ShearDiagnostic {
     /// Get the file name from the source, if available.
     pub fn file_name(&self) -> Option<&str> {
-        self.source.as_ref().map(|source| source.name())
+        self.source.as_ref().map(miette::NamedSource::name)
     }
 
     /// Get the span information, if available.
-    pub fn span(&self) -> Option<SourceSpan> {
+    pub const fn span(&self) -> Option<SourceSpan> {
         self.span
     }
 
