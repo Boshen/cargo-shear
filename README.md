@@ -33,6 +33,14 @@ Automatically fix unused dependencies:
 cargo shear --fix
 ```
 
+Generate machine-readable JSON output:
+
+```bash
+cargo shear --format=json
+```
+
+This is particularly useful for CI/CD pipelines and custom tooling that need to programmatically process the results.
+
 ## Limitations
 
 > [!IMPORTANT]
@@ -92,6 +100,26 @@ Otherwise please report the issue as a bug.
 
 - run: cargo shear
 ```
+
+### JSON Output for CI Integration
+
+For CI systems that require structured output, use the `--format=json` flag:
+
+```yaml
+- name: Check for unused dependencies
+  run: cargo shear --format=json > shear-results.json
+```
+
+The JSON output includes:
+- **summary**: Counts of errors, warnings, and fixes
+- **findings**: Detailed information about each issue including:
+  - `code`: The diagnostic code (e.g., `shear/unused_dependency`)
+  - `severity`: Error or warning level
+  - `message`: Human-readable description
+  - `file`: Path to the file with the issue
+  - `location`: Byte offset and length within the file
+  - `help`: Suggested fix
+  - `fix`: Structured fix information
 
 ## Exit Code (for CI)
 
