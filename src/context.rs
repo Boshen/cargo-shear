@@ -2,16 +2,20 @@
 
 use std::{
     path::{Path, PathBuf},
+    str::FromStr,
     sync::Arc,
 };
 
 use anyhow::{Result, anyhow};
+use cargo_lock::Lockfile;
 use cargo_metadata::{Metadata, Package, Target};
-use ignore::{DirEntry, WalkBuilder}; // Changed from walkdir
+use ignore::{DirEntry, WalkBuilder};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::{manifest::Manifest, source_parser::ParsedSource, util::read_to_string};
+use crate::{
+    manifest::Manifest, registry::Registry, source_parser::ParsedSource, util::read_to_string,
+};
 
 /// Context for processing a workspace.
 pub struct WorkspaceContext {
@@ -32,6 +36,8 @@ pub struct WorkspaceContext {
     /// Number of packages in the workspace.
     pub packages: usize,
 
+    /// Mapping from package name to import name.
+    pub import_names: FxHashMap<String, String>,
     /// Mapping from dependency key to package name.
     pub dep_to_pkg: FxHashMap<String, String>,
     /// Ignored dependency keys.
@@ -45,6 +51,10 @@ impl WorkspaceContext {
         let manifest_path = root.join("Cargo.toml");
         let manifest_content = read_to_string(&manifest_path)?;
         let manifest: Manifest = toml::from_str(&manifest_content)?;
+
+        let lockfile_path = root.join("Cargo.lock");
+        let lockfile_content = read_to_string(&lockfile_path)?;
+        let lockfile: Lockfile = Lockfile::from_str(&lockfile_content)?;
 
         let package_roots: Arc<FxHashSet<PathBuf>> = Arc::new(
             metadata
@@ -121,6 +131,34 @@ impl WorkspaceContext {
             }))
             .collect();
 
+        let mut registry = Registry::new();
+        let mut import_names = FxHashMap::default();
+
+        for pkg in metadata.workspace_packages() {
+            if let Some(target) =
+                pkg.targets.iter().find(|target| target.is_lib() || target.is_proc_macro())
+            {
+                let normalized = pkg.name.replace('-', "_");
+                if target.name != normalized {
+                    import_names.insert(pkg.name.to_string(), target.name.clone());
+                }
+            }
+        }
+
+        for pkg in &lockfile.packages {
+            if pkg.source.is_none() {
+                continue;
+            }
+
+            let pkg_name = pkg.name.as_str();
+            if let Some(import_name) = registry.lookup(pkg_name, &pkg.version.to_string()) {
+                let normalized = pkg_name.replace('-', "_");
+                if import_name != normalized {
+                    import_names.insert(pkg_name.to_owned(), import_name);
+                }
+            }
+        }
+
         let dep_to_pkg = manifest
             .workspace
             .dependencies
@@ -149,6 +187,7 @@ impl WorkspaceContext {
             packages: metadata.workspace_packages().len(),
             files,
             linked,
+            import_names,
             dep_to_pkg,
             ignored_deps,
         })
@@ -184,25 +223,10 @@ pub struct PackageContext<'a> {
 }
 
 impl<'a> PackageContext<'a> {
-    pub fn new(
-        workspace: &'a WorkspaceContext,
-        package: &Package,
-        metadata: &Metadata,
-    ) -> Result<Self> {
+    pub fn new(workspace: &'a WorkspaceContext, package: &Package) -> Result<Self> {
         let manifest_path = package.manifest_path.as_std_path();
         let manifest_content = read_to_string(manifest_path)?;
         let manifest: Manifest = toml::from_str(&manifest_content)?;
-
-        let resolved = metadata
-            .resolve
-            .as_ref()
-            .ok_or_else(|| {
-                anyhow!("`cargo_metadata::MetadataCommand::no_deps` should not be called.")
-            })?
-            .nodes
-            .iter()
-            .find(|node| node.id == package.id)
-            .ok_or_else(|| anyhow!("Package not found: {}", package.name))?;
 
         let directory = manifest_path
             .parent()
@@ -212,11 +236,20 @@ impl<'a> PackageContext<'a> {
         let mut import_to_pkg = FxHashMap::default();
         let mut pkg_to_import = FxHashMap::default();
 
-        for dep in &resolved.deps {
-            if let Some(pkg) = metadata.packages.iter().find(|package| package.id == dep.pkg) {
-                import_to_pkg.insert(dep.name.clone(), pkg.name.to_string());
-                pkg_to_import.insert(pkg.name.to_string(), dep.name.clone());
-            }
+        for dep in &package.dependencies {
+            let import_name = dep.rename.as_ref().map_or_else(
+                || {
+                    workspace
+                        .import_names
+                        .get(&dep.name)
+                        .cloned()
+                        .unwrap_or_else(|| dep.name.replace('-', "_"))
+                },
+                |rename| rename.replace('-', "_"),
+            );
+
+            import_to_pkg.insert(import_name.clone(), dep.name.clone());
+            pkg_to_import.insert(dep.name.clone(), import_name);
         }
 
         let package_ignored_deps = &manifest.package.metadata.cargo_shear.ignored;

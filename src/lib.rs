@@ -36,6 +36,7 @@ mod manifest;
 mod output;
 mod package_analyzer;
 mod package_processor;
+mod registry;
 mod source_parser;
 #[cfg(test)]
 mod tests;
@@ -52,7 +53,7 @@ use std::{
 
 use anyhow::Result;
 use bpaf::Bpaf;
-use cargo_metadata::{CargoOpt, Metadata, MetadataCommand, Package};
+use cargo_metadata::{CargoOpt, MetadataCommand, Package};
 use owo_colors::OwoColorize;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use toml_edit::DocumentMut;
@@ -311,6 +312,7 @@ impl<W: Write> CargoShear<W> {
             .features(CargoOpt::AllFeatures)
             .current_dir(&self.options.path)
             .other_options(extra_opts)
+            .no_deps()
             .verbose(true)
             .exec()
             .map_err(|e| anyhow::anyhow!("Metadata error: {e}"))?;
@@ -353,16 +355,14 @@ impl<W: Write> CargoShear<W> {
                         total
                     );
 
-                    Self::process_package(&processor, &workspace_ctx, package, &metadata)
+                    Self::process_package(&processor, &workspace_ctx, package)
                 })
                 .collect::<Result<Vec<_>>>()?
         } else {
             // Process packages in parallel
             packages
                 .par_iter()
-                .map(|package| {
-                    Self::process_package(&processor, &workspace_ctx, package, &metadata)
-                })
+                .map(|package| Self::process_package(&processor, &workspace_ctx, package))
                 .collect::<Result<Vec<_>>>()?
         };
 
@@ -388,9 +388,8 @@ impl<W: Write> CargoShear<W> {
         processor: &PackageProcessor,
         workspace_ctx: &'a WorkspaceContext,
         package: &Package,
-        metadata: &'a Metadata,
     ) -> Result<(PackageContext<'a>, PackageAnalysis)> {
-        let ctx = PackageContext::new(workspace_ctx, package, metadata)?;
+        let ctx = PackageContext::new(workspace_ctx, package)?;
         let result = processor.process_package(&ctx)?;
         Ok((ctx, result))
     }

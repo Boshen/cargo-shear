@@ -2,6 +2,8 @@ allow-expect-in-tests = true
 allow-unwrap-in-tests = true
 avoid-breaking-exported-api = false
 
+too-many-lines-threshold = 200
+
 disallowed-types = [
   { path = "std::collections::HashMap", reason = "Use `rustc_hash::FxHashMap` instead, which is typically faster." },
   { path = "std::collections::HashSet", reason = "Use `rustc_hash::FxHashSet` instead, which is typically faster." },
