@@ -180,6 +180,23 @@ pub struct ShearDiagnostic {
     help: Option<String>,
 }
 
+impl ShearDiagnostic {
+    /// Get the file name from the source, if available.
+    pub fn file_name(&self) -> Option<&str> {
+        self.source.as_ref().map(|source| source.name())
+    }
+
+    /// Get the span information, if available.
+    pub fn span(&self) -> Option<SourceSpan> {
+        self.span
+    }
+
+    /// Get the diagnostic kind.
+    pub const fn kind(&self) -> &DiagnosticKind {
+        &self.kind
+    }
+}
+
 impl fmt::Debug for ShearDiagnostic {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ShearDiagnostic")
@@ -364,7 +381,7 @@ impl ShearDiagnostic {
 }
 
 #[derive(Debug)]
-enum DiagnosticKind {
+pub enum DiagnosticKind {
     UnusedDependency { name: String },
     UnusedWorkspaceDependency { name: String },
     UnusedOptionalDependency { name: String },
@@ -379,7 +396,7 @@ enum DiagnosticKind {
 }
 
 impl DiagnosticKind {
-    fn message(&self) -> String {
+    pub fn message(&self) -> String {
         match self {
             Self::UnusedDependency { name } => format!("unused dependency `{name}`"),
             Self::UnusedWorkspaceDependency { name } => {
@@ -417,7 +434,7 @@ impl DiagnosticKind {
         }
     }
 
-    const fn label(&self) -> Option<&'static str> {
+    pub const fn label(&self) -> Option<&'static str> {
         match self {
             Self::UnusedWorkspaceDependency { .. } => Some("not used by any workspace member"),
             Self::UnusedDependency { .. }
@@ -434,7 +451,7 @@ impl DiagnosticKind {
         }
     }
 
-    const fn code(&self) -> &'static str {
+    pub const fn code(&self) -> &'static str {
         match self {
             Self::UnusedDependency { .. } => "shear/unused_dependency",
             Self::UnusedWorkspaceDependency { .. } => "shear/unused_workspace_dependency",
@@ -450,7 +467,7 @@ impl DiagnosticKind {
         }
     }
 
-    const fn severity(&self) -> Severity {
+    pub const fn severity(&self) -> Severity {
         match self {
             Self::UnusedDependency { .. }
             | Self::UnusedWorkspaceDependency { .. }
