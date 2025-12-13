@@ -135,7 +135,6 @@ pub struct EmptyFile {
     pub path: PathBuf,
 }
 
-
 /// Processes packages to identify issues.
 pub struct PackageProcessor {
     /// Whether to use `cargo expand` to expand macros
@@ -328,14 +327,10 @@ impl PackageProcessor {
             .collect();
 
         // Process empty files
-        let empty_files: Vec<PathBuf> = used_imports
+        result.empty_files = used_imports
             .empty_files
             .iter()
             .filter_map(|path| path.strip_prefix(&ctx.directory).ok().map(Path::to_path_buf))
-            .collect();
-
-        result.empty_files = empty_files
-            .into_iter()
             .filter(|path| {
                 !pkg_ignored_paths.iter().any(|globs| globs.is_match(path))
                     && !ws_ignored_paths.iter().any(|globs| globs.is_match(root.join(path)))

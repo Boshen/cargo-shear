@@ -432,9 +432,9 @@ impl DiagnosticKind {
             Self::MisplacedDependency { .. } | Self::MisplacedOptionalDependency { .. } => {
                 Some("only used in dev targets")
             }
-            Self::UnlinkedFiles { .. } | Self::EmptyFiles { .. } | Self::RedundantIgnorePath { .. } => {
-                None
-            }
+            Self::UnlinkedFiles { .. }
+            | Self::EmptyFiles { .. }
+            | Self::RedundantIgnorePath { .. } => None,
             Self::UnknownIgnore { .. } => Some("not a dependency"),
             Self::RedundantIgnore { .. } => Some("dependency is used"),
         }
