@@ -386,21 +386,10 @@ fn complex_detection() -> Result<(), Box<dyn Error>> {
         ╰────
       help: remove from ignored list
 
-    shear/redundant_ignore
-
-      ⚠ redundant ignore `slab`
-        ╭─[Cargo.toml:68:28]
-     67 │ [package.metadata.cargo-shear]
-     68 │ ignored = ["regex-syntax", "slab", "fake-crate"]
-        ·                            ───┬──
-        ·                               ╰── dependency is used
-        ╰────
-      help: remove from ignored list
-
     shear/summary
 
       ✗ 8 errors
-      ⚠ 8 warnings
+      ⚠ 7 warnings
 
     Advice:
       ☞ run with `--fix` to fix 8 issues
