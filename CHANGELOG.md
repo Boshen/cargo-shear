@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.0](https://github.com/Boshen/cargo-shear/compare/v1.8.0...v1.9.0) - 2025-12-13
+
+### <!-- 0 -->🚀 Features
+- warn empty files ([#368](https://github.com/Boshen/cargo-shear/pull/368)) (by @Copilot)
+
+### <!-- 9 -->💼 Other
+- Don't flag ignore as redundant if it suppresses another warning ([#367](https://github.com/Boshen/cargo-shear/pull/367)) (by @CathalMullan)
+
+### Contributors
+
+* @Copilot
+* @CathalMullan
+
 ## [1.8.0](https://github.com/Boshen/cargo-shear/compare/v1.7.2...v1.8.0) - 2025-12-13
 
 ### <!-- 0 -->🚀 Features
