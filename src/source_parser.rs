@@ -31,6 +31,9 @@ pub struct ParsedSource {
 
     /// Rust paths referenced by this source file.
     pub paths: FxHashSet<PathBuf>,
+
+    /// Whether this file is empty (no items, only whitespace/comments).
+    pub is_empty: bool,
 }
 
 impl ParsedSource {
@@ -95,6 +98,9 @@ impl SourceParser {
 
         let tree = SourceFile::parse(source, Edition::CURRENT);
         let tree = tree.tree();
+
+        // Check if file is empty (no items, only whitespace/comments)
+        parser.result.is_empty = tree.items().next().is_none();
 
         for element in tree.syntax().descendants_with_tokens() {
             parser.visit(element);

@@ -128,6 +128,13 @@ pub struct RedundantIgnorePath {
     pub pattern: String,
 }
 
+/// An empty file.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct EmptyFile {
+    /// The relative path to the empty file.
+    pub path: PathBuf,
+}
+
 /// Processes packages to identify issues.
 pub struct PackageProcessor {
     /// Whether to use `cargo expand` to expand macros
@@ -157,6 +164,9 @@ pub struct PackageAnalysis {
 
     /// Unlinked files.
     pub unlinked_files: Vec<UnlinkedFile>,
+
+    /// Empty files.
+    pub empty_files: Vec<EmptyFile>,
 
     /// Unknown ignores.
     pub unknown_ignores: Vec<UnknownIgnore>,
@@ -188,6 +198,10 @@ impl PackageProcessor {
     }
 
     /// Process a package to find package level issues.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Complex function handling multiple diagnostic types"
+    )]
     pub fn process_package(&self, ctx: &PackageContext<'_>) -> Result<PackageAnalysis> {
         let analyzer = PackageAnalyzer::new(ctx, self.expand_macros);
         let used_imports = analyzer.analyze()?;
@@ -314,6 +328,18 @@ impl PackageProcessor {
                     && !ws_ignored_paths.iter().any(|globs| globs.is_match(root.join(path)))
             })
             .map(|path| UnlinkedFile { path })
+            .collect();
+
+        // Process empty files
+        result.empty_files = used_imports
+            .empty_files
+            .iter()
+            .filter_map(|path| path.strip_prefix(&ctx.directory).ok().map(Path::to_path_buf))
+            .filter(|path| {
+                !pkg_ignored_paths.iter().any(|globs| globs.is_match(path))
+                    && !ws_ignored_paths.iter().any(|globs| globs.is_match(root.join(path)))
+            })
+            .map(|path| EmptyFile { path })
             .collect();
 
         Ok(result)

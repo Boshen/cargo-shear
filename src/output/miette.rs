@@ -185,7 +185,7 @@ impl fmt::Debug for IgnorePathHelpDiagnostic {
 
 impl fmt::Display for IgnorePathHelpDiagnostic {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "to suppress an unlinked file issue")
+        write!(f, "to suppress a file issue")
     }
 }
 

@@ -34,6 +34,9 @@ pub struct AnalysisResult {
 
     /// Files that aren't reachable from any entry point.
     pub unlinked_files: FxHashSet<PathBuf>,
+
+    /// Files that are empty (no items, only whitespace/comments).
+    pub empty_files: FxHashSet<PathBuf>,
 }
 
 impl AnalysisResult {
@@ -77,6 +80,7 @@ impl<'a> PackageAnalyzer<'a> {
 
         self.analyze_features();
         self.analyze_unlinked();
+        self.analyze_empty();
 
         Ok(self.result)
     }
@@ -219,6 +223,27 @@ impl<'a> PackageAnalyzer<'a> {
                     && !self.ctx.workspace.linked.contains(*path)
             })
             .cloned()
+            .collect();
+    }
+
+    fn analyze_empty(&mut self) {
+        let dir_bytes = self.ctx.directory.as_os_str().as_encoded_bytes();
+        self.result.empty_files = self
+            .ctx
+            .workspace
+            .files
+            .iter()
+            .filter(|(path, parsed)| {
+                let path_bytes = path.as_os_str().as_encoded_bytes();
+                // Only check files in this package that are linked (not entry points)
+                path_bytes.starts_with(dir_bytes)
+                    && path_bytes.get(dir_bytes.len()) == Some(&b'/')
+                    && self.ctx.workspace.linked.contains(*path)
+                    && parsed.is_empty
+                    // Exclude entry points like lib.rs, main.rs, build.rs
+                    && !self.ctx.targets.iter().any(|target| &target.src_path == *path)
+            })
+            .map(|(path, _)| path.clone())
             .collect();
     }
 }
