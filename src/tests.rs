@@ -1,4 +1,4 @@
-use std::{fmt::Write, process::ExitCode};
+use std::{fmt::Write, path::Path, process::ExitCode};
 
 use rustc_hash::FxHashSet;
 
@@ -10,7 +10,7 @@ use crate::{
 
 #[track_caller]
 fn test(source_text: &str) {
-    let parsed = ParsedSource::from_str(source_text);
+    let parsed = ParsedSource::from_str(source_text, Path::new("lib.rs"));
     let expected = FxHashSet::from_iter(["foo".to_owned()]);
     assert_eq!(parsed.imports, expected, "{source_text}");
 }
@@ -131,31 +131,31 @@ fn test_lib() {
 
 #[test]
 fn empty_source() {
-    let parsed = ParsedSource::from_str("");
+    let parsed = ParsedSource::from_str("", Path::new("lib.rs"));
     assert!(parsed.imports.is_empty());
 }
 
 #[test]
 fn comment_only() {
-    let parsed = ParsedSource::from_str("// this is a comment");
+    let parsed = ParsedSource::from_str("// this is a comment", Path::new("lib.rs"));
     assert!(parsed.imports.is_empty());
 }
 
 #[test]
 fn std_imports_not_collected() {
-    let parsed = ParsedSource::from_str("use std::collections::HashMap;");
+    let parsed = ParsedSource::from_str("use std::collections::HashMap;", Path::new("lib.rs"));
     assert!(parsed.imports.is_empty());
 }
 
 #[test]
 fn self_super_crate_not_collected() {
-    let parsed = ParsedSource::from_str("use self::module;");
+    let parsed = ParsedSource::from_str("use self::module;", Path::new("lib.rs"));
     assert!(parsed.imports.is_empty());
 
-    let parsed = ParsedSource::from_str("use super::module;");
+    let parsed = ParsedSource::from_str("use super::module;", Path::new("lib.rs"));
     assert!(parsed.imports.is_empty());
 
-    let parsed = ParsedSource::from_str("use crate::module;");
+    let parsed = ParsedSource::from_str("use crate::module;", Path::new("lib.rs"));
     assert!(parsed.imports.is_empty());
 }
 
@@ -168,7 +168,7 @@ fn multiple_imports_same_crate() {
             foo::qux();
         }
     ";
-    let parsed = ParsedSource::from_str(source);
+    let parsed = ParsedSource::from_str(source, Path::new("lib.rs"));
     let expected = FxHashSet::from_iter(["foo".to_owned()]);
     assert_eq!(parsed.imports, expected);
 }
@@ -270,7 +270,7 @@ fn lifetimes_and_generics() {
 #[test]
 fn malformed_syntax_recovery() {
     // Test that we can handle some malformed syntax gracefully
-    let parsed = ParsedSource::from_str("use foo::;");
+    let parsed = ParsedSource::from_str("use foo::;", Path::new("lib.rs"));
     assert!(parsed.imports.contains("foo"));
 }
 
@@ -278,14 +278,14 @@ fn malformed_syntax_recovery() {
 fn very_long_path() {
     let long_path = "foo::".repeat(100) + "bar";
     let source = format!("use {long_path};");
-    let parsed = ParsedSource::from_str(&source);
+    let parsed = ParsedSource::from_str(&source, Path::new("lib.rs"));
     let expected = FxHashSet::from_iter(["foo".to_owned()]);
     assert_eq!(parsed.imports, expected);
 }
 
 #[test]
 fn unicode_identifiers() {
-    let parsed = ParsedSource::from_str("use foo::数据;");
+    let parsed = ParsedSource::from_str("use foo::数据;", Path::new("lib.rs"));
     let expected = FxHashSet::from_iter(["foo".to_owned()]);
     assert_eq!(parsed.imports, expected);
 }
@@ -308,7 +308,7 @@ fn raw_string_inside_macro() {
 
 #[test]
 fn glob_imports() {
-    let parsed = ParsedSource::from_str("use foo::*;");
+    let parsed = ParsedSource::from_str("use foo::*;", Path::new("lib.rs"));
     let expected = FxHashSet::from_iter(["foo".to_owned()]);
     assert_eq!(parsed.imports, expected);
 }
@@ -419,19 +419,19 @@ fn cargo_shear_options_creation() {
 
 #[test]
 fn invalid_rust_syntax() {
-    let parsed = ParsedSource::from_str("this is not rust code ^^^");
+    let parsed = ParsedSource::from_str("this is not rust code ^^^", Path::new("lib.rs"));
     assert!(parsed.imports.is_empty(), "Should gracefully handle invalid Rust syntax");
 }
 
 #[test]
 fn empty_file_handling() {
-    let parsed = ParsedSource::from_str("");
+    let parsed = ParsedSource::from_str("", Path::new("lib.rs"));
     assert!(parsed.imports.is_empty(), "Empty file should result in no dependencies");
 }
 
 #[test]
 fn whitespace_only() {
-    let parsed = ParsedSource::from_str("   \n  \t  \n  ");
+    let parsed = ParsedSource::from_str("   \n  \t  \n  ", Path::new("lib.rs"));
     assert!(parsed.imports.is_empty(), "Whitespace-only file should result in no dependencies");
 }
 
@@ -444,7 +444,7 @@ fn mixed_valid_invalid_imports() {
         use self::local;  // should be ignored (self)
         use foo::baz::qux;  // valid, same crate as first
     ";
-    let parsed = ParsedSource::from_str(source);
+    let parsed = ParsedSource::from_str(source, Path::new("lib.rs"));
     let expected = FxHashSet::from_iter(["foo".to_owned()]);
     assert_eq!(parsed.imports, expected);
 }
@@ -453,13 +453,13 @@ fn mixed_valid_invalid_imports() {
 
 #[track_caller]
 fn test_no_deps(source_text: &str) {
-    let parsed = ParsedSource::from_str(source_text);
+    let parsed = ParsedSource::from_str(source_text, Path::new("lib.rs"));
     assert!(parsed.imports.is_empty(), "Expected no dependencies for: {source_text}");
 }
 
 #[track_caller]
 fn test_multiple_deps(source_text: &str, expected_deps: &[&str]) {
-    let parsed = ParsedSource::from_str(source_text);
+    let parsed = ParsedSource::from_str(source_text, Path::new("lib.rs"));
     let expected = expected_deps.iter().map(|s| (*s).to_owned()).collect::<FxHashSet<_>>();
     assert_eq!(parsed.imports, expected, "Dependencies mismatch for: {source_text}");
 }
@@ -492,7 +492,7 @@ fn large_file_simulation() {
         writeln!(source, "fn func{i}() {{ foo::call{i}(); }}").unwrap();
     }
 
-    let parsed = ParsedSource::from_str(&source);
+    let parsed = ParsedSource::from_str(&source, Path::new("lib.rs"));
     let expected = FxHashSet::from_iter(["foo".to_owned()]);
     assert_eq!(parsed.imports, expected);
 }
@@ -501,7 +501,7 @@ fn large_file_simulation() {
 fn deeply_nested_paths() {
     let nested_path = (0..20).map(|i| format!("level{i}")).collect::<Vec<_>>().join("::");
     let source = format!("use foo::{nested_path};");
-    let parsed = ParsedSource::from_str(&source);
+    let parsed = ParsedSource::from_str(&source, Path::new("lib.rs"));
     let expected = FxHashSet::from_iter(["foo".to_owned()]);
     assert_eq!(parsed.imports, expected);
 }
@@ -533,7 +533,7 @@ fn raw_identifiers() {
 
 #[test]
 fn raw_identifier_crate_name() {
-    let parsed = ParsedSource::from_str("use r#continue::thing;");
+    let parsed = ParsedSource::from_str("use r#continue::thing;", Path::new("lib.rs"));
     assert!(parsed.imports.contains("continue"));
 }
 
@@ -684,13 +684,13 @@ fn dependency_injection() {
 fn incomplete_statements() {
     // These should parse without panicking
 
-    let parsed = ParsedSource::from_str("use foo::");
+    let parsed = ParsedSource::from_str("use foo::", Path::new("lib.rs"));
     assert!(parsed.imports.contains("foo"));
 
-    let parsed = ParsedSource::from_str("fn main() { foo:: }");
+    let parsed = ParsedSource::from_str("fn main() { foo:: }", Path::new("lib.rs"));
     assert!(parsed.imports.is_empty());
 
-    let parsed = ParsedSource::from_str("struct S { field: foo:: }");
+    let parsed = ParsedSource::from_str("struct S { field: foo:: }", Path::new("lib.rs"));
     assert!(parsed.imports.is_empty());
 }
 
@@ -730,7 +730,7 @@ fn many_small_imports() {
     for i in 0..1000 {
         writeln!(source, "use foo::item{i};").unwrap();
     }
-    let parsed = ParsedSource::from_str(&source);
+    let parsed = ParsedSource::from_str(&source, Path::new("lib.rs"));
     let expected = FxHashSet::from_iter(["foo".to_owned()]);
     assert_eq!(parsed.imports, expected);
 }
@@ -741,7 +741,7 @@ fn deeply_nested_modules() {
     for i in 0..100 {
         writeln!(source, "mod level{i} {{ use foo::item{i}; }}").unwrap();
     }
-    let parsed = ParsedSource::from_str(&source);
+    let parsed = ParsedSource::from_str(&source, Path::new("lib.rs"));
     let expected = FxHashSet::from_iter(["foo".to_owned()]);
     assert_eq!(parsed.imports, expected);
 }
@@ -796,50 +796,55 @@ fn macro_invocation_complex_patterns() {
 #[test]
 fn raw_identifier_combinations() {
     // Raw identifiers in both positions
-    let parsed = ParsedSource::from_str("use r#foo::r#type;");
+    let parsed = ParsedSource::from_str("use r#foo::r#type;", Path::new("lib.rs"));
     assert!(parsed.imports.contains("foo"));
 
-    let parsed = ParsedSource::from_str("fn main() { r#foo::r#match(); }");
+    let parsed = ParsedSource::from_str("fn main() { r#foo::r#match(); }", Path::new("lib.rs"));
     assert!(parsed.imports.contains("foo"));
 
     // Raw identifier only on left
-    let parsed = ParsedSource::from_str("use r#async::bar;");
+    let parsed = ParsedSource::from_str("use r#async::bar;", Path::new("lib.rs"));
     assert!(parsed.imports.contains("async"));
 
-    let parsed = ParsedSource::from_str("fn main() { r#type::regular(); }");
+    let parsed = ParsedSource::from_str("fn main() { r#type::regular(); }", Path::new("lib.rs"));
     assert!(parsed.imports.contains("type"));
 
     // Raw identifier only on right
-    let parsed = ParsedSource::from_str("use regular::r#await;");
+    let parsed = ParsedSource::from_str("use regular::r#await;", Path::new("lib.rs"));
     assert!(parsed.imports.contains("regular"));
     test("fn main() { foo::r#fn(); }");
 
     // Raw identifiers with whitespace
-    let parsed = ParsedSource::from_str("use r#foo  ::  r#bar;");
+    let parsed = ParsedSource::from_str("use r#foo  ::  r#bar;", Path::new("lib.rs"));
     assert!(parsed.imports.contains("foo"));
 
-    let parsed = ParsedSource::from_str("fn main() { r#type\t::\tr#match(); }");
+    let parsed =
+        ParsedSource::from_str("fn main() { r#type\t::\tr#match(); }", Path::new("lib.rs"));
     assert!(parsed.imports.contains("type"));
 
     // Raw identifiers in macros
-    let parsed = ParsedSource::from_str(r#"fn main() { println!("{}", r#foo::r#bar); }"#);
+    let parsed = ParsedSource::from_str(
+        r#"fn main() { println!("{}", r#foo::r#bar); }"#,
+        Path::new("lib.rs"),
+    );
     assert!(parsed.imports.contains("foo"));
 
-    let parsed = ParsedSource::from_str("#[derive(r#foo::r#Trait)] struct S;");
+    let parsed = ParsedSource::from_str("#[derive(r#foo::r#Trait)] struct S;", Path::new("lib.rs"));
     assert!(parsed.imports.contains("foo"));
 }
 
 #[test]
 fn multiple_colon_patterns() {
     // Three or more colons (should handle gracefully)
-    let parsed = ParsedSource::from_str("fn main() { foo:::bar(); }");
+    let parsed = ParsedSource::from_str("fn main() { foo:::bar(); }", Path::new("lib.rs"));
     assert!(parsed.imports.contains("foo"));
 
-    let parsed = ParsedSource::from_str("fn main() { foo::::bar(); }");
+    let parsed = ParsedSource::from_str("fn main() { foo::::bar(); }", Path::new("lib.rs"));
     assert!(parsed.imports.contains("foo"));
 
     // Mixed valid and invalid patterns
-    let parsed = ParsedSource::from_str("fn main() { foo::bar(); baz:::qux(); }");
+    let parsed =
+        ParsedSource::from_str("fn main() { foo::bar(); baz:::qux(); }", Path::new("lib.rs"));
     let expected = FxHashSet::from_iter(["foo".to_owned(), "baz".to_owned()]);
     assert_eq!(parsed.imports, expected);
 }
@@ -920,24 +925,26 @@ fn derive_macro_variations() {
 #[test]
 fn edge_case_path_segments() {
     // Single letter crate names
-    let parsed = ParsedSource::from_str("use a::b;");
+    let parsed = ParsedSource::from_str("use a::b;", Path::new("lib.rs"));
     assert!(parsed.imports.contains("a"));
 
-    let parsed = ParsedSource::from_str("fn main() { x::y(); }");
+    let parsed = ParsedSource::from_str("fn main() { x::y(); }", Path::new("lib.rs"));
     assert!(parsed.imports.contains("x"));
 
     // Underscore in paths
-    let parsed = ParsedSource::from_str("use foo_bar::baz_qux;");
+    let parsed = ParsedSource::from_str("use foo_bar::baz_qux;", Path::new("lib.rs"));
     assert!(parsed.imports.contains("foo_bar"));
 
-    let parsed = ParsedSource::from_str("fn main() { snake_case::function_name(); }");
+    let parsed =
+        ParsedSource::from_str("fn main() { snake_case::function_name(); }", Path::new("lib.rs"));
     assert!(parsed.imports.contains("snake_case"));
 
     // Numbers in identifiers
-    let parsed = ParsedSource::from_str("use foo2::bar3;");
+    let parsed = ParsedSource::from_str("use foo2::bar3;", Path::new("lib.rs"));
     assert!(parsed.imports.contains("foo2"));
 
-    let parsed = ParsedSource::from_str("fn main() { crate1::module2::func3(); }");
+    let parsed =
+        ParsedSource::from_str("fn main() { crate1::module2::func3(); }", Path::new("lib.rs"));
     assert!(parsed.imports.contains("crate1"));
 }
 

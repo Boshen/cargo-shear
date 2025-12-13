@@ -1,14 +1,78 @@
 use std::{collections::BTreeMap, fmt};
 
+use cargo_metadata::TargetKind;
+use globset::{Glob, GlobMatcher};
 use rustc_hash::FxHashSet;
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use toml::Spanned;
+
+/// How a dependency is referenced in `[features]`.
+///
+/// See: <https://doc.rust-lang.org/cargo/reference/features.html>
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum FeatureRef {
+    /// Implicit feature from an optional dependency.
+    Implicit,
+
+    /// Explicit dependency reference: `dep:foo` or `foo`.
+    Explicit { feature: Spanned<String>, value: Spanned<String> },
+
+    /// Dependency feature enablement: `foo/bar`.
+    DepFeature { feature: Spanned<String>, value: Spanned<String> },
+
+    /// Weak dependency feature enablement: `foo?/bar`.
+    WeakDepFeature { feature: Spanned<String>, value: Spanned<String> },
+}
+
+impl FeatureRef {
+    pub fn parse(feature: &Spanned<String>, value: &Spanned<String>) -> (String, Self) {
+        if let Some(dep) = value.as_ref().strip_prefix("dep:") {
+            let import = dep.replace('-', "_");
+            return (import, Self::Explicit { feature: feature.clone(), value: value.clone() });
+        }
+
+        if let Some((dep, _)) = value.as_ref().split_once('/') {
+            let is_weak = dep.ends_with('?');
+            let dep = dep.trim_end_matches('?');
+            let import = dep.replace('-', "_");
+
+            let feature = if is_weak {
+                Self::WeakDepFeature { feature: feature.clone(), value: value.clone() }
+            } else {
+                Self::DepFeature { feature: feature.clone(), value: value.clone() }
+            };
+
+            return (import, feature);
+        }
+
+        let import = value.as_ref().replace('-', "_");
+        (import, Self::Explicit { feature: feature.clone(), value: value.clone() })
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DepTable {
     Normal,
     Dev,
     Build,
+}
+
+impl From<&TargetKind> for DepTable {
+    fn from(kind: &TargetKind) -> Self {
+        match kind {
+            TargetKind::CustomBuild => Self::Build,
+            TargetKind::Test | TargetKind::Bench | TargetKind::Example => Self::Dev,
+            TargetKind::Bin
+            | TargetKind::CDyLib
+            | TargetKind::DyLib
+            | TargetKind::Lib
+            | TargetKind::ProcMacro
+            | TargetKind::RLib
+            | TargetKind::StaticLib
+            | TargetKind::Unknown(_)
+            | _ => Self::Normal,
+        }
+    }
 }
 
 impl fmt::Display for DepTable {
@@ -99,25 +163,35 @@ pub struct Target {
     pub build_dependencies: DepsSet,
 }
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Deserialize, Default)]
 pub struct ShearConfig {
     #[serde(default)]
     pub ignored: FxHashSet<Spanned<String>>,
+    #[serde(default, rename = "ignored-paths", deserialize_with = "deserialize_glob_matchers")]
+    pub ignored_paths: Vec<GlobMatcher>,
 }
 
-#[derive(Debug, Deserialize, Default)]
+fn deserialize_glob_matchers<'de, D>(deserializer: D) -> Result<Vec<GlobMatcher>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let globs: Vec<Glob> = Vec::deserialize(deserializer)?;
+    Ok(globs.into_iter().map(|glob| glob.compile_matcher()).collect())
+}
+
+#[derive(Deserialize, Default)]
 pub struct Metadata {
     #[serde(default, rename = "cargo-shear")]
     pub cargo_shear: ShearConfig,
 }
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Deserialize, Default)]
 pub struct Package {
     #[serde(default)]
     pub metadata: Metadata,
 }
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Deserialize, Default)]
 pub struct Workspace {
     #[serde(default)]
     pub metadata: Metadata,
@@ -125,7 +199,7 @@ pub struct Workspace {
     pub dependencies: DepsSet,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 pub struct Manifest {
     #[serde(default)]
     pub workspace: Workspace,

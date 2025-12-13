@@ -13,10 +13,9 @@
 //! The codebase is organized into several focused modules:
 //!
 //! - `cargo_toml_editor` - Handles modifications to Cargo.toml files
-//! - `dependency_analyzer` - Analyzes code to find used dependencies
+//! - `package_analyzer` - Analyzes packages to find issues
 //! - `package_processor` - Processes packages and detects unused dependencies
-//! - `import_collector` - Parses Rust source to collect import statements
-//! - `error` - Custom error types with detailed context
+//! - `source_parser` - Parses Rust source to extract data
 //!
 //! ## Usage
 //!
@@ -31,14 +30,16 @@
 //! ```
 
 mod cargo_toml_editor;
-mod dependency_analyzer;
+mod context;
 mod diagnostics;
 mod manifest;
 mod output;
+mod package_analyzer;
 mod package_processor;
 mod source_parser;
 #[cfg(test)]
 mod tests;
+mod tree;
 pub mod util;
 
 use std::{
@@ -59,8 +60,8 @@ use toml_edit::DocumentMut;
 pub use crate::output::{ColorMode, OutputFormat};
 use crate::{
     cargo_toml_editor::CargoTomlEditor,
+    context::{PackageContext, WorkspaceContext},
     diagnostics::ShearAnalysis,
-    manifest::Manifest,
     output::Renderer,
     package_processor::{PackageAnalysis, PackageProcessor, WorkspaceAnalysis},
     util::read_to_string,
@@ -279,10 +280,9 @@ impl<W: Write> CargoShear<W> {
                     return ExitCode::from(2);
                 }
 
-                let has_errors = self.analysis.unused > 0 || self.analysis.misplaced > 0;
-                if self.options.fix && self.analysis.fixed > 0 && !has_errors {
+                if self.options.fix && self.analysis.fixed > 0 && self.analysis.errors == 0 {
                     ExitCode::SUCCESS
-                } else if has_errors {
+                } else if self.analysis.errors > 0 {
                     ExitCode::FAILURE
                 } else {
                     ExitCode::SUCCESS
@@ -316,11 +316,7 @@ impl<W: Write> CargoShear<W> {
             .map_err(|e| anyhow::anyhow!("Metadata error: {e}"))?;
 
         let processor = PackageProcessor::new(self.options.expand);
-
-        let root = metadata.workspace_root.as_std_path().to_path_buf();
-        let workspace_manifest_path = metadata.workspace_root.as_std_path().join("Cargo.toml");
-        let workspace_content = read_to_string(&workspace_manifest_path)?;
-        let workspace_manifest: Manifest = toml::from_str(&workspace_content)?;
+        let workspace_ctx = WorkspaceContext::new(&metadata)?;
 
         let packages = metadata.workspace_packages();
         let packages: Vec<_> = packages
@@ -357,13 +353,7 @@ impl<W: Write> CargoShear<W> {
                         total
                     );
 
-                    Self::process_package(
-                        &root,
-                        &processor,
-                        &metadata,
-                        &workspace_manifest,
-                        package,
-                    )
+                    Self::process_package(&processor, &workspace_ctx, package, &metadata)
                 })
                 .collect::<Result<Vec<_>>>()?
         } else {
@@ -371,61 +361,38 @@ impl<W: Write> CargoShear<W> {
             packages
                 .par_iter()
                 .map(|package| {
-                    Self::process_package(
-                        &root,
-                        &processor,
-                        &metadata,
-                        &workspace_manifest,
-                        package,
-                    )
+                    Self::process_package(&processor, &workspace_ctx, package, &metadata)
                 })
                 .collect::<Result<Vec<_>>>()?
         };
 
-        for (path, content, result) in results {
-            let absolute_path = root.join(&path);
-            let fixed = self.fix_package_issues(&absolute_path, &result)?;
-            self.analysis.add_package_result(&path, content, &result, fixed);
+        for (ctx, result) in results {
+            let fixed = self.fix_package_issues(&ctx.manifest_path, &result)?;
+            self.analysis.add_package_result(&ctx, &result, fixed);
         }
 
         // Only analyze workspace if we're targeting all packages.
         if self.options.package.is_empty() && self.options.exclude.is_empty() {
-            let workspace_result = PackageProcessor::process_workspace(
-                &workspace_manifest,
-                &metadata,
-                &self.analysis.packages,
-            );
+            let workspace_result =
+                PackageProcessor::process_workspace(&workspace_ctx, &self.analysis.packages);
 
-            let relative =
-                workspace_manifest_path.strip_prefix(&root).unwrap_or(&workspace_manifest_path);
-
-            let fixed = self.fix_workspace_issues(&workspace_manifest_path, &workspace_result)?;
-            self.analysis.add_workspace_result(
-                relative,
-                workspace_content,
-                &workspace_result,
-                fixed,
-            );
+            let fixed =
+                self.fix_workspace_issues(&workspace_ctx.manifest_path, &workspace_result)?;
+            self.analysis.add_workspace_result(&workspace_ctx, &workspace_result, fixed);
         }
 
         Ok(())
     }
 
-    fn process_package(
-        root: &Path,
+    fn process_package<'a>(
         processor: &PackageProcessor,
-        metadata: &Metadata,
-        workspace_manifest: &Manifest,
+        workspace_ctx: &'a WorkspaceContext,
         package: &Package,
-    ) -> Result<(PathBuf, String, PackageAnalysis)> {
-        let manifest_path = package.manifest_path.as_std_path();
-        let relative_path = manifest_path.strip_prefix(root).unwrap_or(manifest_path);
-
-        let content = read_to_string(manifest_path)?;
-        let manifest: Manifest = toml::from_str(&content)?;
-        let result = processor.process_package(metadata, package, &manifest, workspace_manifest)?;
-
-        Ok((relative_path.to_path_buf(), content, result))
+        metadata: &'a Metadata,
+    ) -> Result<(PackageContext<'a>, PackageAnalysis)> {
+        let ctx = PackageContext::new(workspace_ctx, package, metadata)?;
+        let result = processor.process_package(&ctx)?;
+        Ok((ctx, result))
     }
 
     fn fix_package_issues(&self, manifest_path: &Path, result: &PackageAnalysis) -> Result<usize> {

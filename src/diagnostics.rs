@@ -1,16 +1,18 @@
-use std::{error::Error, fmt, path::Path};
+use std::{error::Error, fmt};
 
 use miette::{Diagnostic, LabeledSpan, NamedSource, Severity, SourceSpan};
 use rustc_hash::FxHashSet;
 
 use crate::{
-    dependency_analyzer::FeatureRef,
-    manifest::DepTable,
+    context::{PackageContext, WorkspaceContext},
+    manifest::{DepTable, FeatureRef},
     package_processor::{
         MisplacedDependency, MisplacedOptionalDependency, PackageAnalysis, RedundantIgnore,
-        UnknownIgnore, UnusedDependency, UnusedFeatureDependency, UnusedOptionalDependency,
-        UnusedWorkspaceDependency, WorkspaceAnalysis,
+        RedundantIgnorePath, UnknownIgnore, UnlinkedFile, UnusedDependency,
+        UnusedFeatureDependency, UnusedOptionalDependency, UnusedWorkspaceDependency,
+        WorkspaceAnalysis,
     },
+    tree::Tree,
 };
 
 /// Result of processing all packages across the workspace.
@@ -22,29 +24,38 @@ pub struct ShearAnalysis {
     /// All package names used across the workspace.
     pub packages: FxHashSet<String>,
 
-    /// Count of unused dependencies.
-    pub unused: usize,
-
-    /// Count of misplaced dependencies.
-    pub misplaced: usize,
+    /// Count of errors.
+    pub errors: usize,
 
     /// Count of warnings.
     /// Anything that can't be automatically fixed is considered a warning.
     pub warnings: usize,
 
-    /// Count of dependencies that were fixed (removed or moved).
+    /// Count of fixed issues.
     pub fixed: usize,
+
+    /// Whether to show the `ignored` advice.
+    pub show_ignored: bool,
+
+    /// Whether to show the `ignored-paths` advice.
+    pub show_ignored_paths: bool,
 }
 
 impl ShearAnalysis {
     pub fn add_package_result(
         &mut self,
-        path: &Path,
-        content: String,
+        ctx: &PackageContext<'_>,
         result: &PackageAnalysis,
         fixed: usize,
     ) {
-        let src = NamedSource::new(path.display().to_string(), content);
+        let relative_path = ctx
+            .manifest_path
+            .strip_prefix(&ctx.workspace.root)
+            .unwrap_or(&ctx.manifest_path)
+            .display()
+            .to_string();
+
+        let src = NamedSource::new(relative_path, ctx.manifest_content.clone());
         self.packages.extend(result.used_packages.iter().cloned());
         self.fixed += fixed;
 
@@ -68,6 +79,17 @@ impl ShearAnalysis {
             self.insert(ShearDiagnostic::misplaced_optional_dependency(finding, &src));
         }
 
+        if !result.unlinked_files.is_empty() {
+            let root = ctx
+                .directory
+                .strip_prefix(&ctx.workspace.root)
+                .ok()
+                .filter(|path| !path.as_os_str().is_empty())
+                .map_or_else(|| ".".to_owned(), |path| path.display().to_string());
+
+            self.insert(ShearDiagnostic::unlinked_files(&result.unlinked_files, &ctx.name, &root));
+        }
+
         for finding in &result.unknown_ignores {
             self.insert(ShearDiagnostic::unknown_ignore(finding, &src));
         }
@@ -75,16 +97,19 @@ impl ShearAnalysis {
         for finding in &result.redundant_ignores {
             self.insert(ShearDiagnostic::redundant_ignore(finding, &src));
         }
+
+        for finding in &result.redundant_ignore_paths {
+            self.insert(ShearDiagnostic::redundant_ignore_path(finding));
+        }
     }
 
     pub fn add_workspace_result(
         &mut self,
-        path: &Path,
-        content: String,
+        ctx: &WorkspaceContext,
         result: &WorkspaceAnalysis,
         fixed: usize,
     ) {
-        let src = NamedSource::new(path.display().to_string(), content);
+        let src = NamedSource::new("Cargo.toml", ctx.manifest_content.clone());
         self.fixed += fixed;
 
         for finding in &result.unused_dependencies {
@@ -103,16 +128,32 @@ impl ShearAnalysis {
     fn insert(&mut self, diagnostic: ShearDiagnostic) {
         match &diagnostic.kind {
             DiagnosticKind::UnusedDependency { .. }
-            | DiagnosticKind::UnusedWorkspaceDependency { .. } => self.unused += 1,
-            DiagnosticKind::MisplacedDependency { .. } => self.misplaced += 1,
+            | DiagnosticKind::UnusedWorkspaceDependency { .. }
+            | DiagnosticKind::MisplacedDependency { .. } => {
+                self.errors += 1;
+                self.show_ignored = true;
+            }
             DiagnosticKind::UnusedOptionalDependency { .. }
             | DiagnosticKind::UnusedFeatureDependency { .. }
-            | DiagnosticKind::MisplacedOptionalDependency { .. }
-            | DiagnosticKind::UnknownIgnore { .. }
-            | DiagnosticKind::RedundantIgnore { .. } => self.warnings += 1,
+            | DiagnosticKind::MisplacedOptionalDependency { .. } => {
+                self.warnings += 1;
+                self.show_ignored = true;
+            }
+            DiagnosticKind::UnlinkedFiles { .. } => {
+                self.warnings += 1;
+                self.show_ignored_paths = true;
+            }
+            DiagnosticKind::UnknownIgnore { .. }
+            | DiagnosticKind::RedundantIgnore { .. }
+            | DiagnosticKind::RedundantIgnorePath { .. } => self.warnings += 1,
         }
 
         self.findings.push(diagnostic);
+    }
+
+    /// Whether to show the `--fix` advice.
+    pub const fn show_fix(&self) -> bool {
+        self.errors > 0 && self.fixed == 0
     }
 }
 
@@ -122,10 +163,10 @@ pub struct ShearDiagnostic {
     kind: DiagnosticKind,
 
     /// Source content.
-    source: NamedSource<String>,
+    source: Option<NamedSource<String>>,
 
     /// Primary span.
-    span: SourceSpan,
+    span: Option<SourceSpan>,
 
     /// Any related diagnostics.
     related: Vec<Box<dyn Diagnostic + Send + Sync>>,
@@ -150,8 +191,8 @@ impl ShearDiagnostic {
     pub fn unused_dependency(diagnostic: &UnusedDependency, source: &NamedSource<String>) -> Self {
         Self {
             kind: DiagnosticKind::UnusedDependency { name: diagnostic.name.get_ref().clone() },
-            source: source.clone(),
-            span: diagnostic.name.span().into(),
+            source: Some(source.clone()),
+            span: Some(diagnostic.name.span().into()),
             related: Vec::new(),
             help: Some("remove this dependency".to_owned()),
         }
@@ -165,8 +206,8 @@ impl ShearDiagnostic {
             kind: DiagnosticKind::UnusedWorkspaceDependency {
                 name: diagnostic.name.get_ref().clone(),
             },
-            source: source.clone(),
-            span: diagnostic.name.span().into(),
+            source: Some(source.clone()),
+            span: Some(diagnostic.name.span().into()),
             related: Vec::new(),
             help: Some("remove this dependency".to_owned()),
         }
@@ -180,8 +221,8 @@ impl ShearDiagnostic {
             kind: DiagnosticKind::UnusedOptionalDependency {
                 name: diagnostic.name.get_ref().clone(),
             },
-            source: source.clone(),
-            span: diagnostic.name.span().into(),
+            source: Some(source.clone()),
+            span: Some(diagnostic.name.span().into()),
             related: ShearRelatedDiagnostic::from_features(
                 Some("removing an optional dependency may be a breaking change"),
                 &diagnostic.features,
@@ -199,8 +240,8 @@ impl ShearDiagnostic {
             kind: DiagnosticKind::UnusedFeatureDependency {
                 name: diagnostic.name.get_ref().clone(),
             },
-            source: source.clone(),
-            span: diagnostic.name.span().into(),
+            source: Some(source.clone()),
+            span: Some(diagnostic.name.span().into()),
             related: ShearRelatedDiagnostic::from_features(None, &diagnostic.features, source),
             help: None,
         }
@@ -213,8 +254,8 @@ impl ShearDiagnostic {
         let target = diagnostic.location.as_table(DepTable::Dev);
         Self {
             kind: DiagnosticKind::MisplacedDependency { name: diagnostic.name.get_ref().clone() },
-            source: source.clone(),
-            span: diagnostic.name.span().into(),
+            source: Some(source.clone()),
+            span: Some(diagnostic.name.span().into()),
             related: Vec::new(),
             help: Some(format!("move this dependency to `{target}`")),
         }
@@ -229,8 +270,8 @@ impl ShearDiagnostic {
             kind: DiagnosticKind::MisplacedOptionalDependency {
                 name: diagnostic.name.get_ref().clone(),
             },
-            source: source.clone(),
-            span: diagnostic.name.span().into(),
+            source: Some(source.clone()),
+            span: Some(diagnostic.name.span().into()),
             related: ShearRelatedDiagnostic::from_features(
                 Some("removing an optional dependency may be a breaking change"),
                 &diagnostic.features,
@@ -240,11 +281,34 @@ impl ShearDiagnostic {
         }
     }
 
+    pub fn unlinked_files(diagnostics: &[UnlinkedFile], package: &str, root: &str) -> Self {
+        let paths: Vec<String> =
+            diagnostics.iter().map(|file| file.path.display().to_string()).collect();
+
+        let help = if paths.len() == 1 {
+            "delete this file".to_owned()
+        } else {
+            "delete these files".to_owned()
+        };
+
+        Self {
+            kind: DiagnosticKind::UnlinkedFiles {
+                package: package.to_owned(),
+                root: root.to_owned(),
+                paths,
+            },
+            source: None,
+            span: None,
+            related: Vec::new(),
+            help: Some(help),
+        }
+    }
+
     pub fn unknown_ignore(diagnostic: &UnknownIgnore, source: &NamedSource<String>) -> Self {
         Self {
             kind: DiagnosticKind::UnknownIgnore { name: diagnostic.name.get_ref().clone() },
-            source: source.clone(),
-            span: diagnostic.name.span().into(),
+            source: Some(source.clone()),
+            span: Some(diagnostic.name.span().into()),
             related: Vec::new(),
             help: Some("remove from ignored list".to_owned()),
         }
@@ -253,10 +317,20 @@ impl ShearDiagnostic {
     pub fn redundant_ignore(diagnostic: &RedundantIgnore, source: &NamedSource<String>) -> Self {
         Self {
             kind: DiagnosticKind::RedundantIgnore { name: diagnostic.name.get_ref().clone() },
-            source: source.clone(),
-            span: diagnostic.name.span().into(),
+            source: Some(source.clone()),
+            span: Some(diagnostic.name.span().into()),
             related: Vec::new(),
             help: Some("remove from ignored list".to_owned()),
+        }
+    }
+
+    pub fn redundant_ignore_path(diagnostic: &RedundantIgnorePath) -> Self {
+        Self {
+            kind: DiagnosticKind::RedundantIgnorePath { pattern: diagnostic.pattern.clone() },
+            source: None,
+            span: None,
+            related: Vec::new(),
+            help: Some("remove from ignored paths list".to_owned()),
         }
     }
 }
@@ -269,8 +343,10 @@ enum DiagnosticKind {
     UnusedFeatureDependency { name: String },
     MisplacedDependency { name: String },
     MisplacedOptionalDependency { name: String },
+    UnlinkedFiles { package: String, root: String, paths: Vec<String> },
     UnknownIgnore { name: String },
     RedundantIgnore { name: String },
+    RedundantIgnorePath { pattern: String },
 }
 
 impl DiagnosticKind {
@@ -290,22 +366,33 @@ impl DiagnosticKind {
             Self::MisplacedOptionalDependency { name } => {
                 format!("misplaced optional dependency `{name}`")
             }
+            Self::UnlinkedFiles { package, root, paths } => {
+                let tree = Tree::with_paths(root, paths);
+                let s = if paths.len() == 1 { "" } else { "s" };
+                format!("{} unlinked file{s} in `{package}`\n{tree}", paths.len())
+                    .trim_end()
+                    .to_owned()
+            }
             Self::UnknownIgnore { name } => format!("unknown ignore `{name}`"),
             Self::RedundantIgnore { name } => format!("redundant ignore `{name}`"),
+            Self::RedundantIgnorePath { pattern } => {
+                format!("redundant ignored paths pattern `{pattern}`")
+            }
         }
     }
 
-    const fn label(&self) -> &'static str {
+    const fn label(&self) -> Option<&'static str> {
         match self {
-            Self::UnusedWorkspaceDependency { .. } => "not used by any workspace member",
+            Self::UnusedWorkspaceDependency { .. } => Some("not used by any workspace member"),
             Self::UnusedDependency { .. }
             | Self::UnusedOptionalDependency { .. }
-            | Self::UnusedFeatureDependency { .. } => "not used in code",
+            | Self::UnusedFeatureDependency { .. } => Some("not used in code"),
             Self::MisplacedDependency { .. } | Self::MisplacedOptionalDependency { .. } => {
-                "only used in dev targets"
+                Some("only used in dev targets")
             }
-            Self::UnknownIgnore { .. } => "not a dependency",
-            Self::RedundantIgnore { .. } => "dependency is used",
+            Self::UnlinkedFiles { .. } | Self::RedundantIgnorePath { .. } => None,
+            Self::UnknownIgnore { .. } => Some("not a dependency"),
+            Self::RedundantIgnore { .. } => Some("dependency is used"),
         }
     }
 
@@ -317,8 +404,10 @@ impl DiagnosticKind {
             Self::UnusedFeatureDependency { .. } => "shear/unused_feature_dependency",
             Self::MisplacedDependency { .. } => "shear/misplaced_dependency",
             Self::MisplacedOptionalDependency { .. } => "shear/misplaced_optional_dependency",
+            Self::UnlinkedFiles { .. } => "shear/unlinked_files",
             Self::UnknownIgnore { .. } => "shear/unknown_ignore",
             Self::RedundantIgnore { .. } => "shear/redundant_ignore",
+            Self::RedundantIgnorePath { .. } => "shear/redundant_ignore_path",
         }
     }
 
@@ -327,11 +416,13 @@ impl DiagnosticKind {
             Self::UnusedDependency { .. }
             | Self::UnusedWorkspaceDependency { .. }
             | Self::MisplacedDependency { .. } => Severity::Error,
-            Self::UnusedOptionalDependency { .. }
+            Self::UnlinkedFiles { .. }
+            | Self::UnusedOptionalDependency { .. }
             | Self::UnusedFeatureDependency { .. }
             | Self::MisplacedOptionalDependency { .. }
             | Self::UnknownIgnore { .. }
-            | Self::RedundantIgnore { .. } => Severity::Warning,
+            | Self::RedundantIgnore { .. }
+            | Self::RedundantIgnorePath { .. } => Severity::Warning,
         }
     }
 }
@@ -358,14 +449,13 @@ impl Diagnostic for ShearDiagnostic {
     }
 
     fn source_code(&self) -> Option<&dyn miette::SourceCode> {
-        Some(&self.source)
+        self.source.as_ref().map(|source| source as &dyn miette::SourceCode)
     }
 
     fn labels(&self) -> Option<Box<dyn Iterator<Item = LabeledSpan> + '_>> {
-        Some(Box::new(std::iter::once(LabeledSpan::new_with_span(
-            Some(self.kind.label().to_owned()),
-            self.span,
-        ))))
+        let label = self.kind.label()?;
+        let span = self.span?;
+        Some(Box::new(std::iter::once(LabeledSpan::new_with_span(Some(label.to_owned()), span))))
     }
 
     fn related<'a>(&'a self) -> Option<Box<dyn Iterator<Item = &'a dyn Diagnostic> + 'a>> {
