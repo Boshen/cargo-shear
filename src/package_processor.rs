@@ -204,6 +204,9 @@ impl PackageProcessor {
             }
         }
 
+        // An ignore is only redundant if removing it wouldn't trigger any other diagnostics.
+        let mut suppressed_ignores: FxHashSet<String> = FxHashSet::default();
+
         // Analyze dependencies
         for (dep, dependency, location) in ctx.manifest.all_dependencies() {
             let pkg = dependency.get_ref().package().unwrap_or_else(|| dep.get_ref().as_str());
@@ -213,11 +216,14 @@ impl PackageProcessor {
                 .cloned()
                 .unwrap_or_else(|| dep.get_ref().replace('-', "_"));
 
-            if ctx.ignored_imports.contains(&import) {
-                continue;
-            }
+            let is_ignored = ctx.ignored_imports.contains(&import);
 
             if !code_imports.contains(&*import) {
+                if is_ignored {
+                    suppressed_ignores.insert(import);
+                    continue;
+                }
+
                 if dependency.get_ref().optional() {
                     result.unused_optional_dependencies.push(UnusedOptionalDependency {
                         name: dep.clone(),
@@ -247,6 +253,11 @@ impl PackageProcessor {
                 && !used_imports.normal.contains(&*import)
                 && used_imports.dev.contains(&*import)
             {
+                if is_ignored {
+                    suppressed_ignores.insert(import);
+                    continue;
+                }
+
                 if dependency.get_ref().optional() {
                     result.misplaced_optional_dependencies.push(MisplacedOptionalDependency {
                         name: dep.clone(),
@@ -272,7 +283,7 @@ impl PackageProcessor {
                 continue;
             }
 
-            if code_imports.contains(&ignored_import) {
+            if !suppressed_ignores.contains(&ignored_import) {
                 result.redundant_ignores.push(RedundantIgnore { name: ignored_dep.clone() });
             }
         }
