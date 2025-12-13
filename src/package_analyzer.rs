@@ -176,7 +176,7 @@ impl<'a> PackageAnalyzer<'a> {
                 ));
             }
 
-            let parsed = ParsedSource::from_str(&output, target.src_path.as_ref());
+            let parsed = ParsedSource::from_expanded_str(&output, target.src_path.as_ref());
             match DepTable::from(kind) {
                 DepTable::Normal => self.result.normal.extend(parsed.imports),
                 DepTable::Dev => self.result.dev.extend(parsed.imports),

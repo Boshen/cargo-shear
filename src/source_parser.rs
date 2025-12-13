@@ -40,18 +40,24 @@ impl ParsedSource {
     /// Parse a file.
     pub fn from_path(path: &StdPath, is_entry_point: bool) -> io::Result<Self> {
         let source = read_to_string(path)?;
-        Ok(SourceParser::parse(&source, Some(path), is_entry_point))
+        Ok(SourceParser::parse(&source, Some(path), is_entry_point, false))
     }
 
     /// Parse source code.
     pub fn from_str(source: &str, path: &StdPath) -> Self {
-        SourceParser::parse(source, Some(path), true)
+        SourceParser::parse(source, Some(path), true, false)
+    }
+
+    /// Parse expanded source code (from `cargo expand`).
+    /// Absolute paths are skipped due to macro hygiene.
+    pub fn from_expanded_str(source: &str, path: &StdPath) -> Self {
+        SourceParser::parse(source, Some(path), true, true)
     }
 
     /// Parse source code with explicit entry point flag.
     #[cfg(test)]
     pub fn from_path_test(source: &str, path: &StdPath, is_entry_point: bool) -> Self {
-        SourceParser::parse(source, Some(path), is_entry_point)
+        SourceParser::parse(source, Some(path), is_entry_point, false)
     }
 }
 
@@ -69,10 +75,15 @@ struct SourceParser {
     // TODO: Consider trying to parse comments as we walk the source?
     /// All doc comments, merged into one markdown string.
     markdown: String,
+
+    /// Whether we're parsing expanded code from `cargo expand`.
+    /// When true, absolute paths (e.g., `::tracing::debug!`) are skipped
+    /// because they resolve through macro-defining crates due to macro hygiene.
+    is_expanded: bool,
 }
 
 impl SourceParser {
-    fn new(path: Option<&StdPath>, is_entry_point: bool) -> Self {
+    fn new(path: Option<&StdPath>, is_entry_point: bool, is_expanded: bool) -> Self {
         let parent = path.and_then(|path| path.parent()).map(StdPath::to_path_buf);
 
         // Entry points: modules resolve relative to parent directory.
@@ -90,11 +101,22 @@ impl SourceParser {
             }
         });
 
-        Self { result: ParsedSource::default(), parent, module, markdown: String::new() }
+        Self {
+            result: ParsedSource::default(),
+            parent,
+            module,
+            markdown: String::new(),
+            is_expanded,
+        }
     }
 
-    fn parse(source: &str, path: Option<&StdPath>, is_entry_point: bool) -> ParsedSource {
-        let mut parser = Self::new(path, is_entry_point);
+    fn parse(
+        source: &str,
+        path: Option<&StdPath>,
+        is_entry_point: bool,
+        is_expanded: bool,
+    ) -> ParsedSource {
+        let mut parser = Self::new(path, is_entry_point, is_expanded);
 
         let tree = SourceFile::parse(source, Edition::CURRENT);
         let tree = tree.tree();
@@ -361,8 +383,10 @@ impl SourceParser {
             if !is_continuation {
                 self.add_import(prev.text());
             }
-        } else {
+        } else if !self.is_expanded {
             // Absolute path: `::foo::bar`
+            // Skip absolute paths in expanded code due to macro hygiene:
+            // they resolve through the macro-defining crate, not the current crate.
             let next_index =
                 if tokens[index].kind() == SyntaxKind::COLON2 { index + 1 } else { index + 2 };
 
@@ -379,8 +403,14 @@ impl SourceParser {
     /// - `use foo::bar::baz` -> `foo`
     /// - `use {foo, bar}` -> `foo`, `bar`
     /// - `use foo::{bar, baz}` -> `foo`
+    /// - `use ::foo::bar` -> skipped in expanded code (absolute path)
     fn collect_use_tree(&mut self, tree: &UseTree) {
         if let Some(path) = tree.path() {
+            // Skip absolute paths in expanded code due to macro hygiene
+            if self.is_expanded && path.to_string().starts_with("::") {
+                return;
+            }
+
             if let Some(name_ref) = path.segments().next().and_then(|segment| segment.name_ref()) {
                 self.add_import(name_ref.text().as_ref());
             }
@@ -399,7 +429,13 @@ impl SourceParser {
     /// Collect imports from a path in code.
     /// - `foo::bar()` -> `foo`
     /// - `foo::Bar::new()` -> `foo`
+    /// - `::foo::bar()` -> skipped in expanded code (absolute path)
     fn collect_path(&mut self, path: &Path) {
+        // Skip absolute paths in expanded code due to macro hygiene
+        if self.is_expanded && path.to_string().starts_with("::") {
+            return;
+        }
+
         let mut segments = path.segments();
 
         // Single segment paths can't be external crates
@@ -939,5 +975,50 @@ mod tests {
                 PathBuf::from("signal/windows/stub.rs"),
             ])
         );
+    }
+
+    #[test]
+    fn skips_absolute_paths_in_expanded_code() {
+        // Simulates expanded macro code with absolute paths.
+        // These absolute paths resolve through macro-defining crates due to macro hygiene,
+        // not through the current crate's dependencies.
+        let source = r#"
+            fn main() {
+                {
+                    use ::tracing::__macro_support::Callsite as _;
+                    ::tracing::debug!("test");
+                }
+                
+                // Relative paths should still be collected
+                foo::bar();
+            }
+        "#;
+
+        // Parse as expanded code
+        let parsed = ParsedSource::from_expanded_str(source, Path::new("lib.rs"));
+
+        // Debug: print what was collected
+        println!("Collected imports: {:?}", parsed.imports);
+
+        // Should NOT collect 'tracing' (absolute path ::tracing)
+        // Should collect 'foo' (relative path foo::bar)
+        assert_eq!(parsed.imports, FxHashSet::from_iter(["foo".to_owned()]));
+    }
+
+    #[test]
+    fn collects_absolute_paths_in_normal_code() {
+        // In normal (non-expanded) code, absolute paths should be collected
+        let source = r#"
+            fn main() {
+                ::tracing::debug!("test");
+                foo::bar();
+            }
+        "#;
+
+        // Parse as normal code
+        let parsed = ParsedSource::from_str(source, Path::new("lib.rs"));
+
+        // Should collect both 'tracing' and 'foo'
+        assert_eq!(parsed.imports, FxHashSet::from_iter(["tracing".to_owned(), "foo".to_owned()]));
     }
 }
