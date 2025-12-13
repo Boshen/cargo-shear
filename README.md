@@ -1,6 +1,10 @@
 # Cargo Shear ✂️ 🐑
 
-Detect and fix unused/misplaced dependencies from `Cargo.toml` in Rust projects.
+Detect and fix issues in Rust projects:
+
+- **Unused dependencies** in `Cargo.toml`
+- **Misplaced dependencies** (dev/build dependencies in wrong sections)
+- **Unlinked source files** (Rust files not reachable from any module tree)
 
 ## Installation
 
@@ -16,6 +20,14 @@ brew install cargo-shear
 ```
 
 ## Usage
+
+Check for issues without making changes:
+
+```bash
+cargo shear
+```
+
+Automatically fix unused dependencies:
 
 ```bash
 cargo shear --fix
@@ -39,7 +51,9 @@ The `--expand` flag uses `cargo expand`, which requires nightly and is significa
 > Misplaced dependency detection only works for integration tests, benchmarks, and examples.
 > Unit tests dependencies within `#[cfg(test)]` cannot be detected as misplaced.
 
-## Ignore false positives
+## Configuration
+
+### Ignore false positives
 
 False positives can be ignored by adding them to the package's `Cargo.toml`:
 
@@ -48,11 +62,21 @@ False positives can be ignored by adding them to the package's `Cargo.toml`:
 ignored = ["crate-name"]
 ```
 
-or in the workspace `Cargo.toml`:
+### Ignore unlinked files
+
+Unlinked files can be ignored using glob patterns:
+
+```toml
+[package.metadata.cargo-shear]
+ignored-paths = ["src/proto/*.rs", "examples/old/*"]
+```
+
+Both options work in workspace `Cargo.toml` as well:
 
 ```toml
 [workspace.metadata.cargo-shear]
 ignored = ["crate-name"]
+ignored-paths = ["*/proto/*.rs"]
 ```
 
 Otherwise please report the issue as a bug.
@@ -71,20 +95,15 @@ Otherwise please report the issue as a bug.
 
 ## Exit Code (for CI)
 
-The exit code gives an indication whether unused dependencies have been found:
+| Exit Code | Without `--fix` | With `--fix` |
+|-----------|----------------|--------------|
+| 0 | No issues found | No issues found, no changes made |
+| 1 | Issues found | Issues found and fixed |
+| 2 | Error during processing | Error during processing |
 
-* 0 if found no unused dependencies,
-* 1 if it found at least one unused dependency,
-* 2 if there was an error during processing (in which case there's no indication whether any unused dependency was found or not).
+**GitHub Actions Example:**
 
-With `--fix`:
-
-* 0 if found no unused dependencies so no fixes were performed,
-* 1 if removed some unused dependencies. Useful for running `cargo check` after `cargo-shear` changed `Cargo.toml`.
-
-GitHub Actions Job Example:
-
-```
+```yaml
 - name: cargo-shear
   shell: bash
   run: |
@@ -95,13 +114,13 @@ GitHub Actions Job Example:
 
 ## Technique
 
-1. use the `cargo_metadata` crate to list all dependencies specified in `[workspace.dependencies]` and `[dependencies]`
-2. iterate through all package targets (`lib`, `bin`, `example`, `test` and `bench`) to locate all Rust files
-3. use rust-analyzer's parser (`ra_ap_syntax`) to parse these Rust files and extract imports
-  - alternatively, use the `--expand` option with `cargo expand` to first expand macros and then parse the expanded code (though this is significantly slower).
-4. find the difference between the imports and the package dependencies
+1. Use the `cargo_metadata` crate to list all dependencies specified in `[workspace.dependencies]` and `[dependencies]`
+2. Iterate through all package targets (`lib`, `bin`, `example`, `test` and `bench`) to locate all Rust files
+3. Use rust-analyzer's parser (`ra_ap_syntax`) to parse these Rust files and extract imports
+   - Alternatively, use the `--expand` option with `cargo expand` to first expand macros and then parse the expanded code (though this is significantly slower)
+4. Find the difference between the imports and the package dependencies
 
-## Prior Arts
+## Prior Art
 
 * [est31/cargo-udeps](https://github.com/est31/cargo-udeps)
     * it collects dependency usage by compiling your project and find them from the `target/` directory
