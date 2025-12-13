@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.0](https://github.com/Boshen/cargo-shear/compare/v1.7.2...v1.8.0) - 2025-12-13
+
+### <!-- 0 -->🚀 Features
+- Detect unlinked Rust files ([#360](https://github.com/Boshen/cargo-shear/pull/360)) (by @CathalMullan)
+
+### <!-- 3 -->📚 Documentation
+- Improve README with comprehensive features and configuration sections ([#365](https://github.com/Boshen/cargo-shear/pull/365)) (by @Boshen)
+
+### Contributors
+
+* @Boshen
+* @CathalMullan
+* @renovate[bot]
+
 ## [1.7.2](https://github.com/Boshen/cargo-shear/compare/v1.7.1...v1.7.2) - 2025-12-09
 
 ### <!-- 4 -->⚡ Performance
