@@ -128,6 +128,14 @@ pub struct RedundantIgnorePath {
     pub pattern: String,
 }
 
+/// An empty file.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct EmptyFile {
+    /// The relative path to the empty file.
+    pub path: PathBuf,
+}
+
+
 /// Processes packages to identify issues.
 pub struct PackageProcessor {
     /// Whether to use `cargo expand` to expand macros
@@ -157,6 +165,9 @@ pub struct PackageAnalysis {
 
     /// Unlinked files.
     pub unlinked_files: Vec<UnlinkedFile>,
+
+    /// Empty files.
+    pub empty_files: Vec<EmptyFile>,
 
     /// Unknown ignores.
     pub unknown_ignores: Vec<UnknownIgnore>,
@@ -314,6 +325,22 @@ impl PackageProcessor {
                     && !ws_ignored_paths.iter().any(|globs| globs.is_match(root.join(path)))
             })
             .map(|path| UnlinkedFile { path })
+            .collect();
+
+        // Process empty files
+        let empty_files: Vec<PathBuf> = used_imports
+            .empty_files
+            .iter()
+            .filter_map(|path| path.strip_prefix(&ctx.directory).ok().map(Path::to_path_buf))
+            .collect();
+
+        result.empty_files = empty_files
+            .into_iter()
+            .filter(|path| {
+                !pkg_ignored_paths.iter().any(|globs| globs.is_match(path))
+                    && !ws_ignored_paths.iter().any(|globs| globs.is_match(root.join(path)))
+            })
+            .map(|path| EmptyFile { path })
             .collect();
 
         Ok(result)

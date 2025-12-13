@@ -7,8 +7,8 @@ use crate::{
     context::{PackageContext, WorkspaceContext},
     manifest::{DepTable, FeatureRef},
     package_processor::{
-        MisplacedDependency, MisplacedOptionalDependency, PackageAnalysis, RedundantIgnore,
-        RedundantIgnorePath, UnknownIgnore, UnlinkedFile, UnusedDependency,
+        EmptyFile, MisplacedDependency, MisplacedOptionalDependency, PackageAnalysis,
+        RedundantIgnore, RedundantIgnorePath, UnknownIgnore, UnlinkedFile, UnusedDependency,
         UnusedFeatureDependency, UnusedOptionalDependency, UnusedWorkspaceDependency,
         WorkspaceAnalysis,
     },
@@ -90,6 +90,17 @@ impl ShearAnalysis {
             self.insert(ShearDiagnostic::unlinked_files(&result.unlinked_files, &ctx.name, &root));
         }
 
+        if !result.empty_files.is_empty() {
+            let root = ctx
+                .directory
+                .strip_prefix(&ctx.workspace.root)
+                .ok()
+                .filter(|path| !path.as_os_str().is_empty())
+                .map_or_else(|| ".".to_owned(), |path| path.display().to_string());
+
+            self.insert(ShearDiagnostic::empty_files(&result.empty_files, &ctx.name, &root));
+        }
+
         for finding in &result.unknown_ignores {
             self.insert(ShearDiagnostic::unknown_ignore(finding, &src));
         }
@@ -139,7 +150,7 @@ impl ShearAnalysis {
                 self.warnings += 1;
                 self.show_ignored = true;
             }
-            DiagnosticKind::UnlinkedFiles { .. } => {
+            DiagnosticKind::UnlinkedFiles { .. } | DiagnosticKind::EmptyFiles { .. } => {
                 self.warnings += 1;
                 self.show_ignored_paths = true;
             }
@@ -304,6 +315,29 @@ impl ShearDiagnostic {
         }
     }
 
+    pub fn empty_files(diagnostics: &[EmptyFile], package: &str, root: &str) -> Self {
+        let paths: Vec<String> =
+            diagnostics.iter().map(|file| file.path.display().to_string()).collect();
+
+        let help = if paths.len() == 1 {
+            "delete this file or add content".to_owned()
+        } else {
+            "delete these files or add content".to_owned()
+        };
+
+        Self {
+            kind: DiagnosticKind::EmptyFiles {
+                package: package.to_owned(),
+                root: root.to_owned(),
+                paths,
+            },
+            source: None,
+            span: None,
+            related: Vec::new(),
+            help: Some(help),
+        }
+    }
+
     pub fn unknown_ignore(diagnostic: &UnknownIgnore, source: &NamedSource<String>) -> Self {
         Self {
             kind: DiagnosticKind::UnknownIgnore { name: diagnostic.name.get_ref().clone() },
@@ -344,6 +378,7 @@ enum DiagnosticKind {
     MisplacedDependency { name: String },
     MisplacedOptionalDependency { name: String },
     UnlinkedFiles { package: String, root: String, paths: Vec<String> },
+    EmptyFiles { package: String, root: String, paths: Vec<String> },
     UnknownIgnore { name: String },
     RedundantIgnore { name: String },
     RedundantIgnorePath { pattern: String },
@@ -373,6 +408,13 @@ impl DiagnosticKind {
                     .trim_end()
                     .to_owned()
             }
+            Self::EmptyFiles { package, root, paths } => {
+                let tree = Tree::with_paths(root, paths);
+                let s = if paths.len() == 1 { "" } else { "s" };
+                format!("{} empty file{s} in `{package}`\n{tree}", paths.len())
+                    .trim_end()
+                    .to_owned()
+            }
             Self::UnknownIgnore { name } => format!("unknown ignore `{name}`"),
             Self::RedundantIgnore { name } => format!("redundant ignore `{name}`"),
             Self::RedundantIgnorePath { pattern } => {
@@ -390,7 +432,9 @@ impl DiagnosticKind {
             Self::MisplacedDependency { .. } | Self::MisplacedOptionalDependency { .. } => {
                 Some("only used in dev targets")
             }
-            Self::UnlinkedFiles { .. } | Self::RedundantIgnorePath { .. } => None,
+            Self::UnlinkedFiles { .. } | Self::EmptyFiles { .. } | Self::RedundantIgnorePath { .. } => {
+                None
+            }
             Self::UnknownIgnore { .. } => Some("not a dependency"),
             Self::RedundantIgnore { .. } => Some("dependency is used"),
         }
@@ -405,6 +449,7 @@ impl DiagnosticKind {
             Self::MisplacedDependency { .. } => "shear/misplaced_dependency",
             Self::MisplacedOptionalDependency { .. } => "shear/misplaced_optional_dependency",
             Self::UnlinkedFiles { .. } => "shear/unlinked_files",
+            Self::EmptyFiles { .. } => "shear/empty_files",
             Self::UnknownIgnore { .. } => "shear/unknown_ignore",
             Self::RedundantIgnore { .. } => "shear/redundant_ignore",
             Self::RedundantIgnorePath { .. } => "shear/redundant_ignore_path",
@@ -417,6 +462,7 @@ impl DiagnosticKind {
             | Self::UnusedWorkspaceDependency { .. }
             | Self::MisplacedDependency { .. } => Severity::Error,
             Self::UnlinkedFiles { .. }
+            | Self::EmptyFiles { .. }
             | Self::UnusedOptionalDependency { .. }
             | Self::UnusedFeatureDependency { .. }
             | Self::MisplacedOptionalDependency { .. }

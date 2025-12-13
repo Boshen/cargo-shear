@@ -1066,6 +1066,40 @@ fn unlinked_ignored_workspace_detection() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// Files that are empty (no items, only whitespace/comments) should be warned about.
+#[test]
+fn empty_files_detection() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("empty_files").run()?;
+    assert_eq!(exit_code, ExitCode::SUCCESS);
+
+    insta::assert_snapshot!(output, @r#"
+    shear/empty_files
+
+      ⚠ 3 empty files in `empty_files`
+      │ .
+      │ └── src
+      │     ├── comments.rs
+      │     ├── empty.rs
+      │     └── whitespace.rs
+      help: delete these files or add content
+
+    shear/summary
+
+      ⚠ 1 warning
+
+    Advice:
+      ☞ to suppress an unlinked file issue
+       ╭─[Cargo.toml:2:18]
+     1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
+     2 │ ignored-paths = ["tests/compile/*.rs"]
+       ·                  ──────────┬─────────
+       ·                            ╰── add a file pattern here
+       ╰────
+    "#);
+
+    Ok(())
+}
+
 // `anyhow` is unused.
 #[test]
 fn unused_detection() -> Result<(), Box<dyn Error>> {
