@@ -90,6 +90,7 @@ pub struct Finding {
 
 impl Finding {
     fn from_diagnostic(diagnostic: &crate::diagnostics::ShearDiagnostic) -> Self {
+        use crate::diagnostics::DiagnosticKind;
         use miette::Diagnostic;
 
         let kind = diagnostic.kind();
@@ -111,18 +112,23 @@ impl Finding {
 
         let help = diagnostic.help().map(|h| h.to_string());
 
-        // Generate a fix suggestion if help text indicates an action
-        let fix = help.as_ref().and_then(|h| {
-            if h.contains("remove this dependency") || h.contains("move this dependency") {
-                Some(Fix {
-                    description: h.clone(),
-                    // Fixes would be included here when --fix is available
-                    // For now, we just provide the description
-                })
-            } else {
-                None
+        // Generate a fix suggestion based on the diagnostic kind
+        // Only fixable issues get a fix object
+        let fix = match kind {
+            DiagnosticKind::UnusedDependency { .. }
+            | DiagnosticKind::UnusedWorkspaceDependency { .. }
+            | DiagnosticKind::MisplacedDependency { .. } => {
+                help.as_ref().map(|h| Fix { description: h.clone() })
             }
-        });
+            DiagnosticKind::UnusedOptionalDependency { .. }
+            | DiagnosticKind::UnusedFeatureDependency { .. }
+            | DiagnosticKind::MisplacedOptionalDependency { .. }
+            | DiagnosticKind::UnlinkedFiles { .. }
+            | DiagnosticKind::EmptyFiles { .. }
+            | DiagnosticKind::UnknownIgnore { .. }
+            | DiagnosticKind::RedundantIgnore { .. }
+            | DiagnosticKind::RedundantIgnorePath { .. } => None,
+        };
 
         Self { code, severity, message, file, location, help, fix }
     }
