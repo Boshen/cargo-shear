@@ -475,18 +475,6 @@ impl DiagnosticKind {
                 | Self::MisplacedDependency { .. }
         )
     }
-
-    /// Returns `true` if this diagnostic is an error.
-    #[expect(dead_code, reason = "Public API method for consumers")]
-    pub const fn is_error(&self) -> bool {
-        matches!(self.severity(), Severity::Error)
-    }
-
-    /// Returns `true` if this diagnostic is a warning.
-    #[expect(dead_code, reason = "Public API method for consumers")]
-    pub const fn is_warning(&self) -> bool {
-        matches!(self.severity(), Severity::Warning)
-    }
 }
 
 impl fmt::Display for ShearDiagnostic {

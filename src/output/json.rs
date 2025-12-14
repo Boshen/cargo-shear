@@ -17,8 +17,7 @@ impl<W: io::Write> JsonRenderer<W> {
 
     pub fn render(&mut self, analysis: &ShearAnalysis) -> io::Result<()> {
         let output = JsonOutput::from_analysis(analysis);
-        serde_json::to_writer_pretty(&mut self.writer, &output)
-            .map_err(io::Error::other)?;
+        serde_json::to_writer_pretty(&mut self.writer, &output).map_err(io::Error::other)?;
         writeln!(self.writer)?;
         Ok(())
     }
@@ -84,9 +83,8 @@ pub struct Finding {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub help: Option<String>,
 
-    /// Optional fix that can be applied.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub fix: Option<Fix>,
+    /// Whether this issue can be automatically fixed with `--fix`.
+    pub fixable: bool,
 }
 
 impl Finding {
@@ -104,22 +102,14 @@ impl Finding {
 
         let file = diagnostic.source.as_ref().map(|s| s.name().to_owned());
 
-        let location = diagnostic.span.map(|span| Location {
-            offset: span.offset(),
-            length: span.len(),
-        });
+        let location =
+            diagnostic.span.map(|span| Location { offset: span.offset(), length: span.len() });
 
         let help = diagnostic.help().map(|h| h.to_string());
 
-        // Generate a fix suggestion based on the diagnostic kind
-        // Only fixable issues get a fix object
-        let fix = if diagnostic.kind.is_fixable() {
-            help.as_ref().map(|h| Fix { description: h.clone() })
-        } else {
-            None
-        };
+        let fixable = diagnostic.kind.is_fixable();
 
-        Self { code, severity, message, file, location, help, fix }
+        Self { code, severity, message, file, location, help, fixable }
     }
 }
 
@@ -131,11 +121,4 @@ pub struct Location {
 
     /// Length in bytes.
     pub length: usize,
-}
-
-/// A fix that can be applied to resolve the issue.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Fix {
-    /// Description of what the fix does.
-    pub description: String,
 }

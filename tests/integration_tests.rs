@@ -1955,9 +1955,7 @@ fn json_output_format() -> Result<(), Box<dyn Error>> {
             "length": 6
           },
           "help": "remove this dependency",
-          "fix": {
-            "description": "remove this dependency"
-          }
+          "fixable": true
         }
       ]
     }
@@ -1987,7 +1985,7 @@ fn json_output_format() -> Result<(), Box<dyn Error>> {
     assert_eq!(finding.get("file").unwrap().as_str(), Some("Cargo.toml"));
     assert!(finding.get("location").is_some());
     assert!(finding.get("help").is_some());
-    assert!(finding.get("fix").is_some());
+    assert_eq!(finding.get("fixable").unwrap().as_bool(), Some(true));
 
     Ok(())
 }
