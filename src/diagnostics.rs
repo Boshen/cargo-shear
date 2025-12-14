@@ -165,36 +165,19 @@ impl ShearAnalysis {
 /// Unified diagnostic type that contains all information needed for display.
 pub struct ShearDiagnostic {
     /// The kind of diagnostic.
-    kind: DiagnosticKind,
+    pub kind: DiagnosticKind,
 
     /// Source content.
-    source: Option<NamedSource<String>>,
+    pub source: Option<NamedSource<String>>,
 
     /// Primary span.
-    span: Option<SourceSpan>,
+    pub span: Option<SourceSpan>,
 
     /// Any related diagnostics.
-    related: Vec<Box<dyn Diagnostic + Send + Sync>>,
+    pub related: Vec<Box<dyn Diagnostic + Send + Sync>>,
 
     /// Optional help text.
-    help: Option<String>,
-}
-
-impl ShearDiagnostic {
-    /// Get the file name from the source, if available.
-    pub fn file_name(&self) -> Option<&str> {
-        self.source.as_ref().map(miette::NamedSource::name)
-    }
-
-    /// Get the span information, if available.
-    pub const fn span(&self) -> Option<SourceSpan> {
-        self.span
-    }
-
-    /// Get the diagnostic kind.
-    pub const fn kind(&self) -> &DiagnosticKind {
-        &self.kind
-    }
+    pub help: Option<String>,
 }
 
 impl fmt::Debug for ShearDiagnostic {
@@ -481,6 +464,28 @@ impl DiagnosticKind {
             | Self::RedundantIgnore { .. }
             | Self::RedundantIgnorePath { .. } => Severity::Warning,
         }
+    }
+
+    /// Returns `true` if this diagnostic can be automatically fixed with `--fix`.
+    pub const fn is_fixable(&self) -> bool {
+        matches!(
+            self,
+            Self::UnusedDependency { .. }
+                | Self::UnusedWorkspaceDependency { .. }
+                | Self::MisplacedDependency { .. }
+        )
+    }
+
+    /// Returns `true` if this diagnostic is an error.
+    #[expect(dead_code, reason = "Public API method for consumers")]
+    pub const fn is_error(&self) -> bool {
+        matches!(self.severity(), Severity::Error)
+    }
+
+    /// Returns `true` if this diagnostic is a warning.
+    #[expect(dead_code, reason = "Public API method for consumers")]
+    pub const fn is_warning(&self) -> bool {
+        matches!(self.severity(), Severity::Warning)
     }
 }
 

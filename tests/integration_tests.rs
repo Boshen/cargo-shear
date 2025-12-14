@@ -1936,7 +1936,34 @@ fn json_output_format() -> Result<(), Box<dyn Error>> {
         .run()?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
-    // Parse the output as JSON to ensure it's valid
+    // Verify the full JSON output matches expected structure
+    insta::assert_snapshot!(output, @r#"
+    {
+      "summary": {
+        "errors": 1,
+        "warnings": 0,
+        "fixed": 0
+      },
+      "findings": [
+        {
+          "code": "shear/unused_dependency",
+          "severity": "error",
+          "message": "unused dependency `anyhow`",
+          "file": "Cargo.toml",
+          "location": {
+            "offset": 86,
+            "length": 6
+          },
+          "help": "remove this dependency",
+          "fix": {
+            "description": "remove this dependency"
+          }
+        }
+      ]
+    }
+    "#);
+
+    // Also parse and verify structure programmatically
     let json: serde_json::Value = serde_json::from_str(&output)?;
 
     // Verify structure

@@ -1,8 +1,9 @@
 use std::io;
 
+use miette::{Diagnostic, Severity};
 use serde::{Deserialize, Serialize};
 
-use crate::diagnostics::ShearAnalysis;
+use crate::diagnostics::{ShearAnalysis, ShearDiagnostic};
 
 /// JSON renderer for cargo-shear output.
 pub struct JsonRenderer<W> {
@@ -89,45 +90,33 @@ pub struct Finding {
 }
 
 impl Finding {
-    fn from_diagnostic(diagnostic: &crate::diagnostics::ShearDiagnostic) -> Self {
-        use crate::diagnostics::DiagnosticKind;
-        use miette::Diagnostic;
+    fn from_diagnostic(diagnostic: &ShearDiagnostic) -> Self {
+        let code = diagnostic.kind.code().to_owned();
 
-        let kind = diagnostic.kind();
-        let code = kind.code().to_owned();
-
-        let severity = match kind.severity() {
-            miette::Severity::Error => "error",
-            miette::Severity::Warning => "warning",
-            miette::Severity::Advice => "advice",
+        let severity = match diagnostic.kind.severity() {
+            Severity::Error => "error",
+            Severity::Warning => "warning",
+            Severity::Advice => "advice",
         }
         .to_owned();
 
-        let message = kind.message();
+        let message = diagnostic.kind.message();
 
-        let file = diagnostic.file_name().map(std::borrow::ToOwned::to_owned);
+        let file = diagnostic.source.as_ref().map(|s| s.name().to_owned());
 
-        let location =
-            diagnostic.span().map(|span| Location { offset: span.offset(), length: span.len() });
+        let location = diagnostic.span.map(|span| Location {
+            offset: span.offset(),
+            length: span.len(),
+        });
 
         let help = diagnostic.help().map(|h| h.to_string());
 
         // Generate a fix suggestion based on the diagnostic kind
         // Only fixable issues get a fix object
-        let fix = match kind {
-            DiagnosticKind::UnusedDependency { .. }
-            | DiagnosticKind::UnusedWorkspaceDependency { .. }
-            | DiagnosticKind::MisplacedDependency { .. } => {
-                help.as_ref().map(|h| Fix { description: h.clone() })
-            }
-            DiagnosticKind::UnusedOptionalDependency { .. }
-            | DiagnosticKind::UnusedFeatureDependency { .. }
-            | DiagnosticKind::MisplacedOptionalDependency { .. }
-            | DiagnosticKind::UnlinkedFiles { .. }
-            | DiagnosticKind::EmptyFiles { .. }
-            | DiagnosticKind::UnknownIgnore { .. }
-            | DiagnosticKind::RedundantIgnore { .. }
-            | DiagnosticKind::RedundantIgnorePath { .. } => None,
+        let fix = if diagnostic.kind.is_fixable() {
+            help.as_ref().map(|h| Fix { description: h.clone() })
+        } else {
+            None
         };
 
         Self { code, severity, message, file, location, help, fix }
