@@ -39,7 +39,6 @@ mod package_processor;
 mod source_parser;
 #[cfg(test)]
 mod tests;
-mod tree;
 pub mod util;
 
 use std::{

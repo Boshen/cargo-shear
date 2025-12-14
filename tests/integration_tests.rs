@@ -990,9 +990,7 @@ fn unlinked_ignored_detection() -> Result<(), Box<dyn Error>> {
     shear/unlinked_files
 
       ⚠ 1 unlinked file in `unlinked_ignored`
-      │ .
-      │ └── src
-      │     └── orphan.rs
+      │ src/orphan.rs
       help: delete this file
 
     shear/summary
@@ -1044,9 +1042,7 @@ fn unlinked_ignored_workspace_detection() -> Result<(), Box<dyn Error>> {
     shear/unlinked_files
 
       ⚠ 1 unlinked file in `app`
-      │ app
-      │ └── src
-      │     └── orphan.rs
+      │ src/orphan.rs
       help: delete this file
 
     shear/summary
@@ -1076,11 +1072,9 @@ fn empty_files_detection() -> Result<(), Box<dyn Error>> {
     shear/empty_files
 
       ⚠ 3 empty files in `empty_files`
-      │ .
-      │ └── src
-      │     ├── comments.rs
-      │     ├── empty.rs
-      │     └── whitespace.rs
+      │ src/comments.rs
+      │ src/empty.rs
+      │ src/whitespace.rs
       help: delete these files
 
     shear/summary

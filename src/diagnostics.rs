@@ -1,4 +1,4 @@
-use std::{error::Error, fmt};
+use std::{collections::BTreeSet, error::Error, fmt, path::PathBuf};
 
 use miette::{Diagnostic, LabeledSpan, NamedSource, Severity, SourceSpan};
 use rustc_hash::FxHashSet;
@@ -12,7 +12,6 @@ use crate::{
         UnusedFeatureDependency, UnusedOptionalDependency, UnusedWorkspaceDependency,
         WorkspaceAnalysis,
     },
-    tree::Tree,
 };
 
 /// Result of processing all packages across the workspace.
@@ -79,20 +78,12 @@ impl ShearAnalysis {
             self.insert(ShearDiagnostic::misplaced_optional_dependency(finding, &src));
         }
 
-        // Calculate root path for file diagnostics
-        let root = ctx
-            .directory
-            .strip_prefix(&ctx.workspace.root)
-            .ok()
-            .filter(|path| !path.as_os_str().is_empty())
-            .map_or_else(|| ".".to_owned(), |path| path.display().to_string());
-
         if !result.unlinked_files.is_empty() {
-            self.insert(ShearDiagnostic::unlinked_files(&result.unlinked_files, &ctx.name, &root));
+            self.insert(ShearDiagnostic::unlinked_files(&result.unlinked_files, &ctx.name));
         }
 
         if !result.empty_files.is_empty() {
-            self.insert(ShearDiagnostic::empty_files(&result.empty_files, &ctx.name, &root));
+            self.insert(ShearDiagnostic::empty_files(&result.empty_files, &ctx.name));
         }
 
         for finding in &result.unknown_ignores {
@@ -286,10 +277,8 @@ impl ShearDiagnostic {
         }
     }
 
-    pub fn unlinked_files(diagnostics: &[UnlinkedFile], package: &str, root: &str) -> Self {
-        let paths: Vec<String> =
-            diagnostics.iter().map(|file| file.path.display().to_string()).collect();
-
+    pub fn unlinked_files(diagnostics: &[UnlinkedFile], package: &str) -> Self {
+        let paths: BTreeSet<_> = diagnostics.iter().map(|file| file.path.clone()).collect();
         let help = if paths.len() == 1 {
             "delete this file".to_owned()
         } else {
@@ -297,11 +286,7 @@ impl ShearDiagnostic {
         };
 
         Self {
-            kind: DiagnosticKind::UnlinkedFiles {
-                package: package.to_owned(),
-                root: root.to_owned(),
-                paths,
-            },
+            kind: DiagnosticKind::UnlinkedFiles { package: package.to_owned(), paths },
             source: None,
             span: None,
             related: Vec::new(),
@@ -309,10 +294,8 @@ impl ShearDiagnostic {
         }
     }
 
-    pub fn empty_files(diagnostics: &[EmptyFile], package: &str, root: &str) -> Self {
-        let paths: Vec<String> =
-            diagnostics.iter().map(|file| file.path.display().to_string()).collect();
-
+    pub fn empty_files(diagnostics: &[EmptyFile], package: &str) -> Self {
+        let paths: BTreeSet<_> = diagnostics.iter().map(|file| file.path.clone()).collect();
         let help = if paths.len() == 1 {
             "delete this file".to_owned()
         } else {
@@ -320,11 +303,7 @@ impl ShearDiagnostic {
         };
 
         Self {
-            kind: DiagnosticKind::EmptyFiles {
-                package: package.to_owned(),
-                root: root.to_owned(),
-                paths,
-            },
+            kind: DiagnosticKind::EmptyFiles { package: package.to_owned(), paths },
             source: None,
             span: None,
             related: Vec::new(),
@@ -371,8 +350,8 @@ enum DiagnosticKind {
     UnusedFeatureDependency { name: String },
     MisplacedDependency { name: String },
     MisplacedOptionalDependency { name: String },
-    UnlinkedFiles { package: String, root: String, paths: Vec<String> },
-    EmptyFiles { package: String, root: String, paths: Vec<String> },
+    UnlinkedFiles { package: String, paths: BTreeSet<PathBuf> },
+    EmptyFiles { package: String, paths: BTreeSet<PathBuf> },
     UnknownIgnore { name: String },
     RedundantIgnore { name: String },
     RedundantIgnorePath { pattern: String },
@@ -395,19 +374,27 @@ impl DiagnosticKind {
             Self::MisplacedOptionalDependency { name } => {
                 format!("misplaced optional dependency `{name}`")
             }
-            Self::UnlinkedFiles { package, root, paths } => {
-                let tree = Tree::with_paths(root, paths);
-                let s = if paths.len() == 1 { "" } else { "s" };
-                format!("{} unlinked file{s} in `{package}`\n{tree}", paths.len())
-                    .trim_end()
-                    .to_owned()
+            Self::UnlinkedFiles { package, paths } => {
+                let count = paths.len();
+                let s = if count == 1 { "" } else { "s" };
+                let paths = paths
+                    .iter()
+                    .map(|path| path.display().to_string())
+                    .collect::<Vec<_>>()
+                    .join("\n");
+
+                format!("{count} unlinked file{s} in `{package}`\n{paths}")
             }
-            Self::EmptyFiles { package, root, paths } => {
-                let tree = Tree::with_paths(root, paths);
-                let s = if paths.len() == 1 { "" } else { "s" };
-                format!("{} empty file{s} in `{package}`\n{tree}", paths.len())
-                    .trim_end()
-                    .to_owned()
+            Self::EmptyFiles { package, paths } => {
+                let count = paths.len();
+                let s = if count == 1 { "" } else { "s" };
+                let paths = paths
+                    .iter()
+                    .map(|path| path.display().to_string())
+                    .collect::<Vec<_>>()
+                    .join("\n");
+
+                format!("{count} empty file{s} in `{package}`\n{paths}")
             }
             Self::UnknownIgnore { name } => format!("unknown ignore `{name}`"),
             Self::RedundantIgnore { name } => format!("redundant ignore `{name}`"),
