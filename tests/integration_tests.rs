@@ -1094,6 +1094,21 @@ fn empty_files_detection() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// Empty files can be ignored via ignored-paths without triggering redundant_ignore_path warning.
+#[test]
+fn empty_files_ignored() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("empty_ignored").run()?;
+    assert_eq!(exit_code, ExitCode::SUCCESS);
+
+    insta::assert_snapshot!(output, @r"
+    shear/summary
+
+      ✓ no issues found
+    ");
+
+    Ok(())
+}
+
 // `anyhow` is unused.
 #[test]
 fn unused_detection() -> Result<(), Box<dyn Error>> {
