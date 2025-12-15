@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.1](https://github.com/Boshen/cargo-shear/compare/v1.9.0...v1.9.1) - 2025-12-15
+
+### <!-- 9 -->💼 Other
+- Fix redundant_ignore_path warning for empty files ([#382](https://github.com/Boshen/cargo-shear/pull/382)) (by @Copilot)
+- Add JSON output format for CI integration ([#371](https://github.com/Boshen/cargo-shear/pull/371)) (by @Copilot)
+- Prevent duplicate path warnings in root workspace packages ([#383](https://github.com/Boshen/cargo-shear/pull/383)) (by @CathalMullan)
+- Print files as list, rather than tree ([#377](https://github.com/Boshen/cargo-shear/pull/377)) (by @CathalMullan)
+
+### Contributors
+
+* @Copilot
+* @CathalMullan
+* @renovate[bot]
+
 ## [1.9.0](https://github.com/Boshen/cargo-shear/compare/v1.8.0...v1.9.0) - 2025-12-13
 
 ### <!-- 0 -->🚀 Features
