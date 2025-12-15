@@ -309,15 +309,26 @@ impl PackageProcessor {
             .filter_map(|path| path.strip_prefix(&ctx.directory).ok().map(Path::to_path_buf))
             .collect();
 
+        // Analyze empty files
+        let empty_files: FxHashSet<PathBuf> = used_imports
+            .empty_files
+            .iter()
+            .filter_map(|path| path.strip_prefix(&ctx.directory).ok().map(Path::to_path_buf))
+            .collect();
+
         let pkg_ignored_paths = &ctx.manifest.package.metadata.cargo_shear.ignored_paths;
         let ws_ignored_paths = &ctx.workspace.manifest.workspace.metadata.cargo_shear.ignored_paths;
 
         // Ensure ignores are relative to package directory
         let root = ctx.directory.strip_prefix(&ctx.workspace.root).unwrap_or(&ctx.directory);
 
+        // An ignore pattern is redundant only if it doesn't match any unlinked OR empty files
         result.redundant_ignore_paths = pkg_ignored_paths
             .iter()
-            .filter(|matcher| !unlinked_files.iter().any(|path| matcher.is_match(path)))
+            .filter(|matcher| {
+                !unlinked_files.iter().any(|path| matcher.is_match(path))
+                    && !empty_files.iter().any(|path| matcher.is_match(path))
+            })
             .map(|matcher| RedundantIgnorePath { pattern: matcher.glob().glob().to_owned() })
             .collect();
 
@@ -331,10 +342,8 @@ impl PackageProcessor {
             .collect();
 
         // Process empty files
-        result.empty_files = used_imports
-            .empty_files
-            .iter()
-            .filter_map(|path| path.strip_prefix(&ctx.directory).ok().map(Path::to_path_buf))
+        result.empty_files = empty_files
+            .into_iter()
             .filter(|path| {
                 !pkg_ignored_paths.iter().any(|globs| globs.is_match(path))
                     && !ws_ignored_paths.iter().any(|globs| globs.is_match(root.join(path)))
