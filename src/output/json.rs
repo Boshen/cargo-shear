@@ -87,32 +87,6 @@ pub struct Finding {
     pub fixable: bool,
 }
 
-impl Finding {
-    fn from_diagnostic(diagnostic: &ShearDiagnostic) -> Self {
-        let code = diagnostic.kind.code().to_owned();
-
-        let severity = match diagnostic.kind.severity() {
-            Severity::Error => "error",
-            Severity::Warning => "warning",
-            Severity::Advice => "advice",
-        }
-        .to_owned();
-
-        let message = diagnostic.kind.message();
-
-        let file = diagnostic.source.as_ref().map(|s| s.name().to_owned());
-
-        let location =
-            diagnostic.span.map(|span| Location { offset: span.offset(), length: span.len() });
-
-        let help = diagnostic.help().map(|h| h.to_string());
-
-        let fixable = diagnostic.kind.is_fixable();
-
-        Self { code, severity, message, file, location, help, fixable }
-    }
-}
-
 /// Location information within a file.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Location {
@@ -121,4 +95,23 @@ pub struct Location {
 
     /// Length in bytes.
     pub length: usize,
+}
+
+impl Finding {
+    fn from_diagnostic(diagnostic: &ShearDiagnostic) -> Self {
+        let code = diagnostic.kind.code().to_owned();
+        let severity = match diagnostic.kind.severity() {
+            Severity::Error => "error",
+            Severity::Warning => "warning",
+            Severity::Advice => "advice",
+        }
+        .to_owned();
+        let message = diagnostic.kind.message();
+        let file = diagnostic.source.as_ref().map(|s| s.name().to_owned());
+        let location =
+            diagnostic.span.map(|span| Location { offset: span.offset(), length: span.len() });
+        let help = diagnostic.help().map(|h| h.to_string());
+        let fixable = diagnostic.kind.is_fixable();
+        Self { code, severity, message, file, location, help, fixable }
+    }
 }

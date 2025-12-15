@@ -119,7 +119,7 @@ The JSON output includes:
   - `file`: Path to the file with the issue
   - `location`: Byte offset and length within the file
   - `help`: Suggested fix
-  - `fix`: Structured fix information
+  - `fixable`: Boolean indicating if issue can be auto-fixed with `--fix`
 
 ## Exit Code (for CI)
 

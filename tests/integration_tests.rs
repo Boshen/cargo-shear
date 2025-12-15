@@ -1961,31 +1961,5 @@ fn json_output_format() -> Result<(), Box<dyn Error>> {
     }
     "#);
 
-    // Also parse and verify structure programmatically
-    let json: serde_json::Value = serde_json::from_str(&output)?;
-
-    // Verify structure
-    assert!(json.get("summary").is_some());
-    assert!(json.get("findings").is_some());
-
-    // Verify summary
-    let summary = json.get("summary").unwrap();
-    assert_eq!(summary.get("errors").unwrap().as_u64(), Some(1));
-    assert_eq!(summary.get("warnings").unwrap().as_u64(), Some(0));
-    assert_eq!(summary.get("fixed").unwrap().as_u64(), Some(0));
-
-    // Verify findings
-    let findings = json.get("findings").unwrap().as_array().unwrap();
-    assert_eq!(findings.len(), 1);
-
-    let finding = &findings[0];
-    assert_eq!(finding.get("code").unwrap().as_str(), Some("shear/unused_dependency"));
-    assert_eq!(finding.get("severity").unwrap().as_str(), Some("error"));
-    assert_eq!(finding.get("message").unwrap().as_str(), Some("unused dependency `anyhow`"));
-    assert_eq!(finding.get("file").unwrap().as_str(), Some("Cargo.toml"));
-    assert!(finding.get("location").is_some());
-    assert!(finding.get("help").is_some());
-    assert_eq!(finding.get("fixable").unwrap().as_bool(), Some(true));
-
     Ok(())
 }
