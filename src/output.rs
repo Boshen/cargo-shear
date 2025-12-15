@@ -2,6 +2,7 @@ use std::{io, io::IsTerminal, str::FromStr};
 
 use crate::{diagnostics::ShearAnalysis, output::miette::MietteRenderer};
 
+pub mod json;
 pub mod miette;
 
 /// Output format for cargo-shear.
@@ -10,6 +11,9 @@ pub enum OutputFormat {
     /// Auto format with colors and unicode.
     #[default]
     Auto,
+
+    /// JSON format for machine-readable output.
+    Json,
 }
 
 impl FromStr for OutputFormat {
@@ -18,7 +22,8 @@ impl FromStr for OutputFormat {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "auto" => Ok(Self::Auto),
-            _ => Err(format!("unknown format: {s}, expected: auto")),
+            "json" => Ok(Self::Json),
+            _ => Err(format!("unknown format: {s}, expected: auto, json")),
         }
     }
 }
@@ -83,6 +88,10 @@ impl<W: io::Write> Renderer<W> {
         match self.format {
             OutputFormat::Auto => {
                 let mut renderer = MietteRenderer::new(&mut self.writer, self.color);
+                renderer.render(analysis)
+            }
+            OutputFormat::Json => {
+                let mut renderer = json::JsonRenderer::new(&mut self.writer);
                 renderer.render(analysis)
             }
         }

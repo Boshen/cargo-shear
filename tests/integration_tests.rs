@@ -2,7 +2,7 @@
 
 use std::{error::Error, fs, io, path::Path, process::ExitCode};
 
-use cargo_shear::{CargoShear, CargoShearOptions, ColorMode};
+use cargo_shear::{CargoShear, CargoShearOptions, ColorMode, OutputFormat};
 use cargo_toml::Manifest;
 use tempfile::TempDir;
 
@@ -1918,6 +1918,42 @@ fn unused_workspace_libname_fix() -> Result<(), Box<dyn Error>> {
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
     let workspace = &manifest.workspace.as_ref().unwrap().dependencies;
     assert!(!workspace.contains_key("criterion2"));
+
+    Ok(())
+}
+
+// JSON output format should produce valid JSON with structured diagnostic data.
+#[test]
+fn json_output_format() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("unused")
+        .options(|options| options.with_format(OutputFormat::Json))
+        .run()?;
+    assert_eq!(exit_code, ExitCode::FAILURE);
+
+    // Verify the full JSON output matches expected structure
+    insta::assert_snapshot!(output, @r#"
+    {
+      "summary": {
+        "errors": 1,
+        "warnings": 0,
+        "fixed": 0
+      },
+      "findings": [
+        {
+          "code": "shear/unused_dependency",
+          "severity": "error",
+          "message": "unused dependency `anyhow`",
+          "file": "Cargo.toml",
+          "location": {
+            "offset": 86,
+            "length": 6
+          },
+          "help": "remove this dependency",
+          "fixable": true
+        }
+      ]
+    }
+    "#);
 
     Ok(())
 }

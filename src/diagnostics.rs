@@ -156,19 +156,19 @@ impl ShearAnalysis {
 /// Unified diagnostic type that contains all information needed for display.
 pub struct ShearDiagnostic {
     /// The kind of diagnostic.
-    kind: DiagnosticKind,
+    pub kind: DiagnosticKind,
 
     /// Source content.
-    source: Option<NamedSource<String>>,
+    pub source: Option<NamedSource<String>>,
 
     /// Primary span.
-    span: Option<SourceSpan>,
+    pub span: Option<SourceSpan>,
 
     /// Any related diagnostics.
-    related: Vec<Box<dyn Diagnostic + Send + Sync>>,
+    pub related: Vec<Box<dyn Diagnostic + Send + Sync>>,
 
     /// Optional help text.
-    help: Option<String>,
+    pub help: Option<String>,
 }
 
 impl fmt::Debug for ShearDiagnostic {
@@ -343,7 +343,7 @@ impl ShearDiagnostic {
 }
 
 #[derive(Debug)]
-enum DiagnosticKind {
+pub enum DiagnosticKind {
     UnusedDependency { name: String },
     UnusedWorkspaceDependency { name: String },
     UnusedOptionalDependency { name: String },
@@ -358,7 +358,7 @@ enum DiagnosticKind {
 }
 
 impl DiagnosticKind {
-    fn message(&self) -> String {
+    pub fn message(&self) -> String {
         match self {
             Self::UnusedDependency { name } => format!("unused dependency `{name}`"),
             Self::UnusedWorkspaceDependency { name } => {
@@ -404,7 +404,7 @@ impl DiagnosticKind {
         }
     }
 
-    const fn label(&self) -> Option<&'static str> {
+    pub const fn label(&self) -> Option<&'static str> {
         match self {
             Self::UnusedWorkspaceDependency { .. } => Some("not used by any workspace member"),
             Self::UnusedDependency { .. }
@@ -421,7 +421,7 @@ impl DiagnosticKind {
         }
     }
 
-    const fn code(&self) -> &'static str {
+    pub const fn code(&self) -> &'static str {
         match self {
             Self::UnusedDependency { .. } => "shear/unused_dependency",
             Self::UnusedWorkspaceDependency { .. } => "shear/unused_workspace_dependency",
@@ -437,7 +437,7 @@ impl DiagnosticKind {
         }
     }
 
-    const fn severity(&self) -> Severity {
+    pub const fn severity(&self) -> Severity {
         match self {
             Self::UnusedDependency { .. }
             | Self::UnusedWorkspaceDependency { .. }
@@ -451,6 +451,16 @@ impl DiagnosticKind {
             | Self::RedundantIgnore { .. }
             | Self::RedundantIgnorePath { .. } => Severity::Warning,
         }
+    }
+
+    /// Returns `true` if this diagnostic can be automatically fixed with `--fix`.
+    pub const fn is_fixable(&self) -> bool {
+        matches!(
+            self,
+            Self::UnusedDependency { .. }
+                | Self::UnusedWorkspaceDependency { .. }
+                | Self::MisplacedDependency { .. }
+        )
     }
 }
 
