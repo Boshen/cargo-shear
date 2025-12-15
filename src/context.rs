@@ -1,9 +1,6 @@
 //! Context types for processing workspaces and packages.
 
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::path::{Path, PathBuf};
 
 use anyhow::{Result, anyhow};
 use cargo_metadata::{Metadata, Package, Target};
@@ -29,8 +26,8 @@ pub struct WorkspaceContext {
     pub files: FxHashMap<PathBuf, ParsedSource>,
     /// All linked files.
     pub linked: FxHashSet<PathBuf>,
-    /// Number of packages in the workspace.
-    pub packages: usize,
+    /// Paths of all packages in the workspace.
+    pub packages: FxHashSet<PathBuf>,
 
     /// Mapping from dependency key to package name.
     pub dep_to_pkg: FxHashMap<String, String>,
@@ -46,14 +43,12 @@ impl WorkspaceContext {
         let manifest_content = read_to_string(&manifest_path)?;
         let manifest: Manifest = toml::from_str(&manifest_content)?;
 
-        let package_roots: Arc<FxHashSet<PathBuf>> = Arc::new(
-            metadata
-                .workspace_packages()
-                .iter()
-                .filter_map(|pkg| pkg.manifest_path.parent())
-                .map(|path| path.as_std_path().to_path_buf())
-                .collect(),
-        );
+        let packages: FxHashSet<PathBuf> = metadata
+            .workspace_packages()
+            .iter()
+            .filter_map(|pkg| pkg.manifest_path.parent())
+            .map(|path| path.as_std_path().to_path_buf())
+            .collect();
 
         let entry_points: FxHashSet<PathBuf> = metadata
             .workspace_packages()
@@ -69,7 +64,7 @@ impl WorkspaceContext {
         let walked: FxHashSet<PathBuf> = parents
             .into_par_iter()
             .flat_map_iter(|parent| {
-                let package_roots = Arc::clone(&package_roots);
+                let packages = packages.clone();
                 WalkBuilder::new(&parent)
                     // Skip nested packages (but allow package roots)
                     .filter_entry(move |entry| {
@@ -78,7 +73,7 @@ impl WorkspaceContext {
                         {
                             let path = entry.path();
                             if path.join("Cargo.toml").exists() {
-                                return package_roots.contains(path);
+                                return packages.contains(path);
                             }
                         }
 
@@ -146,9 +141,9 @@ impl WorkspaceContext {
             manifest_path,
             manifest_content,
             manifest,
-            packages: metadata.workspace_packages().len(),
             files,
             linked,
+            packages,
             dep_to_pkg,
             ignored_deps,
         })

@@ -217,6 +217,17 @@ impl<'a> PackageAnalyzer<'a> {
             .files
             .keys()
             .filter(|path| {
+                // Skip files belonging to other packages when analyzing workspace root
+                if self.ctx.directory == self.ctx.workspace.root
+                    && self.ctx.workspace.packages.len() > 1
+                {
+                    for pkg in &self.ctx.workspace.packages {
+                        if pkg != &self.ctx.directory && path.starts_with(pkg) {
+                            return false;
+                        }
+                    }
+                }
+
                 let path_bytes = path.as_os_str().as_encoded_bytes();
                 path_bytes.starts_with(dir_bytes)
                     && path_bytes.get(dir_bytes.len()) == Some(&b'/')
