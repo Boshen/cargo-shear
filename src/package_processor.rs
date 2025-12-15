@@ -352,7 +352,7 @@ impl PackageProcessor {
     ) -> WorkspaceAnalysis {
         let mut result = WorkspaceAnalysis::default();
 
-        if ctx.packages <= 1 {
+        if ctx.packages.len() <= 1 {
             return result;
         }
 
