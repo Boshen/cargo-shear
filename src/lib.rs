@@ -54,6 +54,7 @@ use bpaf::Bpaf;
 use cargo_metadata::{CargoOpt, Metadata, MetadataCommand, Package};
 use owo_colors::OwoColorize;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use rustc_hash::FxHashSet;
 use toml_edit::DocumentMut;
 
 pub use crate::output::{ColorMode, OutputFormat};
@@ -365,15 +366,20 @@ impl<W: Write> CargoShear<W> {
                 .collect::<Result<Vec<_>>>()?
         };
 
+        let mut used_workspace_ignore_paths: FxHashSet<String> = FxHashSet::default();
         for (ctx, result) in results {
             let fixed = self.fix_package_issues(&ctx.manifest_path, &result)?;
+            used_workspace_ignore_paths.extend(result.used_workspace_ignore_paths.iter().cloned());
             self.analysis.add_package_result(&ctx, &result, fixed);
         }
 
         // Only analyze workspace if we're targeting all packages.
         if self.options.package.is_empty() && self.options.exclude.is_empty() {
-            let workspace_result =
-                PackageProcessor::process_workspace(&workspace_ctx, &self.analysis.packages);
+            let workspace_result = PackageProcessor::process_workspace(
+                &workspace_ctx,
+                &self.analysis.packages,
+                &used_workspace_ignore_paths,
+            );
 
             let fixed =
                 self.fix_workspace_issues(&workspace_ctx.manifest_path, &workspace_result)?;

@@ -1017,16 +1017,22 @@ fn unlinked_ignored_redundant_detection() -> Result<(), Box<dyn Error>> {
         CargoShearRunner::new("unlinked_ignored_redundant").run()?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
-    insta::assert_snapshot!(output, @r"
+    insta::assert_snapshot!(output, @r#"
     shear/redundant_ignore_path
 
       ⚠ redundant ignored paths pattern `src/nonexistent.rs`
+       ╭─[Cargo.toml:7:18]
+     6 │ [package.metadata.cargo-shear]
+     7 │ ignored-paths = ["src/nonexistent.rs"]
+       ·                  ──────────┬─────────
+       ·                            ╰── pattern not matched
+       ╰────
       help: remove from ignored paths list
 
     shear/summary
 
       ⚠ 1 warning
-    ");
+    "#);
 
     Ok(())
 }
@@ -1057,6 +1063,33 @@ fn unlinked_ignored_workspace_detection() -> Result<(), Box<dyn Error>> {
        ·                  ──────────┬─────────
        ·                            ╰── add a file pattern here
        ╰────
+    "#);
+
+    Ok(())
+}
+
+// `nonexistent/pattern` workspace ignored-paths pattern doesn't match any files.
+#[test]
+fn unlinked_workspace_ignored_redundant_detection() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _temp_dir) =
+        CargoShearRunner::new("unlinked_workspace_ignored_redundant").run()?;
+    assert_eq!(exit_code, ExitCode::SUCCESS);
+
+    insta::assert_snapshot!(output, @r#"
+    shear/redundant_ignore_path
+
+      ⚠ redundant ignored paths pattern `nonexistent/pattern`
+       ╭─[Cargo.toml:6:18]
+     5 │ [workspace.metadata.cargo-shear]
+     6 │ ignored-paths = ["nonexistent/pattern"]
+       ·                  ──────────┬──────────
+       ·                            ╰── pattern not matched
+       ╰────
+      help: remove from ignored paths list
+
+    shear/summary
+
+      ⚠ 1 warning
     "#);
 
     Ok(())
