@@ -122,10 +122,10 @@ pub struct RedundantIgnore {
 }
 
 /// A redundant ignored path pattern.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 pub struct RedundantIgnorePath {
     /// The redundant glob pattern.
-    pub pattern: String,
+    pub pattern: Spanned<String>,
 }
 
 /// An empty file.
@@ -176,6 +176,9 @@ pub struct PackageAnalysis {
 
     /// Redundant ignored path patterns.
     pub redundant_ignore_paths: Vec<RedundantIgnorePath>,
+
+    /// Workspace ignored path patterns that were used by this package.
+    pub used_workspace_ignore_paths: FxHashSet<String>,
 }
 
 /// Result of processing a workspace.
@@ -189,6 +192,9 @@ pub struct WorkspaceAnalysis {
 
     /// Redundant workspace ignores.
     pub redundant_ignores: Vec<RedundantIgnore>,
+
+    /// Redundant workspace ignored path patterns.
+    pub redundant_ignore_paths: Vec<RedundantIgnorePath>,
 }
 
 impl PackageProcessor {
@@ -325,18 +331,37 @@ impl PackageProcessor {
         // An ignore pattern is redundant only if it doesn't match any unlinked OR empty files
         result.redundant_ignore_paths = pkg_ignored_paths
             .iter()
-            .filter(|matcher| {
-                !unlinked_files.iter().any(|path| matcher.is_match(path))
-                    && !empty_files.iter().any(|path| matcher.is_match(path))
+            .filter(|glob| {
+                !unlinked_files.iter().any(|path| glob.matcher.is_match(path))
+                    && !empty_files.iter().any(|path| glob.matcher.is_match(path))
             })
-            .map(|matcher| RedundantIgnorePath { pattern: matcher.glob().glob().to_owned() })
+            .map(|glob| RedundantIgnorePath { pattern: glob.pattern.clone() })
             .collect();
+
+        // Track which workspace ignored path patterns were used
+        for glob in ws_ignored_paths {
+            let matches_unlinked = unlinked_files.iter().any(|path| {
+                let not_matched_by_pkg =
+                    !pkg_ignored_paths.iter().any(|pkg| pkg.matcher.is_match(path));
+                not_matched_by_pkg && glob.matcher.is_match(root.join(path))
+            });
+
+            let matches_empty = empty_files.iter().any(|path| {
+                let not_matched_by_pkg =
+                    !pkg_ignored_paths.iter().any(|pkg| pkg.matcher.is_match(path));
+                not_matched_by_pkg && glob.matcher.is_match(root.join(path))
+            });
+
+            if matches_unlinked || matches_empty {
+                result.used_workspace_ignore_paths.insert(glob.pattern.get_ref().clone());
+            }
+        }
 
         result.unlinked_files = unlinked_files
             .into_iter()
             .filter(|path| {
-                !pkg_ignored_paths.iter().any(|globs| globs.is_match(path))
-                    && !ws_ignored_paths.iter().any(|globs| globs.is_match(root.join(path)))
+                !pkg_ignored_paths.iter().any(|glob| glob.matcher.is_match(path))
+                    && !ws_ignored_paths.iter().any(|glob| glob.matcher.is_match(root.join(path)))
             })
             .map(|path| UnlinkedFile { path })
             .collect();
@@ -345,8 +370,8 @@ impl PackageProcessor {
         result.empty_files = empty_files
             .into_iter()
             .filter(|path| {
-                !pkg_ignored_paths.iter().any(|globs| globs.is_match(path))
-                    && !ws_ignored_paths.iter().any(|globs| globs.is_match(root.join(path)))
+                !pkg_ignored_paths.iter().any(|glob| glob.matcher.is_match(path))
+                    && !ws_ignored_paths.iter().any(|glob| glob.matcher.is_match(root.join(path)))
             })
             .map(|path| EmptyFile { path })
             .collect();
@@ -358,14 +383,21 @@ impl PackageProcessor {
     pub fn process_workspace(
         ctx: &WorkspaceContext,
         workspace_used_pkgs: &FxHashSet<String>,
+        used_workspace_ignore_paths: &FxHashSet<String>,
     ) -> WorkspaceAnalysis {
         let mut result = WorkspaceAnalysis::default();
 
-        if ctx.packages.len() <= 1 {
-            return result;
+        // Warn on unused workspace ignored paths
+        let ws_ignored_paths = &ctx.manifest.workspace.metadata.cargo_shear.ignored_paths;
+        for glob in ws_ignored_paths {
+            if !used_workspace_ignore_paths.contains(glob.pattern.get_ref()) {
+                result
+                    .redundant_ignore_paths
+                    .push(RedundantIgnorePath { pattern: glob.pattern.clone() });
+            }
         }
 
-        if ctx.manifest.workspace.dependencies.is_empty() {
+        if ctx.packages.len() <= 1 || ctx.manifest.workspace.dependencies.is_empty() {
             return result;
         }
 

@@ -95,7 +95,7 @@ impl ShearAnalysis {
         }
 
         for finding in &result.redundant_ignore_paths {
-            self.insert(ShearDiagnostic::redundant_ignore_path(finding));
+            self.insert(ShearDiagnostic::redundant_ignore_path(finding, &src));
         }
     }
 
@@ -118,6 +118,10 @@ impl ShearAnalysis {
 
         for finding in &result.redundant_ignores {
             self.insert(ShearDiagnostic::redundant_ignore(finding, &src));
+        }
+
+        for finding in &result.redundant_ignore_paths {
+            self.insert(ShearDiagnostic::redundant_ignore_path(finding, &src));
         }
     }
 
@@ -331,11 +335,16 @@ impl ShearDiagnostic {
         }
     }
 
-    pub fn redundant_ignore_path(diagnostic: &RedundantIgnorePath) -> Self {
+    pub fn redundant_ignore_path(
+        diagnostic: &RedundantIgnorePath,
+        source: &NamedSource<String>,
+    ) -> Self {
         Self {
-            kind: DiagnosticKind::RedundantIgnorePath { pattern: diagnostic.pattern.clone() },
-            source: None,
-            span: None,
+            kind: DiagnosticKind::RedundantIgnorePath {
+                pattern: diagnostic.pattern.get_ref().clone(),
+            },
+            source: Some(source.clone()),
+            span: Some(diagnostic.pattern.span().into()),
             related: Vec::new(),
             help: Some("remove from ignored paths list".to_owned()),
         }
@@ -413,11 +422,10 @@ impl DiagnosticKind {
             Self::MisplacedDependency { .. } | Self::MisplacedOptionalDependency { .. } => {
                 Some("only used in dev targets")
             }
-            Self::UnlinkedFiles { .. }
-            | Self::EmptyFiles { .. }
-            | Self::RedundantIgnorePath { .. } => None,
+            Self::UnlinkedFiles { .. } | Self::EmptyFiles { .. } => None,
             Self::UnknownIgnore { .. } => Some("not a dependency"),
             Self::RedundantIgnore { .. } => Some("dependency is used"),
+            Self::RedundantIgnorePath { .. } => Some("pattern not matched"),
         }
     }
 

@@ -167,16 +167,8 @@ pub struct Target {
 pub struct ShearConfig {
     #[serde(default)]
     pub ignored: FxHashSet<Spanned<String>>,
-    #[serde(default, rename = "ignored-paths", deserialize_with = "deserialize_glob_matchers")]
-    pub ignored_paths: Vec<GlobMatcher>,
-}
-
-fn deserialize_glob_matchers<'de, D>(deserializer: D) -> Result<Vec<GlobMatcher>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let globs: Vec<Glob> = Vec::deserialize(deserializer)?;
-    Ok(globs.into_iter().map(|glob| glob.compile_matcher()).collect())
+    #[serde(default, rename = "ignored-paths")]
+    pub ignored_paths: Vec<SpannedGlob>,
 }
 
 #[derive(Deserialize, Default)]
@@ -259,5 +251,22 @@ impl Manifest {
         });
 
         dependencies.chain(dev_dependencies).chain(build_dependencies).chain(target_dependencies)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SpannedGlob {
+    pub pattern: Spanned<String>,
+    pub matcher: GlobMatcher,
+}
+
+impl<'de> Deserialize<'de> for SpannedGlob {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let pattern = Spanned::<String>::deserialize(deserializer)?;
+        let glob = Glob::new(pattern.get_ref()).map_err(serde::de::Error::custom)?;
+        Ok(Self { pattern, matcher: glob.compile_matcher() })
     }
 }

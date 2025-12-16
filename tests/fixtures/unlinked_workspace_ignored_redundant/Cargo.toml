@@ -1,0 +1,6 @@
+[workspace]
+resolver = "3"
+members = ["lib"]
+
+[workspace.metadata.cargo-shear]
+ignored-paths = ["nonexistent/pattern"]
