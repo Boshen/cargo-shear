@@ -251,7 +251,8 @@ impl<W: Write> CargoShear<W> {
     /// ```
     #[must_use]
     pub fn new(writer: W, options: CargoShearOptions) -> Self {
-        Self { writer, options, analysis: ShearAnalysis::default() }
+        let analysis = ShearAnalysis::new(options.clone());
+        Self { writer, options, analysis }
     }
 
     /// Run the dependency analysis and optionally fix unused dependencies.

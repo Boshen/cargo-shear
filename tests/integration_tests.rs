@@ -1143,6 +1143,37 @@ fn empty_files_ignored() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// Warn that `--expand` might be needed for more accurate results.
+#[test]
+fn expand_hint() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("expand_hint").run()?;
+    assert_eq!(exit_code, ExitCode::SUCCESS);
+
+    insta::assert_snapshot!(output, @r#"
+    shear/unlinked_files
+
+      ⚠ 1 unlinked file in `expand_hint`
+      │ src/expand/helper.rs
+      help: delete this file
+
+    shear/summary
+
+      ⚠ 1 warning
+
+    Advice:
+      ☞ run with `--expand` for more accurate results
+      ☞ to suppress a file issue
+       ╭─[Cargo.toml:2:18]
+     1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
+     2 │ ignored-paths = ["tests/compile/*.rs"]
+       ·                  ──────────┬─────────
+       ·                            ╰── add a file pattern here
+       ╰────
+    "#);
+
+    Ok(())
+}
+
 // `anyhow` is unused.
 #[test]
 fn unused_detection() -> Result<(), Box<dyn Error>> {

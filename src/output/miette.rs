@@ -84,14 +84,28 @@ impl<W: io::Write> MietteRenderer<W> {
             )?;
         }
 
-        if !analysis.show_fix() && !analysis.show_ignored && !analysis.show_ignored_paths {
+        let show_expand = analysis.show_expand && !analysis.options.expand;
+        let show_fix = analysis.show_fix && !analysis.options.fix;
+
+        let has_advice =
+            show_expand || show_fix || analysis.show_ignored || analysis.show_ignored_paths;
+
+        if !has_advice {
             return Ok(());
         }
 
         writeln!(self.writer)?;
         writeln!(self.writer, "Advice:")?;
 
-        if analysis.show_fix() {
+        if show_expand {
+            writeln!(
+                self.writer,
+                "  {} run with `--expand` for more accurate results",
+                "☞".style(theme.styles.advice),
+            )?;
+        }
+
+        if show_fix {
             writeln!(
                 self.writer,
                 "  {} run with `--fix` to fix {} issue{}",
