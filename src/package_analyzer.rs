@@ -114,7 +114,8 @@ impl<'a> PackageAnalyzer<'a> {
                         path == dir_bytes
                     } else {
                         // For directories, match files under that directory
-                        path.starts_with(dir_bytes) && path.get(dir_bytes.len()) == Some(&b'/')
+                        path.starts_with(dir_bytes)
+                            && matches!(path.get(dir_bytes.len()), Some(&(b'/' | b'\\')))
                     }
                 })
                 .flat_map(|(_, parsed)| parsed.imports.iter().cloned())
@@ -230,7 +231,7 @@ impl<'a> PackageAnalyzer<'a> {
 
                 let path_bytes = path.as_os_str().as_encoded_bytes();
                 path_bytes.starts_with(dir_bytes)
-                    && path_bytes.get(dir_bytes.len()) == Some(&b'/')
+                    && matches!(path_bytes.get(dir_bytes.len()), Some(&(b'/' | b'\\')))
                     && !self.ctx.workspace.linked.contains(*path)
             })
             .cloned()
@@ -248,7 +249,7 @@ impl<'a> PackageAnalyzer<'a> {
                 let path_bytes = path.as_os_str().as_encoded_bytes();
                 // Only check files in this package that are linked (not entry points)
                 path_bytes.starts_with(dir_bytes)
-                    && path_bytes.get(dir_bytes.len()) == Some(&b'/')
+                    && matches!(path_bytes.get(dir_bytes.len()), Some(&(b'/' | b'\\')))
                     && self.ctx.workspace.linked.contains(*path)
                     && parsed.is_empty
                     // Exclude entry points like lib.rs, main.rs, build.rs

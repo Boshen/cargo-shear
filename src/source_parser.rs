@@ -599,7 +599,7 @@ impl SourceParser {
         let base = dir.map_or_else(|| module.clone(), |dir| module.join(dir));
 
         self.result.paths.insert(base.join(format!("{name}.rs")));
-        self.result.paths.insert(base.join(format!("{name}/mod.rs")));
+        self.result.paths.insert(base.join(name).join("mod.rs"));
     }
 
     /// Add explicit path from `#[path = "..."]`

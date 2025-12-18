@@ -20,15 +20,18 @@ concurrency:
 
 jobs:
   test:
-    name: Test
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: taiki-e/checkout-action@b13d20b7cda4e2f325ef19895128f7ff735c0b3d # v1.3.1
 
       - uses: oxc-project/setup-rust@ecabb7322a2ba5aeedb3612d2a40b86a85cee235 # v1.0.11
         with:
           save-cache: ${{ github.ref_name == 'main' }}
-          cache-key: warm
+          cache-key: ${{ matrix.os }}
           components: clippy rustfmt
 
       - run: |
@@ -38,5 +41,6 @@ jobs:
           cargo run .
 
       - uses: crate-ci/typos@2d0ce569feab1f8752f1dde43cc2f2aa53236e06 # v1.40.0
+        if: matrix.os == 'ubuntu-latest'
         with:
           files: .

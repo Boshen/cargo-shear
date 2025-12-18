@@ -4,6 +4,7 @@ use std::{error::Error, fs, io, path::Path, process::ExitCode};
 
 use cargo_shear::{CargoShear, CargoShearOptions, ColorMode, OutputFormat};
 use cargo_toml::Manifest;
+use serde_json::Value;
 use tempfile::TempDir;
 
 /// Test runner for `cargo-shear`.
@@ -1978,28 +1979,39 @@ fn json_output_format() -> Result<(), Box<dyn Error>> {
         .run()?;
     assert_eq!(exit_code, ExitCode::FAILURE);
 
-    // Verify the full JSON output matches expected structure
+    // Normalize offset to 0.
+    // Varies across platforms due to line endings
+    let mut json: Value = serde_json::from_str(&output)?;
+    if let Some(findings) = json.get_mut("findings").and_then(|finding| finding.as_array_mut()) {
+        for finding in findings {
+            if let Some(loc) = finding.get_mut("location") {
+                loc["offset"] = serde_json::json!(0);
+            }
+        }
+    }
+
+    let output = serde_json::to_string_pretty(&json)?;
     insta::assert_snapshot!(output, @r#"
     {
-      "summary": {
-        "errors": 1,
-        "warnings": 0,
-        "fixed": 0
-      },
       "findings": [
         {
           "code": "shear/unused_dependency",
-          "severity": "error",
-          "message": "unused dependency `anyhow`",
           "file": "Cargo.toml",
-          "location": {
-            "offset": 86,
-            "length": 6
-          },
+          "fixable": true,
           "help": "remove this dependency",
-          "fixable": true
+          "location": {
+            "length": 6,
+            "offset": 0
+          },
+          "message": "unused dependency `anyhow`",
+          "severity": "error"
         }
-      ]
+      ],
+      "summary": {
+        "errors": 1,
+        "fixed": 0,
+        "warnings": 0
+      }
     }
     "#);
 
