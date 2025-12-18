@@ -52,7 +52,8 @@ impl ShearAnalysis {
             .strip_prefix(&ctx.workspace.root)
             .unwrap_or(&ctx.manifest_path)
             .display()
-            .to_string();
+            .to_string()
+            .replace('\\', "/");
 
         let src = NamedSource::new(relative_path, ctx.manifest_content.clone());
         self.packages.extend(result.used_packages.iter().cloned());
@@ -388,7 +389,7 @@ impl DiagnosticKind {
                 let s = if count == 1 { "" } else { "s" };
                 let paths = paths
                     .iter()
-                    .map(|path| path.display().to_string())
+                    .map(|path| path.display().to_string().replace('\\', "/"))
                     .collect::<Vec<_>>()
                     .join("\n");
 
@@ -399,7 +400,7 @@ impl DiagnosticKind {
                 let s = if count == 1 { "" } else { "s" };
                 let paths = paths
                     .iter()
-                    .map(|path| path.display().to_string())
+                    .map(|path| path.display().to_string().replace('\\', "/"))
                     .collect::<Vec<_>>()
                     .join("\n");
 
