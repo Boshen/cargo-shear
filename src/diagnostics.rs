@@ -4,6 +4,7 @@ use miette::{Diagnostic, LabeledSpan, NamedSource, Severity, SourceSpan};
 use rustc_hash::FxHashSet;
 
 use crate::{
+    CargoShearOptions,
     context::{PackageContext, WorkspaceContext},
     manifest::{DepTable, FeatureRef},
     package_processor::{
@@ -14,9 +15,16 @@ use crate::{
     },
 };
 
+/// Known crates that generate code at build time, and may require `--expand`.
+const KNOWN_CODEGEN_PKGS: &[&str] =
+    &["automod", "prost-build", "tonic-build", "tonic-prost-build", "trybuild"];
+
 /// Result of processing all packages across the workspace.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct ShearAnalysis {
+    /// Options used for this analysis.
+    pub options: CargoShearOptions,
+
     /// All diagnostic findings.
     pub findings: Vec<ShearDiagnostic>,
 
@@ -33,6 +41,12 @@ pub struct ShearAnalysis {
     /// Count of fixed issues.
     pub fixed: usize,
 
+    /// Whether to show the `--expand` advice.
+    pub show_expand: bool,
+
+    /// Whether to show the `--fix` advice.
+    pub show_fix: bool,
+
     /// Whether to show the `ignored` advice.
     pub show_ignored: bool,
 
@@ -41,6 +55,22 @@ pub struct ShearAnalysis {
 }
 
 impl ShearAnalysis {
+    #[must_use]
+    pub fn new(options: CargoShearOptions) -> Self {
+        Self {
+            options,
+            findings: Vec::new(),
+            packages: FxHashSet::default(),
+            errors: 0,
+            warnings: 0,
+            fixed: 0,
+            show_expand: false,
+            show_fix: false,
+            show_ignored: false,
+            show_ignored_paths: false,
+        }
+    }
+
     pub fn add_package_result(
         &mut self,
         ctx: &PackageContext<'_>,
@@ -98,6 +128,11 @@ impl ShearAnalysis {
         for finding in &result.redundant_ignore_paths {
             self.insert(ShearDiagnostic::redundant_ignore_path(finding, &src));
         }
+
+        if !self.show_expand {
+            self.show_expand =
+                KNOWN_CODEGEN_PKGS.iter().any(|pkg| ctx.pkg_to_import.contains_key(*pkg));
+        }
     }
 
     pub fn add_workspace_result(
@@ -127,34 +162,32 @@ impl ShearAnalysis {
     }
 
     fn insert(&mut self, diagnostic: ShearDiagnostic) {
+        match diagnostic.kind.severity() {
+            Severity::Error => {
+                self.errors += 1;
+                self.show_fix = true;
+            }
+            Severity::Warning | Severity::Advice => self.warnings += 1,
+        }
+
         match &diagnostic.kind {
             DiagnosticKind::UnusedDependency { .. }
             | DiagnosticKind::UnusedWorkspaceDependency { .. }
-            | DiagnosticKind::MisplacedDependency { .. } => {
-                self.errors += 1;
-                self.show_ignored = true;
-            }
-            DiagnosticKind::UnusedOptionalDependency { .. }
+            | DiagnosticKind::UnusedOptionalDependency { .. }
             | DiagnosticKind::UnusedFeatureDependency { .. }
+            | DiagnosticKind::MisplacedDependency { .. }
             | DiagnosticKind::MisplacedOptionalDependency { .. } => {
-                self.warnings += 1;
                 self.show_ignored = true;
             }
             DiagnosticKind::UnlinkedFiles { .. } | DiagnosticKind::EmptyFiles { .. } => {
-                self.warnings += 1;
                 self.show_ignored_paths = true;
             }
             DiagnosticKind::UnknownIgnore { .. }
             | DiagnosticKind::RedundantIgnore { .. }
-            | DiagnosticKind::RedundantIgnorePath { .. } => self.warnings += 1,
+            | DiagnosticKind::RedundantIgnorePath { .. } => {}
         }
 
         self.findings.push(diagnostic);
-    }
-
-    /// Whether to show the `--fix` advice.
-    pub const fn show_fix(&self) -> bool {
-        self.errors > 0 && self.fixed == 0
     }
 }
 
