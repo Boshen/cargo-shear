@@ -297,9 +297,9 @@ impl<W: Write> CargoShear<W> {
 
                 if self.options.fix && self.analysis.fixed > 0 && self.analysis.errors == 0 {
                     ExitCode::SUCCESS
-                } else if self.analysis.errors > 0 {
-                    ExitCode::FAILURE
-                } else if self.options.deny_warnings && self.analysis.warnings > 0 {
+                } else if self.analysis.errors > 0
+                    || (self.options.deny_warnings && self.analysis.warnings > 0)
+                {
                     ExitCode::FAILURE
                 } else {
                     ExitCode::SUCCESS

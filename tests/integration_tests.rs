@@ -96,9 +96,8 @@ fn clean_fix() -> Result<(), Box<dyn Error>> {
 // Clean detection with --deny-warnings should still succeed.
 #[test]
 fn clean_deny_warnings() -> Result<(), Box<dyn Error>> {
-    let (exit_code, output, _temp_dir) = CargoShearRunner::new("clean")
-        .options(CargoShearOptions::with_deny_warnings)
-        .run()?;
+    let (exit_code, output, _temp_dir) =
+        CargoShearRunner::new("clean").options(CargoShearOptions::with_deny_warnings).run()?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
     insta::assert_snapshot!(output, @r"
