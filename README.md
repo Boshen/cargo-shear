@@ -1,13 +1,13 @@
 # Cargo Shear ✂️ 🐑
 
-> [!NOTE]
-> **Maintenance Mode**: This tool is feature complete. We only accept dependency upgrades, bug fixes, and UI/DX improvements.
-
 Detect and fix issues in Rust projects:
 
 - **Unused dependencies** in `Cargo.toml`
 - **Misplaced dependencies** (dev/build dependencies in wrong sections)
 - **Unlinked source files** (Rust files not reachable from any module tree)
+  
+> [!NOTE]
+> This tool is considered feature-complete. We continue to welcome contributions that focus on bug fixes, dependency upgrades, and UI/UX improvements.
 
 ## Installation
 
