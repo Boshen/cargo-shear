@@ -33,6 +33,14 @@ Automatically fix unused dependencies:
 cargo shear --fix
 ```
 
+Treat warnings as errors (exit with failure code):
+
+```bash
+cargo shear --deny-warnings
+```
+
+This is useful for CI/CD pipelines to enforce strict checking of warnings such as empty files, unlinked files, and unused optional dependencies.
+
 Generate machine-readable JSON output:
 
 ```bash
@@ -129,6 +137,16 @@ The JSON output includes:
 | 1 | Issues found | Issues found and fixed |
 | 2 | Error during processing | Error during processing |
 
+### Strict Mode with `--deny-warnings`
+
+By default, warnings (such as empty files, unlinked files, and unused optional dependencies) exit with code 0. Use the `--deny-warnings` flag to treat warnings as errors for stricter CI enforcement:
+
+| Exit Code | Without `--deny-warnings` | With `--deny-warnings` |
+|-----------|---------------------------|------------------------|
+| 0 | No errors (warnings allowed) | No errors or warnings |
+| 1 | Errors found | Errors or warnings found |
+| 2 | Error during processing | Error during processing |
+
 **GitHub Actions Example:**
 
 ```yaml
@@ -138,6 +156,13 @@ The JSON output includes:
     if ! cargo shear --fix; then
       cargo check
     fi
+```
+
+**Strict CI Example with `--deny-warnings`:**
+
+```yaml
+- name: cargo-shear (strict)
+  run: cargo shear --deny-warnings
 ```
 
 ## Technique
