@@ -95,6 +95,12 @@ pub struct CargoShearOptions {
     #[bpaf(long)]
     expand: bool,
 
+    /// Treat warnings as errors.
+    ///
+    /// When set, warnings will cause cargo-shear to exit with a failure code.
+    #[bpaf(long("deny-warnings"))]
+    deny_warnings: bool,
+
     /// Assert that `Cargo.lock` will remain unchanged.
     locked: bool,
 
@@ -139,6 +145,7 @@ impl CargoShearOptions {
             path,
             fix: false,
             expand: false,
+            deny_warnings: false,
             locked: false,
             offline: false,
             frozen: false,
@@ -160,6 +167,13 @@ impl CargoShearOptions {
     #[must_use]
     pub const fn with_expand(mut self) -> Self {
         self.expand = true;
+        self
+    }
+
+    /// Enable deny warnings mode.
+    #[must_use]
+    pub const fn with_deny_warnings(mut self) -> Self {
+        self.deny_warnings = true;
         self
     }
 
@@ -281,19 +295,27 @@ impl<W: Write> CargoShear<W> {
                     return ExitCode::from(2);
                 }
 
-                if self.options.fix && self.analysis.fixed > 0 && self.analysis.errors == 0 {
-                    ExitCode::SUCCESS
-                } else if self.analysis.errors > 0 {
-                    ExitCode::FAILURE
-                } else {
-                    ExitCode::SUCCESS
-                }
+                self.determine_exit_code()
             }
             Err(err) => {
                 let _ = writeln!(self.writer, "error: {err:?}");
                 ExitCode::from(2)
             }
         }
+    }
+
+    /// Determine the exit code based on analysis results and options.
+    const fn determine_exit_code(&self) -> ExitCode {
+        // If we fixed issues successfully and there are no remaining errors, exit with success
+        if self.options.fix && self.analysis.fixed > 0 && self.analysis.errors == 0 {
+            return ExitCode::SUCCESS;
+        }
+
+        // Exit with failure if there are errors or warnings (when --deny-warnings is set)
+        let has_errors = self.analysis.errors > 0;
+        let has_warnings = self.options.deny_warnings && self.analysis.warnings > 0;
+
+        if has_errors || has_warnings { ExitCode::FAILURE } else { ExitCode::SUCCESS }
     }
 
     fn shear(&mut self) -> Result<()> {
