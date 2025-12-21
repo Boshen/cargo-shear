@@ -95,6 +95,12 @@ pub struct CargoShearOptions {
     #[bpaf(long)]
     expand: bool,
 
+    /// Treat warnings as errors.
+    ///
+    /// When set, warnings will cause cargo-shear to exit with a failure code.
+    #[bpaf(long("deny-warnings"))]
+    deny_warnings: bool,
+
     /// Assert that `Cargo.lock` will remain unchanged.
     locked: bool,
 
@@ -139,6 +145,7 @@ impl CargoShearOptions {
             path,
             fix: false,
             expand: false,
+            deny_warnings: false,
             locked: false,
             offline: false,
             frozen: false,
@@ -160,6 +167,13 @@ impl CargoShearOptions {
     #[must_use]
     pub const fn with_expand(mut self) -> Self {
         self.expand = true;
+        self
+    }
+
+    /// Enable deny warnings mode.
+    #[must_use]
+    pub const fn with_deny_warnings(mut self) -> Self {
+        self.deny_warnings = true;
         self
     }
 
@@ -284,6 +298,8 @@ impl<W: Write> CargoShear<W> {
                 if self.options.fix && self.analysis.fixed > 0 && self.analysis.errors == 0 {
                     ExitCode::SUCCESS
                 } else if self.analysis.errors > 0 {
+                    ExitCode::FAILURE
+                } else if self.options.deny_warnings && self.analysis.warnings > 0 {
                     ExitCode::FAILURE
                 } else {
                     ExitCode::SUCCESS
