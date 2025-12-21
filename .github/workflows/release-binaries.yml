@@ -60,7 +60,7 @@ jobs:
           echo "SHEAR_VERSION=$VERSION" >> $GITHUB_ENV
           echo "CC=clang" >> $GITHUB_ENV # for mimalloc
 
-      - uses: oxc-project/setup-rust@ecabb7322a2ba5aeedb3612d2a40b86a85cee235 # v1.0.11
+      - uses: oxc-project/setup-rust@c8224157c0bf235aabc633e8cd50d344f087a7de # v1.0.12
 
       - uses: taiki-e/setup-cross-toolchain-action@84e58a47fc2bcd3821a2aa8c153595bbffb0e10f # v1.32.1
         with:
