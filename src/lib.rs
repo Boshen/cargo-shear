@@ -295,20 +295,30 @@ impl<W: Write> CargoShear<W> {
                     return ExitCode::from(2);
                 }
 
-                if self.options.fix && self.analysis.fixed > 0 && self.analysis.errors == 0 {
-                    ExitCode::SUCCESS
-                } else if self.analysis.errors > 0
-                    || (self.options.deny_warnings && self.analysis.warnings > 0)
-                {
-                    ExitCode::FAILURE
-                } else {
-                    ExitCode::SUCCESS
-                }
+                self.determine_exit_code()
             }
             Err(err) => {
                 let _ = writeln!(self.writer, "error: {err:?}");
                 ExitCode::from(2)
             }
+        }
+    }
+
+    /// Determine the exit code based on analysis results and options.
+    const fn determine_exit_code(&self) -> ExitCode {
+        // If we fixed issues successfully and there are no remaining errors, exit with success
+        if self.options.fix && self.analysis.fixed > 0 && self.analysis.errors == 0 {
+            return ExitCode::SUCCESS;
+        }
+
+        // Exit with failure if there are errors or warnings (when --deny-warnings is set)
+        let has_errors = self.analysis.errors > 0;
+        let has_warnings = self.options.deny_warnings && self.analysis.warnings > 0;
+
+        if has_errors || has_warnings {
+            ExitCode::FAILURE
+        } else {
+            ExitCode::SUCCESS
         }
     }
 
