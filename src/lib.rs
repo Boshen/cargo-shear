@@ -315,11 +315,7 @@ impl<W: Write> CargoShear<W> {
         let has_errors = self.analysis.errors > 0;
         let has_warnings = self.options.deny_warnings && self.analysis.warnings > 0;
 
-        if has_errors || has_warnings {
-            ExitCode::FAILURE
-        } else {
-            ExitCode::SUCCESS
-        }
+        if has_errors || has_warnings { ExitCode::FAILURE } else { ExitCode::SUCCESS }
     }
 
     fn shear(&mut self) -> Result<()> {
