@@ -251,7 +251,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -332,9 +332,9 @@ dependencies = [
 
 [[package]]
 name = "insta"
-version = "1.45.0"
+version = "1.46.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b76866be74d68b1595eb8060cb9191dca9c021db2316558e52ddc5d55d41b66c"
+checksum = "1b66886d14d18d420ab5052cbff544fc5d34d0b2cdd35eb5976aaa10a4a472e5"
 dependencies = [
  "console",
  "once_cell",
@@ -520,15 +520,15 @@ dependencies = [
 
 [[package]]
 name = "ra_ap_edition"
-version = "0.0.311"
+version = "0.0.312"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb119ce610fb851977061cd8c2b636c4327a7189d6a087ebb26ae31365cc6284"
+checksum = "6ee4f38641a31cf74c480ea138634e131f7bc9cdec902db74e248dad45ecbc84"
 
 [[package]]
 name = "ra_ap_parser"
-version = "0.0.311"
+version = "0.0.312"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a3e0e5d339dbe185e42840265a268c0b4fd58bef1c59b7f43f49057c40a5889e"
+checksum = "fd9efc42d925f20117047eb1ed46d89d195ed23ff997121f62e53bfac66143de"
 dependencies = [
  "drop_bomb",
  "ra-ap-rustc_lexer",
@@ -540,9 +540,9 @@ dependencies = [
 
 [[package]]
 name = "ra_ap_stdx"
-version = "0.0.311"
+version = "0.0.312"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "606d6249a7f26d2c700e18d37b4d502cae60d8b6869192f7b37c2b1b6c3c4b2a"
+checksum = "0600886eef2cacf5c3d2c4e2297ba6dd712efba686b17a2ac11d8bfa28176021"
 dependencies = [
  "crossbeam-channel",
  "crossbeam-utils",
@@ -556,9 +556,9 @@ dependencies = [
 
 [[package]]
 name = "ra_ap_syntax"
-version = "0.0.311"
+version = "0.0.312"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee801c7fa72eb82b3feab4942515e2236e07c2b594c86b38bb484e65a1494381"
+checksum = "6734975626d419e55b42439536fcdace27e74e3722c02b5798408f40fa2501b9"
 dependencies = [
  "either",
  "itertools",
@@ -650,7 +650,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.59.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -794,7 +794,7 @@ dependencies = [
  "getrandom",
  "once_cell",
  "rustix",
- "windows-sys 0.59.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -987,7 +987,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
