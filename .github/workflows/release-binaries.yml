@@ -62,7 +62,7 @@ jobs:
 
       - uses: oxc-project/setup-rust@c8224157c0bf235aabc633e8cd50d344f087a7de # v1.0.12
 
-      - uses: taiki-e/setup-cross-toolchain-action@de3cf2a24ac5d2934a75983953853818cd5dff77 # v1.34.0
+      - uses: taiki-e/setup-cross-toolchain-action@15a579e0045e5e4f668b73a441b9609884abffc9 # v1.37.0
         with:
           target: ${{ matrix.target }}
 
