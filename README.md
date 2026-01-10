@@ -102,6 +102,12 @@ Otherwise please report the issue as a bug.
 
 ## CI
 
+> [!NOTE]
+> `cargo shear` uses static analysis and operates on source code without compiling.
+> This means it only needs to run once on a single platform (e.g., Linux) to detect issues across all target platforms, including those with platform-specific dependencies and conditional compilation.
+> 
+> The only exception is when using the `--expand` flag, which invokes `cargo build` and may produce platform-specific results.
+
 ```yaml
 - name: Install cargo-binstall
   uses: cargo-bins/cargo-binstall@main
