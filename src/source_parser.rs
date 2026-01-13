@@ -414,6 +414,7 @@ impl SourceParser {
     /// Collect from serde attributes:
     /// - `#[serde(with = "serde_regex")]` -> `serde_regex`
     /// - `#[serde(crate = "rocket::serde")]` -> `rocket`
+    /// - `#[serde(with = "::serde_with::rust::double_option")]` -> `serde_with`
     fn collect_serde_attribute(&mut self, token_tree: &TokenTree) {
         let tokens: Vec<_> = token_tree
             .syntax()
@@ -438,7 +439,7 @@ impl SourceParser {
 
             if let Some(string) = AstString::cast(string.clone())
                 && let Ok(string) = string.value()
-                && let Some(import) = string.split("::").next()
+                && let Some(import) = string.split("::").find(|s| !s.is_empty())
             {
                 self.add_import(import);
             }
