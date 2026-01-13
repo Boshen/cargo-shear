@@ -108,7 +108,9 @@ fn serde_crate_on_type() {
 
 #[test]
 fn serde_root_scoped_path() {
-    test("struct Foo { #[serde(with = \"::foo::rust::double_option\")] field: Option<Option<String>> }");
+    test(
+        "struct Foo { #[serde(with = \"::foo::rust::double_option\")] field: Option<Option<String>> }",
+    );
     test("struct Foo { #[serde(deserialize_with = \"::foo::deserialize\")] field: String }");
     test("#[serde(crate = \"::foo\")] struct Foo { bar: () }");
 }
