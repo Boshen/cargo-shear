@@ -207,6 +207,7 @@ By default, warnings (such as empty files, unlinked files, and unused optional d
 * -86 lines [reqsign](https://github.com/Xuanwo/reqsign/pull/481)
 * -184 lines from [turbopack](https://github.com/vercel/next.js/pull/80121)
 * -625 lines from [openai/codex](https://github.com/openai/codex/pull/3338)
+* -69 lines from [uutils/coreutils](https://github.com/uutils/coreutils/pull/10404)
 
 ## [Sponsored By](https://github.com/sponsors/Boshen)
 
