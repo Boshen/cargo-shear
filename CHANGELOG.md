@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.2](https://github.com/Boshen/cargo-shear/compare/v1.9.1...v1.9.2) - 2026-02-12
+
+### <!-- 3 -->📚 Documentation
+- clarify single-platform execution for CI ([#405](https://github.com/Boshen/cargo-shear/pull/405)) (by @Copilot)
+- declare maintenance mode ([#393](https://github.com/Boshen/cargo-shear/pull/393)) (by @Boshen)
+
+### <!-- 9 -->💼 Other
+- Add uutils/coreutils to the list of Trophy ([#413](https://github.com/Boshen/cargo-shear/pull/413)) (by @sylvestre)
+- Fix detection of root-scoped paths in serde attributes ([#409](https://github.com/Boshen/cargo-shear/pull/409)) (by @Copilot)
+- Revise maintenance mode note in README ([#394](https://github.com/Boshen/cargo-shear/pull/394)) (by @Boshen)
+- Add --deny-warnings flag to treat warnings as errors ([#391](https://github.com/Boshen/cargo-shear/pull/391)) (by @Copilot)
+- Suggest `--expand` when known codegen crates are in use ([#387](https://github.com/Boshen/cargo-shear/pull/387)) (by @CathalMullan)
+- Add Windows CI, fix path separator handling ([#389](https://github.com/Boshen/cargo-shear/pull/389)) (by @CathalMullan)
+- Add redundant workspace ignored-paths detection ([#385](https://github.com/Boshen/cargo-shear/pull/385)) (by @CathalMullan)
+
+### Contributors
+
+* @renovate[bot]
+* @sylvestre
+* @Copilot
+* @Boshen
+* @CathalMullan
+
 ## [1.9.1](https://github.com/Boshen/cargo-shear/compare/v1.9.0...v1.9.1) - 2025-12-15
 
 ### <!-- 9 -->💼 Other
