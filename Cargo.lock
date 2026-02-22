@@ -13,9 +13,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.101"
+version = "1.0.102"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f0e0fee31ef5ed1ba1316088939cea399010ed7731dba877ed44aeb407a75ea"
+checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
 name = "autocfg"
@@ -109,7 +109,7 @@ dependencies = [
  "serde_json",
  "simdutf8",
  "tempfile",
- "toml 1.0.1+spec-1.1.0",
+ "toml 1.0.3+spec-1.1.0",
  "toml_edit",
 ]
 
@@ -251,7 +251,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -520,15 +520,15 @@ dependencies = [
 
 [[package]]
 name = "ra_ap_edition"
-version = "0.0.319"
+version = "0.0.320"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "45d85b52a502a2cd62144fd6ca972867253972e903b5c5433cf2ce5c48b91850"
+checksum = "f3f020474af82c06d555459702d58e1065e179e86fc9db439206e5fc2846ef55"
 
 [[package]]
 name = "ra_ap_parser"
-version = "0.0.319"
+version = "0.0.320"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a326038df53edf9368ac769d2dfe087e3ed3f5bb6891aeba447022e9ceedd469"
+checksum = "6cbd4a2f282f30eec328ddf66c02d618239068037a81cb8e7af3e56dfdef2fbd"
 dependencies = [
  "drop_bomb",
  "ra-ap-rustc_lexer",
@@ -540,9 +540,9 @@ dependencies = [
 
 [[package]]
 name = "ra_ap_stdx"
-version = "0.0.319"
+version = "0.0.320"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9ee0ec6d82af909b95300461ed65cda2599293973bbe9417e8223f4e8f08bc2"
+checksum = "aae2faa543fb54368b004fb9befefc30857613b0de062bdd39876fe16ac82af7"
 dependencies = [
  "crossbeam-channel",
  "crossbeam-utils",
@@ -556,9 +556,9 @@ dependencies = [
 
 [[package]]
 name = "ra_ap_syntax"
-version = "0.0.319"
+version = "0.0.320"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81cdf6fb1804887421f02e156fe1130a68b24318db4347ae4663bfb993ab025c"
+checksum = "a29f6ebbef907d8b5a690e68021e37d1ed859e8355dda4b9f4db513ba51acc44"
 dependencies = [
  "either",
  "itertools",
@@ -650,7 +650,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.59.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -794,7 +794,7 @@ dependencies = [
  "getrandom",
  "once_cell",
  "rustix",
- "windows-sys 0.59.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -860,9 +860,9 @@ dependencies = [
 
 [[package]]
 name = "toml"
-version = "1.0.1+spec-1.1.0"
+version = "1.0.3+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbe30f93627849fa362d4a602212d41bb237dc2bd0f8ba0b2ce785012e124220"
+checksum = "c7614eaf19ad818347db24addfa201729cf2a9b6fdfd9eb0ab870fcacc606c0c"
 dependencies = [
  "indexmap",
  "serde_core",
@@ -893,9 +893,9 @@ dependencies = [
 
 [[package]]
 name = "toml_edit"
-version = "0.25.1+spec-1.1.0"
+version = "0.25.3+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "538ed8bc4ada0b2549f2a7be9654aac2dfa358faeabb97d7845c3eb5a297e5d6"
+checksum = "a0a07913e63758bc95142d9863a5a45173b71515e68b690cad70cf99c3255ce1"
 dependencies = [
  "indexmap",
  "toml_datetime 1.0.0+spec-1.1.0",
@@ -906,9 +906,9 @@ dependencies = [
 
 [[package]]
 name = "toml_parser"
-version = "1.0.8+spec-1.1.0"
+version = "1.0.9+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0742ff5ff03ea7e67c8ae6c93cac239e0d9784833362da3f9a9c1da8dfefcbdc"
+checksum = "702d4415e08923e7e1ef96cd5727c0dfed80b4d2fa25db9647fe5eb6f7c5a4c4"
 dependencies = [
  "winnow",
 ]
@@ -1011,7 +1011,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
