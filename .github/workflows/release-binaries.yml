@@ -52,7 +52,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
-      - uses: taiki-e/checkout-action@3ab630d442e198ebb0ca30872832406ca01c46eb # v1.4.0
+      - uses: taiki-e/checkout-action@83ed61bfbe2b8abbb3c66e8b65b1335484c70009 # v1.4.1
 
       - name: Set environment variables
         run: |
@@ -60,16 +60,16 @@ jobs:
           echo "SHEAR_VERSION=$VERSION" >> $GITHUB_ENV
           echo "CC=clang" >> $GITHUB_ENV # for mimalloc
 
-      - uses: oxc-project/setup-rust@704e1648ce532a12b4d6fb98db0ba10afa3ae879 # v1.0.13
+      - uses: oxc-project/setup-rust@4f86b5d871ae7d24bc420e578be68964ab09e5cc # v1.0.15
 
-      - uses: taiki-e/setup-cross-toolchain-action@b8d1a322a6009a2b7220f53996695778eef89b41 # v1.38.0
+      - uses: taiki-e/setup-cross-toolchain-action@20dbac418ca692fd1a9377acf2cec38161169a39 # v1.39.1
         with:
           target: ${{ matrix.target }}
 
       - run: echo "RUSTFLAGS=${RUSTFLAGS} -C target-feature=+crt-static -C link-self-contained=yes" >>"${GITHUB_ENV}"
         if: contains(matrix.target, '-linux-musl')
 
-      - uses: taiki-e/upload-rust-binary-action@f391289bcff6a7f36b6301c0a74199657bbb4561 # v1.28.0
+      - uses: taiki-e/upload-rust-binary-action@381995c84a8e242b8736ec80211c563d7bd07ce7 # v1.28.1
         with:
           bin: cargo-shear
           target: ${{ matrix.target }}
