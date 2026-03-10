@@ -11,6 +11,7 @@ jobs:
   release-plz:
     name: Release-plz
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       pull-requests: write
       contents: write
