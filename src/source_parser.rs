@@ -34,6 +34,12 @@ pub struct ParsedSource {
 
     /// Whether this file is empty (no items, only whitespace/comments).
     pub is_empty: bool,
+
+    /// Whether this file contains `#[test]` or `#[cfg(test)]`.
+    pub has_tests: bool,
+
+    /// Whether this file contains doc tests (Rust code blocks in doc comments).
+    pub has_doctests: bool,
 }
 
 impl ParsedSource {
@@ -141,6 +147,7 @@ impl SourceParser {
 
                     if is_rust {
                         current = Some(String::new());
+                        self.result.has_doctests = true;
                     }
                 }
                 Event::End(TagEnd::CodeBlock) => {
@@ -252,6 +259,25 @@ impl SourceParser {
 
     fn visit_attribute(&mut self, node: &SyntaxNode) {
         let Some(attr) = Attr::cast(node.clone()) else { return };
+
+        // Detect #[test] and #[cfg(test)]
+        if let Some(path) = attr.path() {
+            let path_str = path.to_string();
+            if path_str == "test" {
+                self.result.has_tests = true;
+            } else if (path_str == "cfg" || path_str == "cfg_attr")
+                && let Some(token_tree) = attr.token_tree()
+            {
+                let has_test_token = token_tree
+                    .syntax()
+                    .descendants_with_tokens()
+                    .filter_map(NodeOrToken::into_token)
+                    .any(|token| token.kind() == SyntaxKind::IDENT && token.text() == "test");
+                if has_test_token {
+                    self.result.has_tests = true;
+                }
+            }
+        }
 
         if let Some(token_tree) = attr.token_tree() {
             self.collect_token_tree(&token_tree);
@@ -940,5 +966,49 @@ mod tests {
                 PathBuf::from("signal/windows/stub.rs"),
             ])
         );
+    }
+
+    #[test]
+    fn detects_normal_test() {
+        let source = r#"
+            #[test]
+            fn my_test() {}
+        "#;
+        let parsed = ParsedSource::from_str(source, Path::new("lib.rs"));
+        assert!(parsed.has_tests);
+    }
+
+    #[test]
+    fn detects_cfg_test_module() {
+        let source = r#"
+            #[cfg(test)]
+            mod tests {
+                fn my_test() {}
+            }
+        "#;
+        let parsed = ParsedSource::from_str(source, Path::new("lib.rs"));
+        assert!(parsed.has_tests);
+    }
+
+    #[test]
+    fn detects_test_behind_non_test_cfg() {
+        let source = r#"
+            #[test]
+            #[cfg(any(coverage, coverage_nightly))]
+            fn my_test() {}
+        "#;
+        let parsed = ParsedSource::from_str(source, Path::new("lib.rs"));
+        assert!(parsed.has_tests);
+    }
+
+    #[test]
+    fn detects_test_behind_feature_cfg() {
+        let source = r#"
+            #[test]
+            #[cfg(feature = "memory")]
+            fn my_test() {}
+        "#;
+        let parsed = ParsedSource::from_str(source, Path::new("lib.rs"));
+        assert!(parsed.has_tests);
     }
 }

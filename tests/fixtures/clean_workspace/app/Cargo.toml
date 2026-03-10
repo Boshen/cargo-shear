@@ -3,5 +3,9 @@ name = "app"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+test = false
+doctest = false
+
 [dependencies]
 lib = { path = "../lib" }

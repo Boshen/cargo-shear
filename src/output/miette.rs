@@ -110,8 +110,8 @@ impl<W: io::Write> MietteRenderer<W> {
                 self.writer,
                 "  {} run with `--fix` to fix {} issue{}",
                 "☞".style(theme.styles.advice),
-                analysis.errors,
-                if analysis.errors == 1 { "" } else { "s" }
+                analysis.fixable,
+                if analysis.fixable == 1 { "" } else { "s" }
             )?;
         }
 

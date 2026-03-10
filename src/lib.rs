@@ -22,10 +22,7 @@
 //! ```no_run
 //! use cargo_shear::{CargoShear, CargoShearOptions};
 //!
-//! let options = CargoShearOptions::new_for_test(
-//!     std::path::PathBuf::from("."),
-//!     false, // fix
-//! );
+//! let options = CargoShearOptions::new(std::path::PathBuf::from("."));
 //! let exit_code = CargoShear::new(std::io::stdout(), options).run();
 //! ```
 
@@ -260,7 +257,7 @@ impl<W: Write> CargoShear<W> {
     /// use cargo_shear::{CargoShear, CargoShearOptions};
     /// use std::path::PathBuf;
     ///
-    /// let options = CargoShearOptions::new_for_test(PathBuf::from("."), false);
+    /// let options = CargoShearOptions::new(PathBuf::from("."));
     /// let shear = CargoShear::new(std::io::stdout(), options);
     /// ```
     #[must_use]
@@ -428,7 +425,7 @@ impl<W: Write> CargoShear<W> {
             return Ok(0);
         }
 
-        if result.misplaced_dependencies.is_empty() && result.unused_dependencies.is_empty() {
+        if !result.has_fixable_issues() {
             return Ok(0);
         }
 
@@ -441,9 +438,24 @@ impl<W: Write> CargoShear<W> {
             &mut manifest,
             &result.misplaced_dependencies,
         );
+        let mut flag_fixes = 0usize;
+        if !result.test_disabled_with_tests.is_empty() {
+            flag_fixes += usize::from(CargoTomlEditor::remove_lib_flag(&mut manifest, "test"));
+        }
+        if !result.test_enabled_without_tests.is_empty() {
+            CargoTomlEditor::set_lib_flag_false(&mut manifest, "test");
+            flag_fixes += 1;
+        }
+        if !result.doctest_disabled_with_doctests.is_empty() {
+            flag_fixes += usize::from(CargoTomlEditor::remove_lib_flag(&mut manifest, "doctest"));
+        }
+        if !result.doctest_enabled_without_doctests.is_empty() {
+            CargoTomlEditor::set_lib_flag_false(&mut manifest, "doctest");
+            flag_fixes += 1;
+        }
 
         fs::write(manifest_path, manifest.to_string())?;
-        Ok(fixed_unused + fixed_misplaced)
+        Ok(fixed_unused + fixed_misplaced + flag_fixes)
     }
 
     fn fix_workspace_issues(

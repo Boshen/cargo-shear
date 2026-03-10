@@ -1,5 +1,5 @@
 [package]
-name = "app"
+name = "doctest_disabled_with_doctests"
 version = "0.1.0"
 edition = "2024"
 

@@ -17,6 +17,23 @@ use crate::{
     source_parser::ParsedSource,
 };
 
+/// Per-target test/doctest presence info.
+#[derive(Debug)]
+pub struct TargetTestInfo {
+    /// Target name.
+    pub target_name: String,
+    /// Target kind (e.g., lib, bin).
+    pub target_kind: TargetKind,
+    /// Whether `test = true` in `Cargo.toml` (from `cargo_metadata`).
+    pub test_enabled: bool,
+    /// Whether `doctest = true` in `Cargo.toml` (from `cargo_metadata`).
+    pub doctest_enabled: bool,
+    /// Whether any source file has `#[test]` or `#[cfg(test)]`.
+    pub has_tests: bool,
+    /// Whether any source file has doc tests (lib targets only).
+    pub has_doctests: bool,
+}
+
 /// Result of analyzing a package.
 #[derive(Debug, Default)]
 pub struct AnalysisResult {
@@ -37,6 +54,9 @@ pub struct AnalysisResult {
 
     /// Files that are empty (no items, only whitespace/comments).
     pub empty_files: FxHashSet<PathBuf>,
+
+    /// Per-target test/doctest presence info.
+    pub target_test_info: Vec<TargetTestInfo>,
 }
 
 impl AnalysisResult {
@@ -102,7 +122,7 @@ impl<'a> PackageAnalyzer<'a> {
                     .as_encoded_bytes()
             };
 
-            let imports: FxHashSet<String> = self
+            let matching_files: Vec<_> = self
                 .ctx
                 .workspace
                 .files
@@ -110,14 +130,16 @@ impl<'a> PackageAnalyzer<'a> {
                 .filter(|(path, _)| {
                     let path = path.as_os_str().as_encoded_bytes();
                     if is_build_script {
-                        // For build scripts, match the exact file
                         path == dir_bytes
                     } else {
-                        // For directories, match files under that directory
                         path.starts_with(dir_bytes)
                             && matches!(path.get(dir_bytes.len()), Some(&(b'/' | b'\\')))
                     }
                 })
+                .collect();
+
+            let imports: FxHashSet<String> = matching_files
+                .iter()
                 .flat_map(|(_, parsed)| parsed.imports.iter().cloned())
                 .collect();
 
@@ -125,6 +147,33 @@ impl<'a> PackageAnalyzer<'a> {
                 DepTable::Normal => self.result.normal.extend(imports),
                 DepTable::Dev => self.result.dev.extend(imports),
                 DepTable::Build => self.result.build.extend(imports),
+            }
+
+            // Collect test/doctest info for lib-like targets only.
+            // Bin targets share source directories with lib targets,
+            // so we can't reliably determine their test presence.
+            let is_lib = matches!(
+                kind,
+                TargetKind::Lib
+                    | TargetKind::CDyLib
+                    | TargetKind::DyLib
+                    | TargetKind::ProcMacro
+                    | TargetKind::RLib
+                    | TargetKind::StaticLib
+            );
+
+            if is_lib {
+                let has_tests = matching_files.iter().any(|(_, parsed)| parsed.has_tests);
+                let has_doctests = matching_files.iter().any(|(_, parsed)| parsed.has_doctests);
+
+                self.result.target_test_info.push(TargetTestInfo {
+                    target_name: target.name.clone(),
+                    target_kind: kind.clone(),
+                    test_enabled: target.test,
+                    doctest_enabled: target.doctest,
+                    has_tests,
+                    has_doctests,
+                });
             }
         }
     }

@@ -10,9 +10,6 @@ categories = ["development-tools", "development-tools::cargo-plugins"]
 license = "MIT"
 readme = "README.md"
 
-[lib]
-doctest = false
-
 [[bin]]
 name = "cargo-shear"
 path = "src/main.rs"
