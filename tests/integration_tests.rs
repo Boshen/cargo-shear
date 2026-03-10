@@ -467,12 +467,12 @@ fn filter_workspace_package_detection() -> Result<(), Box<dyn Error>> {
     shear/unused_dependency
 
       × unused dependency `thiserror`
-       ╭─[app/Cargo.toml:8:1]
-     7 │ # Unused
-     8 │ thiserror = "2.0"
-       · ────┬────
-       ·     ╰── not used in code
-       ╰────
+        ╭─[app/Cargo.toml:12:1]
+     11 │ # Unused
+     12 │ thiserror = "2.0"
+        · ────┬────
+        ·     ╰── not used in code
+        ╰────
       help: remove this dependency
 
     shear/summary
@@ -526,12 +526,12 @@ fn filter_workspace_exclude_detection() -> Result<(), Box<dyn Error>> {
     shear/unused_dependency
 
       × unused dependency `thiserror`
-       ╭─[app/Cargo.toml:8:1]
-     7 │ # Unused
-     8 │ thiserror = "2.0"
-       · ────┬────
-       ·     ╰── not used in code
-       ╰────
+        ╭─[app/Cargo.toml:12:1]
+     11 │ # Unused
+     12 │ thiserror = "2.0"
+        · ────┬────
+        ·     ╰── not used in code
+        ╰────
       help: remove this dependency
 
     shear/summary
@@ -2081,6 +2081,142 @@ fn unused_workspace_libname_fix() -> Result<(), Box<dyn Error>> {
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
     let workspace = &manifest.workspace.as_ref().unwrap().dependencies;
     assert!(!workspace.contains_key("criterion2"));
+
+    Ok(())
+}
+
+// `test = false` but source has `#[test]` / `#[cfg(test)]`.
+#[test]
+fn test_disabled_with_tests() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("test_disabled_with_tests").run()?;
+    assert_eq!(exit_code, ExitCode::SUCCESS);
+
+    insta::assert_snapshot!(output, @r#"
+    shear/test_disabled_with_tests
+
+      ⚠ `test = false` on lib target `test_disabled_with_tests` but source contains tests
+      help: set `test = true` or remove the `test = false` setting
+
+    shear/summary
+
+      ⚠ 1 warning
+
+    Advice:
+      ☞ run with `--fix` to fix 1 issue
+    "#);
+
+    Ok(())
+}
+
+// `doctest = false` but source has doc tests.
+#[test]
+fn doctest_disabled_with_doctests() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _temp_dir) =
+        CargoShearRunner::new("doctest_disabled_with_doctests").run()?;
+    assert_eq!(exit_code, ExitCode::SUCCESS);
+
+    insta::assert_snapshot!(output, @r#"
+    shear/doctest_disabled_with_doctests
+
+      ⚠ `doctest = false` on lib target `doctest_disabled_with_doctests` but source contains doc tests
+      help: set `doctest = true` or remove the `doctest = false` setting
+
+    shear/summary
+
+      ⚠ 1 warning
+
+    Advice:
+      ☞ run with `--fix` to fix 1 issue
+    "#);
+
+    Ok(())
+}
+
+// `test = false` but source has tests — `--fix` removes `test = false`.
+#[test]
+fn test_disabled_with_tests_fix() -> Result<(), Box<dyn Error>> {
+    let (exit_code, _output, temp_dir) = CargoShearRunner::new("test_disabled_with_tests")
+        .options(CargoShearOptions::with_fix)
+        .run()?;
+    assert_eq!(exit_code, ExitCode::SUCCESS);
+
+    let content = std::fs::read_to_string(temp_dir.path().join("Cargo.toml"))?;
+    assert!(!content.contains("\ntest = false"));
+    // doctest = false should remain since there are no doc tests in this fixture
+    assert!(content.contains("doctest = false"));
+
+    Ok(())
+}
+
+// `doctest = false` but source has doc tests — `--fix` removes `doctest = false`.
+#[test]
+fn doctest_disabled_with_doctests_fix() -> Result<(), Box<dyn Error>> {
+    let (exit_code, _output, temp_dir) = CargoShearRunner::new("doctest_disabled_with_doctests")
+        .options(CargoShearOptions::with_fix)
+        .run()?;
+    assert_eq!(exit_code, ExitCode::SUCCESS);
+
+    let content = std::fs::read_to_string(temp_dir.path().join("Cargo.toml"))?;
+    assert!(!content.contains("doctest = false"));
+    // test = false should remain since there are no tests in this fixture
+    assert!(content.contains("test = false"));
+
+    Ok(())
+}
+
+// In a workspace, `test = true` (default) but no tests warns to set `test = false`.
+#[test]
+fn test_enabled_without_tests_workspace() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _temp_dir) =
+        CargoShearRunner::new("test_enabled_without_tests_workspace").run()?;
+    assert_eq!(exit_code, ExitCode::SUCCESS);
+
+    insta::assert_snapshot!(output, @r#"
+    shear/doctest_enabled_without_doctests
+
+      ⚠ `doctest = true` on lib target `with_tests` but source contains no doc tests
+      help: set `doctest = false` to avoid running doc tests for this target
+
+    shear/test_enabled_without_tests
+
+      ⚠ `test = true` on lib target `without_tests` but source contains no tests
+      help: set `test = false` to avoid compiling a test harness for this target
+
+    shear/doctest_enabled_without_doctests
+
+      ⚠ `doctest = true` on lib target `without_tests` but source contains no doc tests
+      help: set `doctest = false` to avoid running doc tests for this target
+
+    shear/summary
+
+      ⚠ 3 warnings
+
+    Advice:
+      ☞ run with `--fix` to fix 3 issues
+    "#);
+
+    Ok(())
+}
+
+// In a workspace, `--fix` adds `test = false` and `doctest = false` to the crate without tests.
+#[test]
+fn test_enabled_without_tests_workspace_fix() -> Result<(), Box<dyn Error>> {
+    let (exit_code, _output, temp_dir) =
+        CargoShearRunner::new("test_enabled_without_tests_workspace")
+            .options(CargoShearOptions::with_fix)
+            .run()?;
+    assert_eq!(exit_code, ExitCode::SUCCESS);
+
+    let without_tests =
+        std::fs::read_to_string(temp_dir.path().join("crates/without_tests/Cargo.toml"))?;
+    assert!(without_tests.contains("test = false"));
+    assert!(without_tests.contains("doctest = false"));
+
+    // The crate with tests should not have `test = false` added
+    let with_tests = std::fs::read_to_string(temp_dir.path().join("crates/with_tests/Cargo.toml"))?;
+    assert!(!with_tests.contains("\ntest = false"));
+    // But it should have `doctest = false` since it has no doc tests
+    assert!(with_tests.contains("doctest = false"));
 
     Ok(())
 }

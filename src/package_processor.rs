@@ -4,7 +4,7 @@
 //!
 //! * import: Imports from within Rust code:
 //!
-//! ```rust
+//! ```rust,ignore
 //! use tokio_util::codec;
 //! ```
 //!
@@ -33,6 +33,8 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 use rustc_hash::FxHashSet;
 use toml::Spanned;
+
+use cargo_metadata::TargetKind;
 
 use crate::{
     context::{PackageContext, WorkspaceContext},
@@ -135,6 +137,38 @@ pub struct EmptyFile {
     pub path: PathBuf,
 }
 
+/// A target with `test = false` that contains tests.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct TestDisabledWithTests {
+    /// The target name.
+    pub target_name: String,
+    /// The target kind.
+    pub target_kind: String,
+}
+
+/// A target with `test = true` (default) that contains no tests.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct TestEnabledWithoutTests {
+    /// The target name.
+    pub target_name: String,
+    /// The target kind.
+    pub target_kind: String,
+}
+
+/// A lib target with `doctest = false` that contains doc tests.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct DoctestDisabledWithDoctests {
+    /// The target name.
+    pub target_name: String,
+}
+
+/// A lib target with `doctest = true` (default) that contains no doc tests.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct DoctestEnabledWithoutDoctests {
+    /// The target name.
+    pub target_name: String,
+}
+
 /// Processes packages to identify issues.
 pub struct PackageProcessor {
     /// Whether to use `cargo expand` to expand macros
@@ -179,6 +213,29 @@ pub struct PackageAnalysis {
 
     /// Workspace ignored path patterns that were used by this package.
     pub used_workspace_ignore_paths: FxHashSet<String>,
+
+    /// Targets with `test = false` that contain tests.
+    pub test_disabled_with_tests: Vec<TestDisabledWithTests>,
+
+    /// Targets with `test = true` but no tests.
+    pub test_enabled_without_tests: Vec<TestEnabledWithoutTests>,
+
+    /// Lib targets with `doctest = false` that contain doc tests.
+    pub doctest_disabled_with_doctests: Vec<DoctestDisabledWithDoctests>,
+
+    /// Lib targets with `doctest = true` but no doc tests.
+    pub doctest_enabled_without_doctests: Vec<DoctestEnabledWithoutDoctests>,
+}
+
+impl PackageAnalysis {
+    pub const fn has_fixable_issues(&self) -> bool {
+        !self.misplaced_dependencies.is_empty()
+            || !self.unused_dependencies.is_empty()
+            || !self.test_disabled_with_tests.is_empty()
+            || !self.test_enabled_without_tests.is_empty()
+            || !self.doctest_disabled_with_doctests.is_empty()
+            || !self.doctest_enabled_without_doctests.is_empty()
+    }
 }
 
 /// Result of processing a workspace.
@@ -375,6 +432,46 @@ impl PackageProcessor {
             })
             .map(|path| EmptyFile { path })
             .collect();
+
+        // Analyze test/doctest mismatches
+        let is_workspace = ctx.workspace.packages.len() > 1;
+        for info in &used_imports.target_test_info {
+            #[expect(clippy::wildcard_enum_match_arm, reason = "Only lib-like targets reach here")]
+            let kind_str = match &info.target_kind {
+                TargetKind::CDyLib => "cdylib",
+                TargetKind::DyLib => "dylib",
+                TargetKind::ProcMacro => "proc-macro",
+                TargetKind::RLib => "rlib",
+                TargetKind::StaticLib => "staticlib",
+                _ => "lib",
+            };
+
+            if !info.test_enabled && info.has_tests {
+                result.test_disabled_with_tests.push(TestDisabledWithTests {
+                    target_name: info.target_name.clone(),
+                    target_kind: kind_str.to_owned(),
+                });
+            }
+
+            if is_workspace && info.test_enabled && !info.has_tests {
+                result.test_enabled_without_tests.push(TestEnabledWithoutTests {
+                    target_name: info.target_name.clone(),
+                    target_kind: kind_str.to_owned(),
+                });
+            }
+
+            if !info.doctest_enabled && info.has_doctests {
+                result
+                    .doctest_disabled_with_doctests
+                    .push(DoctestDisabledWithDoctests { target_name: info.target_name.clone() });
+            }
+
+            if is_workspace && info.doctest_enabled && !info.has_doctests {
+                result
+                    .doctest_enabled_without_doctests
+                    .push(DoctestEnabledWithoutDoctests { target_name: info.target_name.clone() });
+            }
+        }
 
         Ok(result)
     }

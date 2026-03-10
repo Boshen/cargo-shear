@@ -1,5 +1,5 @@
 [package]
-name = "app"
+name = "test_disabled_with_tests"
 version = "0.1.0"
 edition = "2024"
 

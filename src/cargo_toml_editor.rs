@@ -10,7 +10,7 @@
 //! - Feature flags that reference removed dependencies
 
 use rustc_hash::FxHashSet;
-use toml_edit::{DocumentMut, Item, Table};
+use toml_edit::{DocumentMut, Item, Table, value};
 
 use crate::{
     manifest::DepLocation,
@@ -179,6 +179,25 @@ impl CargoTomlEditor {
         }
 
         false
+    }
+
+    /// Remove a flag (e.g. `test` or `doctest`) from the `[lib]` section.
+    pub fn remove_lib_flag(manifest: &mut DocumentMut, flag: &str) -> bool {
+        manifest
+            .get_mut("lib")
+            .and_then(|item| item.as_table_mut())
+            .and_then(|table| table.remove(flag))
+            .is_some()
+    }
+
+    /// Set a flag to `false` in the `[lib]` section, creating the section if needed.
+    pub fn set_lib_flag_false(manifest: &mut DocumentMut, flag: &str) {
+        if !manifest.contains_key("lib") {
+            manifest["lib"] = Item::Table(Table::new());
+        }
+        if let Some(table) = manifest.get_mut("lib").and_then(|item| item.as_table_mut()) {
+            table[flag] = value(false);
+        }
     }
 
     fn fix_features(manifest: &mut DocumentMut, unused_deps: &FxHashSet<&str>) {

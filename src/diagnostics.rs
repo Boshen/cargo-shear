@@ -8,10 +8,11 @@ use crate::{
     context::{PackageContext, WorkspaceContext},
     manifest::{DepTable, FeatureRef},
     package_processor::{
-        EmptyFile, MisplacedDependency, MisplacedOptionalDependency, PackageAnalysis,
-        RedundantIgnore, RedundantIgnorePath, UnknownIgnore, UnlinkedFile, UnusedDependency,
-        UnusedFeatureDependency, UnusedOptionalDependency, UnusedWorkspaceDependency,
-        WorkspaceAnalysis,
+        DoctestDisabledWithDoctests, DoctestEnabledWithoutDoctests, EmptyFile, MisplacedDependency,
+        MisplacedOptionalDependency, PackageAnalysis, RedundantIgnore, RedundantIgnorePath,
+        TestDisabledWithTests, TestEnabledWithoutTests, UnknownIgnore, UnlinkedFile,
+        UnusedDependency, UnusedFeatureDependency, UnusedOptionalDependency,
+        UnusedWorkspaceDependency, WorkspaceAnalysis,
     },
 };
 
@@ -38,6 +39,9 @@ pub struct ShearAnalysis {
     /// Anything that can't be automatically fixed is considered a warning.
     pub warnings: usize,
 
+    /// Count of fixable issues (unfixed).
+    pub fixable: usize,
+
     /// Count of fixed issues.
     pub fixed: usize,
 
@@ -63,6 +67,7 @@ impl ShearAnalysis {
             packages: FxHashSet::default(),
             errors: 0,
             warnings: 0,
+            fixable: 0,
             fixed: 0,
             show_expand: false,
             show_fix: false,
@@ -129,6 +134,22 @@ impl ShearAnalysis {
             self.insert(ShearDiagnostic::redundant_ignore_path(finding, &src));
         }
 
+        for finding in &result.test_disabled_with_tests {
+            self.insert(ShearDiagnostic::test_disabled_with_tests(finding));
+        }
+
+        for finding in &result.test_enabled_without_tests {
+            self.insert(ShearDiagnostic::test_enabled_without_tests(finding));
+        }
+
+        for finding in &result.doctest_disabled_with_doctests {
+            self.insert(ShearDiagnostic::doctest_disabled_with_doctests(finding));
+        }
+
+        for finding in &result.doctest_enabled_without_doctests {
+            self.insert(ShearDiagnostic::doctest_enabled_without_doctests(finding));
+        }
+
         if !self.show_expand {
             self.show_expand =
                 KNOWN_CODEGEN_PKGS.iter().any(|pkg| ctx.pkg_to_import.contains_key(*pkg));
@@ -162,11 +183,13 @@ impl ShearAnalysis {
     }
 
     fn insert(&mut self, diagnostic: ShearDiagnostic) {
+        if diagnostic.kind.is_fixable() {
+            self.fixable += 1;
+            self.show_fix = true;
+        }
+
         match diagnostic.kind.severity() {
-            Severity::Error => {
-                self.errors += 1;
-                self.show_fix = true;
-            }
+            Severity::Error => self.errors += 1,
             Severity::Warning | Severity::Advice => self.warnings += 1,
         }
 
@@ -184,7 +207,11 @@ impl ShearAnalysis {
             }
             DiagnosticKind::UnknownIgnore { .. }
             | DiagnosticKind::RedundantIgnore { .. }
-            | DiagnosticKind::RedundantIgnorePath { .. } => {}
+            | DiagnosticKind::RedundantIgnorePath { .. }
+            | DiagnosticKind::TestDisabledWithTests { .. }
+            | DiagnosticKind::TestEnabledWithoutTests { .. }
+            | DiagnosticKind::DoctestDisabledWithDoctests { .. }
+            | DiagnosticKind::DoctestEnabledWithoutDoctests { .. } => {}
         }
 
         self.findings.push(diagnostic);
@@ -383,6 +410,48 @@ impl ShearDiagnostic {
             help: Some("remove from ignored paths list".to_owned()),
         }
     }
+
+    pub fn test_disabled_with_tests(diagnostic: &TestDisabledWithTests) -> Self {
+        Self::sourceless(
+            DiagnosticKind::TestDisabledWithTests {
+                target_name: diagnostic.target_name.clone(),
+                target_kind: diagnostic.target_kind.clone(),
+            },
+            "set `test = true` or remove the `test = false` setting",
+        )
+    }
+
+    pub fn test_enabled_without_tests(diagnostic: &TestEnabledWithoutTests) -> Self {
+        Self::sourceless(
+            DiagnosticKind::TestEnabledWithoutTests {
+                target_name: diagnostic.target_name.clone(),
+                target_kind: diagnostic.target_kind.clone(),
+            },
+            "set `test = false` to avoid compiling a test harness for this target",
+        )
+    }
+
+    pub fn doctest_disabled_with_doctests(diagnostic: &DoctestDisabledWithDoctests) -> Self {
+        Self::sourceless(
+            DiagnosticKind::DoctestDisabledWithDoctests {
+                target_name: diagnostic.target_name.clone(),
+            },
+            "set `doctest = true` or remove the `doctest = false` setting",
+        )
+    }
+
+    pub fn doctest_enabled_without_doctests(diagnostic: &DoctestEnabledWithoutDoctests) -> Self {
+        Self::sourceless(
+            DiagnosticKind::DoctestEnabledWithoutDoctests {
+                target_name: diagnostic.target_name.clone(),
+            },
+            "set `doctest = false` to avoid running doc tests for this target",
+        )
+    }
+
+    fn sourceless(kind: DiagnosticKind, help: &str) -> Self {
+        Self { kind, source: None, span: None, related: Vec::new(), help: Some(help.to_owned()) }
+    }
 }
 
 #[derive(Debug)]
@@ -398,6 +467,10 @@ pub enum DiagnosticKind {
     UnknownIgnore { name: String },
     RedundantIgnore { name: String },
     RedundantIgnorePath { pattern: String },
+    TestDisabledWithTests { target_name: String, target_kind: String },
+    TestEnabledWithoutTests { target_name: String, target_kind: String },
+    DoctestDisabledWithDoctests { target_name: String },
+    DoctestEnabledWithoutDoctests { target_name: String },
 }
 
 impl DiagnosticKind {
@@ -444,6 +517,26 @@ impl DiagnosticKind {
             Self::RedundantIgnorePath { pattern } => {
                 format!("redundant ignored paths pattern `{pattern}`")
             }
+            Self::TestDisabledWithTests { target_name, target_kind } => {
+                format!(
+                    "`test = false` on {target_kind} target `{target_name}` but source contains tests"
+                )
+            }
+            Self::TestEnabledWithoutTests { target_name, target_kind } => {
+                format!(
+                    "`test = true` on {target_kind} target `{target_name}` but source contains no tests"
+                )
+            }
+            Self::DoctestDisabledWithDoctests { target_name } => {
+                format!(
+                    "`doctest = false` on lib target `{target_name}` but source contains doc tests"
+                )
+            }
+            Self::DoctestEnabledWithoutDoctests { target_name } => {
+                format!(
+                    "`doctest = true` on lib target `{target_name}` but source contains no doc tests"
+                )
+            }
         }
     }
 
@@ -456,7 +549,12 @@ impl DiagnosticKind {
             Self::MisplacedDependency { .. } | Self::MisplacedOptionalDependency { .. } => {
                 Some("only used in dev targets")
             }
-            Self::UnlinkedFiles { .. } | Self::EmptyFiles { .. } => None,
+            Self::UnlinkedFiles { .. }
+            | Self::EmptyFiles { .. }
+            | Self::TestDisabledWithTests { .. }
+            | Self::TestEnabledWithoutTests { .. }
+            | Self::DoctestDisabledWithDoctests { .. }
+            | Self::DoctestEnabledWithoutDoctests { .. } => None,
             Self::UnknownIgnore { .. } => Some("not a dependency"),
             Self::RedundantIgnore { .. } => Some("dependency is used"),
             Self::RedundantIgnorePath { .. } => Some("pattern not matched"),
@@ -476,6 +574,10 @@ impl DiagnosticKind {
             Self::UnknownIgnore { .. } => "shear/unknown_ignore",
             Self::RedundantIgnore { .. } => "shear/redundant_ignore",
             Self::RedundantIgnorePath { .. } => "shear/redundant_ignore_path",
+            Self::TestDisabledWithTests { .. } => "shear/test_disabled_with_tests",
+            Self::TestEnabledWithoutTests { .. } => "shear/test_enabled_without_tests",
+            Self::DoctestDisabledWithDoctests { .. } => "shear/doctest_disabled_with_doctests",
+            Self::DoctestEnabledWithoutDoctests { .. } => "shear/doctest_enabled_without_doctests",
         }
     }
 
@@ -491,7 +593,11 @@ impl DiagnosticKind {
             | Self::MisplacedOptionalDependency { .. }
             | Self::UnknownIgnore { .. }
             | Self::RedundantIgnore { .. }
-            | Self::RedundantIgnorePath { .. } => Severity::Warning,
+            | Self::RedundantIgnorePath { .. }
+            | Self::TestDisabledWithTests { .. }
+            | Self::TestEnabledWithoutTests { .. }
+            | Self::DoctestDisabledWithDoctests { .. }
+            | Self::DoctestEnabledWithoutDoctests { .. } => Severity::Warning,
         }
     }
 
@@ -502,6 +608,10 @@ impl DiagnosticKind {
             Self::UnusedDependency { .. }
                 | Self::UnusedWorkspaceDependency { .. }
                 | Self::MisplacedDependency { .. }
+                | Self::TestDisabledWithTests { .. }
+                | Self::TestEnabledWithoutTests { .. }
+                | Self::DoctestDisabledWithDoctests { .. }
+                | Self::DoctestEnabledWithoutDoctests { .. }
         )
     }
 }
