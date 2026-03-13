@@ -17,6 +17,8 @@ use crate::{
     package_processor::{MisplacedDependency, UnusedDependency, UnusedWorkspaceDependency},
 };
 
+const DEP_TABLE_KEYS: &[&str] = &["dependencies", "dev-dependencies", "build-dependencies"];
+
 /// Provides methods to edit Cargo.toml files and remove unused dependencies.
 pub struct CargoTomlEditor;
 
@@ -58,6 +60,7 @@ impl CargoTomlEditor {
 
         let count = removed.len();
         Self::fix_features(manifest, &removed);
+        Self::cleanup_empty_tables(manifest);
         count
     }
 
@@ -88,6 +91,7 @@ impl CargoTomlEditor {
 
         let count = removed.len();
         Self::fix_features(manifest, &removed);
+        Self::cleanup_empty_tables(manifest);
         count
     }
 
@@ -113,6 +117,7 @@ impl CargoTomlEditor {
             }
         }
 
+        Self::cleanup_empty_tables(manifest);
         count
     }
 
@@ -183,11 +188,15 @@ impl CargoTomlEditor {
 
     /// Remove a flag (e.g. `test` or `doctest`) from the `[lib]` section.
     pub fn remove_lib_flag(manifest: &mut DocumentMut, flag: &str) -> bool {
-        manifest
+        let removed = manifest
             .get_mut("lib")
             .and_then(|item| item.as_table_mut())
             .and_then(|table| table.remove(flag))
-            .is_some()
+            .is_some();
+        if removed {
+            Self::cleanup_empty_tables(manifest);
+        }
+        removed
     }
 
     /// Set a flag to `false` in the `[lib]` section, creating the section if needed.
@@ -197,6 +206,68 @@ impl CargoTomlEditor {
         }
         if let Some(table) = manifest.get_mut("lib").and_then(|item| item.as_table_mut()) {
             table[flag] = value(false);
+        }
+    }
+
+    fn cleanup_empty_tables(manifest: &mut DocumentMut) {
+        // Clean root-level dep tables
+        for key in DEP_TABLE_KEYS {
+            if manifest.get(key).and_then(|i| i.as_table()).is_some_and(Table::is_empty) {
+                manifest.remove(key);
+            }
+        }
+
+        // Clean target-specific tables (bottom-up)
+        if let Some(targets) = manifest.get_mut("target").and_then(|i| i.as_table_mut()) {
+            let target_keys: Vec<String> = targets.iter().map(|(k, _)| k.to_owned()).collect();
+            for cfg_key in &target_keys {
+                if let Some(target) = targets.get_mut(cfg_key).and_then(|i| i.as_table_mut()) {
+                    for dep_key in DEP_TABLE_KEYS {
+                        if target
+                            .get(dep_key)
+                            .and_then(|i| i.as_table())
+                            .is_some_and(Table::is_empty)
+                        {
+                            target.remove(dep_key);
+                        }
+                    }
+                }
+                if targets.get(cfg_key).and_then(|i| i.as_table()).is_some_and(Table::is_empty) {
+                    targets.remove(cfg_key);
+                }
+            }
+        }
+        if manifest.get("target").and_then(|i| i.as_table()).is_some_and(Table::is_empty) {
+            manifest.remove("target");
+        }
+
+        // Clean workspace.dependencies
+        if let Some(workspace) = manifest.get_mut("workspace").and_then(|i| i.as_table_mut())
+            && workspace.get("dependencies").and_then(|i| i.as_table()).is_some_and(Table::is_empty)
+        {
+            workspace.remove("dependencies");
+        }
+
+        // Clean empty feature entries, then [features]
+        if let Some(features) = manifest.get_mut("features").and_then(|i| i.as_table_mut()) {
+            let keys: Vec<String> = features.iter().map(|(k, _)| k.to_owned()).collect();
+            for key in &keys {
+                if features
+                    .get(key)
+                    .and_then(|i| i.as_array())
+                    .is_some_and(toml_edit::Array::is_empty)
+                {
+                    features.remove(key);
+                }
+            }
+        }
+        if manifest.get("features").and_then(|i| i.as_table()).is_some_and(Table::is_empty) {
+            manifest.remove("features");
+        }
+
+        // Clean [lib]
+        if manifest.get("lib").and_then(|i| i.as_table()).is_some_and(Table::is_empty) {
+            manifest.remove("lib");
         }
     }
 

@@ -1303,6 +1303,10 @@ fn unused_fix() -> Result<(), Box<dyn Error>> {
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
     assert!(!manifest.dependencies.contains_key("anyhow"));
 
+    // Empty `[dependencies]` table should be removed after fix
+    let content = fs::read_to_string(temp_dir.path().join("Cargo.toml"))?;
+    assert!(!content.contains("[dependencies]"));
+
     Ok(())
 }
 
@@ -1781,6 +1785,10 @@ fn unused_platform_fix() -> Result<(), Box<dyn Error>> {
     let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
     let windows = manifest.target.get("cfg(windows)");
     assert!(!windows.is_some_and(|table| table.dependencies.contains_key("anyhow")));
+
+    // Empty `[target]` table chain should be removed after fix
+    let content = fs::read_to_string(temp_dir.path().join("Cargo.toml"))?;
+    assert!(!content.contains("[target"));
 
     Ok(())
 }
