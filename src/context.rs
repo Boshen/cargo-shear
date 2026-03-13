@@ -209,8 +209,12 @@ impl<'a> PackageContext<'a> {
 
         for dep in &resolved.deps {
             if let Some(pkg) = metadata.packages.iter().find(|package| package.id == dep.pkg) {
-                import_to_pkg.insert(dep.name.clone(), pkg.name.to_string());
-                pkg_to_import.insert(pkg.name.to_string(), dep.name.clone());
+                // Artifact/bindep dependencies have an empty `dep.name` in `cargo_metadata`.
+                // Fall back to the package name so the rest of the pipeline can match them.
+                let name =
+                    if dep.name.is_empty() { pkg.name.replace('-', "_") } else { dep.name.clone() };
+                import_to_pkg.insert(name.clone(), pkg.name.to_string());
+                pkg_to_import.insert(pkg.name.to_string(), name);
             }
         }
 
@@ -234,5 +238,49 @@ impl<'a> PackageContext<'a> {
             pkg_to_import,
             ignored_imports,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    /// Artifact/bindep dependencies (e.g. `artifact = "bin"`) have an empty
+    /// `dep.name` in `cargo_metadata`. Verify the fallback to package name.
+    ///
+    /// Real-world example from vite-task's `crates/fspy/Cargo.toml`:
+    ///
+    /// ```toml
+    /// [target.'cfg(all(target_os = "linux", target_arch = "x86_64"))'.dev-dependencies]
+    /// fspy_test_bin = { path = "../fspy_test_bin", artifact = "bin", target = "x86_64-unknown-linux-musl" }
+    ///
+    /// [package.metadata.cargo-shear]
+    /// ignored = ["fspy_test_bin"]
+    /// ```
+    ///
+    /// `cargo_metadata` resolves this with `dep.name = ""` and `pkg.name = "fspy_test_bin"`.
+    #[test]
+    fn artifact_bindep_empty_dep_name_uses_pkg_name() {
+        let dep_name = "";
+        let pkg_name = "fspy_test_bin";
+        let name =
+            if dep_name.is_empty() { pkg_name.replace('-', "_") } else { dep_name.to_owned() };
+        assert_eq!(name, "fspy_test_bin");
+    }
+
+    #[test]
+    fn artifact_bindep_normalizes_hyphens() {
+        let dep_name = "";
+        let pkg_name = "my-test-bin";
+        let name =
+            if dep_name.is_empty() { pkg_name.replace('-', "_") } else { dep_name.to_owned() };
+        assert_eq!(name, "my_test_bin");
+    }
+
+    #[test]
+    fn normal_dep_uses_dep_name() {
+        let dep_name = "tokio";
+        let pkg_name = "tokio";
+        let name =
+            if dep_name.is_empty() { pkg_name.replace('-', "_") } else { dep_name.to_owned() };
+        assert_eq!(name, "tokio");
     }
 }
