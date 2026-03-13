@@ -588,6 +588,67 @@ fn ignored() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// Artifact/bindep dependency (`artifact = "bin"`) under a target-specific table.
+// `cargo_metadata` resolves these with an empty `dep.name`.
+// The ignore should suppress the false "unused" diagnostic.
+// Mimics vite-task's `fspy_test_bin` scenario.
+// Requires nightly toolchain for `-Z bindeps`.
+// Runs as a subprocess to safely clear `RUSTUP_TOOLCHAIN`.
+#[test]
+fn ignored_artifact() -> Result<(), Box<dyn Error>> {
+    let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("ignored_artifact");
+
+    let temp_dir = TempDir::new()?;
+    // Copy fixture to temp dir (reuse the same recursive copy helper).
+    fn copy_dir(src: &Path, dst: &Path) -> io::Result<()> {
+        if src.is_dir() {
+            fs::create_dir_all(dst)?;
+            for entry in fs::read_dir(src)? {
+                let entry = entry?;
+                let target = dst.join(entry.file_name());
+                if entry.file_type()?.is_dir() {
+                    copy_dir(&entry.path(), &target)?;
+                } else {
+                    fs::copy(entry.path(), target)?;
+                }
+            }
+        }
+        Ok(())
+    }
+    copy_dir(&fixture_path, temp_dir.path())?;
+
+    let binary = env!("CARGO_BIN_EXE_cargo-shear");
+    let output = std::process::Command::new(binary)
+        .arg("--color=never")
+        .arg(temp_dir.path())
+        // Set cwd so rustup finds the fixture's rust-toolchain.toml (nightly).
+        .current_dir(temp_dir.path())
+        // Clear RUSTUP_TOOLCHAIN so rust-toolchain.toml takes effect.
+        .env_remove("RUSTUP_TOOLCHAIN")
+        // Clear CARGO so MetadataCommand uses the rustup proxy (which respects rust-toolchain.toml)
+        // instead of the stable cargo binary set by `cargo test`.
+        .env_remove("CARGO")
+        .output()?;
+
+    let stdout = String::from_utf8(output.stdout)?;
+    assert!(
+        output.status.success(),
+        "cargo-shear failed:\nstdout: {stdout}\nstderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    insta::assert_snapshot!(stdout, @r"
+    shear/summary
+
+      ✓ no issues found
+    ");
+
+    Ok(())
+}
+
 // `anywho` is in the ignored list but doesn't exist as a dependency.
 #[test]
 fn ignored_invalid() -> Result<(), Box<dyn Error>> {
