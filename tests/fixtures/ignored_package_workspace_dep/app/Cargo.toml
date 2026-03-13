@@ -1,0 +1,15 @@
+[package]
+name = "app"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+test = false
+doctest = false
+
+[dependencies]
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+[package.metadata.cargo-shear]
+ignored = ["thiserror"]

@@ -697,6 +697,24 @@ fn ignored_workspace_merged() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// Package-level ignore should prevent workspace dep from being removed.
+// `thiserror` is inherited by `app` and ignored at package level. It must not
+// be flagged as an unused workspace dependency.
+#[test]
+fn ignored_package_workspace_dep() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _temp_dir) =
+        CargoShearRunner::new("ignored_package_workspace_dep").run()?;
+    assert_eq!(exit_code, ExitCode::SUCCESS);
+
+    insta::assert_snapshot!(output, @r"
+    shear/summary
+
+      ✓ no issues found
+    ");
+
+    Ok(())
+}
+
 // `anyhow` is only used in tests but declared in `dependencies` instead of `dev-dependencies`.
 #[test]
 fn misplaced_detection() -> Result<(), Box<dyn Error>> {
