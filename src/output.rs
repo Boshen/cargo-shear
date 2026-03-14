@@ -2,6 +2,7 @@ use std::{io, io::IsTerminal, str::FromStr};
 
 use crate::{diagnostics::ShearAnalysis, output::miette::MietteRenderer};
 
+pub mod github;
 pub mod json;
 pub mod miette;
 
@@ -14,6 +15,24 @@ pub enum OutputFormat {
 
     /// JSON format for machine-readable output.
     Json,
+
+    /// GitHub Actions workflow commands format.
+    GitHub,
+}
+
+impl OutputFormat {
+    /// Resolve `Auto` to a concrete format based on environment.
+    ///
+    /// When running in GitHub Actions (`GITHUB_ACTIONS` env var is set),
+    /// `Auto` resolves to `GitHub`. Otherwise it stays as `Auto` (miette).
+    #[must_use]
+    pub fn resolve(self) -> Self {
+        if matches!(self, Self::Auto) && std::env::var_os("GITHUB_ACTIONS").is_some() {
+            Self::GitHub
+        } else {
+            self
+        }
+    }
 }
 
 impl FromStr for OutputFormat {
@@ -23,7 +42,8 @@ impl FromStr for OutputFormat {
         match s.to_lowercase().as_str() {
             "auto" => Ok(Self::Auto),
             "json" => Ok(Self::Json),
-            _ => Err(format!("unknown format: {s}, expected: auto, json")),
+            "github" => Ok(Self::GitHub),
+            _ => Err(format!("unknown format: {s}, expected: auto, json, github")),
         }
     }
 }
@@ -92,6 +112,10 @@ impl<W: io::Write> Renderer<W> {
             }
             OutputFormat::Json => {
                 let mut renderer = json::JsonRenderer::new(&mut self.writer);
+                renderer.render(analysis)
+            }
+            OutputFormat::GitHub => {
+                let mut renderer = github::GitHubRenderer::new(&mut self.writer);
                 renderer.render(analysis)
             }
         }

@@ -119,7 +119,7 @@ pub struct CargoShearOptions {
     /// Can be specified multiple times to exclude multiple packages.
     exclude: Vec<String>,
 
-    /// Output format: auto, json
+    /// Output format: auto, json, github
     #[bpaf(long, fallback(OutputFormat::Auto))]
     format: OutputFormat,
 
@@ -220,6 +220,16 @@ impl CargoShearOptions {
     #[must_use]
     pub const fn with_color(mut self, color: ColorMode) -> Self {
         self.color = color;
+        self
+    }
+
+    /// Resolve auto-detected options based on environment.
+    ///
+    /// This should be called after CLI parsing to resolve `Auto` format
+    /// to a concrete format based on environment (e.g., GitHub Actions).
+    #[must_use]
+    pub fn resolve(mut self) -> Self {
+        self.format = self.format.resolve();
         self
     }
 }

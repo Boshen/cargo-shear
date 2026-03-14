@@ -607,6 +607,7 @@ fn ignored_artifact() -> Result<(), Box<dyn Error>> {
         .current_dir(&fixture_path)
         .env_remove("RUSTUP_TOOLCHAIN")
         .env_remove("CARGO")
+        .env_remove("GITHUB_ACTIONS")
         .output()?;
 
     let stdout = String::from_utf8(output.stdout)?;
@@ -2327,6 +2328,20 @@ fn json_output_format() -> Result<(), Box<dyn Error>> {
       }
     }
     "#);
+
+    Ok(())
+}
+
+// GitHub output format should produce GitHub Actions workflow commands.
+#[test]
+fn github_output_format() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("unused")
+        .options(|options| options.with_format(OutputFormat::GitHub))
+        .run()?;
+    assert_eq!(exit_code, ExitCode::FAILURE);
+
+    insta::assert_snapshot!(output, @"::error file=Cargo.toml,line=8,col=1,title=shear/unused_dependency::unused dependency `anyhow` (remove this dependency)
+");
 
     Ok(())
 }
