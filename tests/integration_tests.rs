@@ -592,8 +592,8 @@ fn ignored() -> Result<(), Box<dyn Error>> {
 // `cargo_metadata` resolves these with an empty `dep.name`.
 // The ignore should suppress the false "unused" diagnostic.
 // Mimics vite-task's `fspy_test_bin` scenario.
-// Requires nightly toolchain for `-Z bindeps`.
-// Runs as a subprocess to safely clear `RUSTUP_TOOLCHAIN`.
+// Runs as a subprocess to clear `RUSTUP_TOOLCHAIN` / `CARGO` so the fixture's
+// nightly `rust-toolchain.toml` takes effect (`-Z bindeps` requires nightly).
 #[test]
 fn ignored_artifact() -> Result<(), Box<dyn Error>> {
     let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -601,35 +601,11 @@ fn ignored_artifact() -> Result<(), Box<dyn Error>> {
         .join("fixtures")
         .join("ignored_artifact");
 
-    let temp_dir = TempDir::new()?;
-    // Copy fixture to temp dir (reuse the same recursive copy helper).
-    fn copy_dir(src: &Path, dst: &Path) -> io::Result<()> {
-        if src.is_dir() {
-            fs::create_dir_all(dst)?;
-            for entry in fs::read_dir(src)? {
-                let entry = entry?;
-                let target = dst.join(entry.file_name());
-                if entry.file_type()?.is_dir() {
-                    copy_dir(&entry.path(), &target)?;
-                } else {
-                    fs::copy(entry.path(), target)?;
-                }
-            }
-        }
-        Ok(())
-    }
-    copy_dir(&fixture_path, temp_dir.path())?;
-
-    let binary = env!("CARGO_BIN_EXE_cargo-shear");
-    let output = std::process::Command::new(binary)
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_cargo-shear"))
         .arg("--color=never")
-        .arg(temp_dir.path())
-        // Set cwd so rustup finds the fixture's rust-toolchain.toml (nightly).
-        .current_dir(temp_dir.path())
-        // Clear RUSTUP_TOOLCHAIN so rust-toolchain.toml takes effect.
+        .arg(&fixture_path)
+        .current_dir(&fixture_path)
         .env_remove("RUSTUP_TOOLCHAIN")
-        // Clear CARGO so MetadataCommand uses the rustup proxy (which respects rust-toolchain.toml)
-        // instead of the stable cargo binary set by `cargo test`.
         .env_remove("CARGO")
         .output()?;
 
