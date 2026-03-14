@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Result, anyhow};
 use cargo_metadata::{Metadata, Package, Target};
-use ignore::{DirEntry, WalkBuilder}; // Changed from walkdir
+use ignore::{DirEntry, WalkBuilder};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rustc_hash::{FxHashMap, FxHashSet};
 

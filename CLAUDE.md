@@ -23,10 +23,14 @@ A Rust tool for detecting and removing unused dependencies from Cargo.toml files
 
 4. **Key Modules**
    - `src/lib.rs` - Core library functionality
-   - `src/dependency_analyzer.rs` - Analyzes dependencies
-   - `src/import_collector.rs` - Collects imports from Rust code
+   - `src/source_parser.rs` - Parses Rust source files to extract imports and file paths
+   - `src/package_analyzer.rs` - Analyzes packages to find unused dependencies and unlinked files
+   - `src/package_processor.rs` - Processes packages to identify issues (unused, misplaced deps, etc.)
    - `src/cargo_toml_editor.rs` - Edits Cargo.toml files
-   - `src/package_processor.rs` - Processes packages in workspaces
+   - `src/manifest.rs` - Manifest parsing and types
+   - `src/context.rs` - Context types for workspaces and packages
+   - `src/diagnostics.rs` - Diagnostic types and analysis results
+   - `src/output.rs` - Output formatting (miette, JSON, GitHub Actions)
 
 5. **Development Workflow**
    - Make changes

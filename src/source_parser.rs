@@ -72,7 +72,6 @@ struct SourceParser {
     /// Used for resolving `mod` declarations.
     module: Option<PathBuf>,
 
-    // TODO: Consider trying to parse comments as we walk the source?
     /// All doc comments, merged into one markdown string.
     markdown: String,
 }
