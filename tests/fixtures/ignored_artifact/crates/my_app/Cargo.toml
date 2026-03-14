@@ -1,0 +1,14 @@
+[package]
+name = "my_app"
+version = "0.1.0"
+edition = "2024"
+
+[target.'cfg(all(target_os = "linux", target_arch = "x86_64"))'.dev-dependencies]
+my_test_bin = { path = "../my_test_bin", artifact = "bin", target = "x86_64-unknown-linux-musl" }
+
+[lib]
+test = false
+doctest = false
+
+[package.metadata.cargo-shear]
+ignored = ["my_test_bin"]

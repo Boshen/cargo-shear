@@ -588,6 +588,43 @@ fn ignored() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// Artifact/bindep dependency (`artifact = "bin"`) under a target-specific table.
+// `cargo_metadata` resolves these with an empty `dep.name`.
+// The ignore should suppress the false "unused" diagnostic.
+// Mimics vite-task's `fspy_test_bin` scenario.
+// Runs as a subprocess to clear `RUSTUP_TOOLCHAIN` / `CARGO` so the fixture's
+// nightly `rust-toolchain.toml` takes effect (`-Z bindeps` requires nightly).
+#[test]
+fn ignored_artifact() -> Result<(), Box<dyn Error>> {
+    let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("ignored_artifact");
+
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_cargo-shear"))
+        .arg("--color=never")
+        .arg(&fixture_path)
+        .current_dir(&fixture_path)
+        .env_remove("RUSTUP_TOOLCHAIN")
+        .env_remove("CARGO")
+        .output()?;
+
+    let stdout = String::from_utf8(output.stdout)?;
+    assert!(
+        output.status.success(),
+        "cargo-shear failed:\nstdout: {stdout}\nstderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    insta::assert_snapshot!(stdout, @r"
+    shear/summary
+
+      ✓ no issues found
+    ");
+
+    Ok(())
+}
+
 // `anywho` is in the ignored list but doesn't exist as a dependency.
 #[test]
 fn ignored_invalid() -> Result<(), Box<dyn Error>> {

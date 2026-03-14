@@ -209,8 +209,12 @@ impl<'a> PackageContext<'a> {
 
         for dep in &resolved.deps {
             if let Some(pkg) = metadata.packages.iter().find(|package| package.id == dep.pkg) {
-                import_to_pkg.insert(dep.name.clone(), pkg.name.to_string());
-                pkg_to_import.insert(pkg.name.to_string(), dep.name.clone());
+                // Artifact/bindep dependencies have an empty `dep.name` in `cargo_metadata`.
+                // Fall back to the package name so the rest of the pipeline can match them.
+                let name =
+                    if dep.name.is_empty() { pkg.name.replace('-', "_") } else { dep.name.clone() };
+                import_to_pkg.insert(name.clone(), pkg.name.to_string());
+                pkg_to_import.insert(pkg.name.to_string(), name);
             }
         }
 
