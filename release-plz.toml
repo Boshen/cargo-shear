@@ -1,3 +1,6 @@
+[workspace]
+release_always_increment_minor = true
+
 [changelog]
 body = """
 
