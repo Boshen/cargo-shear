@@ -119,7 +119,7 @@ pub struct CargoShearOptions {
     /// Can be specified multiple times to exclude multiple packages.
     exclude: Vec<String>,
 
-    /// Output format: auto, json
+    /// Output format: auto, json, github
     #[bpaf(long, fallback(OutputFormat::Auto))]
     format: OutputFormat,
 

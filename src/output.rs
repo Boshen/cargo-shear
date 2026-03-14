@@ -2,6 +2,7 @@ use std::{io, io::IsTerminal, str::FromStr};
 
 use crate::{diagnostics::ShearAnalysis, output::miette::MietteRenderer};
 
+pub mod github;
 pub mod json;
 pub mod miette;
 
@@ -14,6 +15,9 @@ pub enum OutputFormat {
 
     /// JSON format for machine-readable output.
     Json,
+
+    /// GitHub Actions workflow commands format.
+    GitHub,
 }
 
 impl FromStr for OutputFormat {
@@ -23,7 +27,8 @@ impl FromStr for OutputFormat {
         match s.to_lowercase().as_str() {
             "auto" => Ok(Self::Auto),
             "json" => Ok(Self::Json),
-            _ => Err(format!("unknown format: {s}, expected: auto, json")),
+            "github" => Ok(Self::GitHub),
+            _ => Err(format!("unknown format: {s}, expected: auto, json, github")),
         }
     }
 }
@@ -87,11 +92,20 @@ impl<W: io::Write> Renderer<W> {
     pub fn render(&mut self, analysis: &ShearAnalysis) -> io::Result<()> {
         match self.format {
             OutputFormat::Auto => {
-                let mut renderer = MietteRenderer::new(&mut self.writer, self.color);
-                renderer.render(analysis)
+                if std::env::var_os("GITHUB_ACTIONS").is_some() {
+                    let mut renderer = github::GitHubRenderer::new(&mut self.writer);
+                    renderer.render(analysis)
+                } else {
+                    let mut renderer = MietteRenderer::new(&mut self.writer, self.color);
+                    renderer.render(analysis)
+                }
             }
             OutputFormat::Json => {
                 let mut renderer = json::JsonRenderer::new(&mut self.writer);
+                renderer.render(analysis)
+            }
+            OutputFormat::GitHub => {
+                let mut renderer = github::GitHubRenderer::new(&mut self.writer);
                 renderer.render(analysis)
             }
         }
