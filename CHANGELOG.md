@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0](https://github.com/Boshen/cargo-shear/compare/v1.10.0...v2.0.0) - 2026-03-14
+
+### <!-- 0 -->🚀 Features
+- add `--format github` for GitHub Actions workflow commands ([#452](https://github.com/Boshen/cargo-shear/pull/452)) (by @Boshen)
+
+### <!-- 1 -->🐛 Bug Fixes
+- use valid release-plz config to prevent major bumps ([#454](https://github.com/Boshen/cargo-shear/pull/454)) (by @Boshen)
+- package-level ignored deps removed from workspace dependencies ([#450](https://github.com/Boshen/cargo-shear/pull/450)) (by @NeelChotai)
+- handle artifact/bindep dependencies with empty import names ([#448](https://github.com/Boshen/cargo-shear/pull/448)) (by @Boshen)
+- remove empty TOML tables after fixing ([#446](https://github.com/Boshen/cargo-shear/pull/446)) (by @Boshen)
+
+### Contributors
+
+* @Boshen
+* @NeelChotai
+
 ## [1.10.0](https://github.com/Boshen/cargo-shear/compare/v1.9.1...v1.10.0) - 2026-03-10
 
 ### <!-- 0 -->🚀 Features
