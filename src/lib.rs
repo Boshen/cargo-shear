@@ -222,6 +222,16 @@ impl CargoShearOptions {
         self.color = color;
         self
     }
+
+    /// Resolve auto-detected options based on environment.
+    ///
+    /// This should be called after CLI parsing to resolve `Auto` format
+    /// to a concrete format based on environment (e.g., GitHub Actions).
+    #[must_use]
+    pub fn resolve(mut self) -> Self {
+        self.format = self.format.resolve();
+        self
+    }
 }
 
 pub(crate) fn default_path() -> Result<PathBuf> {
@@ -285,8 +295,7 @@ impl<W: Write> CargoShear<W> {
         match self.shear() {
             Ok(()) => {
                 let color = self.options.color.enabled();
-                let format = self.options.format.resolve();
-                let mut renderer = Renderer::new(&mut self.writer, format, color);
+                let mut renderer = Renderer::new(&mut self.writer, self.options.format, color);
 
                 if let Err(err) = renderer.render(&self.analysis) {
                     let _ = writeln!(self.writer, "error rendering report: {err:?}");
