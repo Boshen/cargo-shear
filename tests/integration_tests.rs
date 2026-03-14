@@ -607,6 +607,7 @@ fn ignored_artifact() -> Result<(), Box<dyn Error>> {
         .current_dir(&fixture_path)
         .env_remove("RUSTUP_TOOLCHAIN")
         .env_remove("CARGO")
+        .env_remove("GITHUB_ACTIONS")
         .output()?;
 
     let stdout = String::from_utf8(output.stdout)?;
