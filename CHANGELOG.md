@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.11.1](https://github.com/Boshen/cargo-shear/compare/v1.11.0...v1.11.1) - 2026-03-14
+
+### <!-- 1 -->🐛 Bug Fixes
+- workspace-level ignores falsely flagged as redundant ([#459](https://github.com/Boshen/cargo-shear/pull/459)) (by @Boshen)
+
+### Contributors
+
+* @Boshen
+
 ## [1.11.0](https://github.com/Boshen/cargo-shear/compare/v1.10.0...v1.11.0) - 2026-03-14
 
 ### <!-- 0 -->🚀 Features
