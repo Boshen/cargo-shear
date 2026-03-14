@@ -299,7 +299,11 @@ impl PackageProcessor {
                 if is_ignored {
                     // Track ignored deps as used so the workspace analysis doesn't
                     // remove them from [workspace.dependencies].
-                    result.used_packages.insert(pkg.to_owned());
+                    // Only for package-level ignores; workspace-level ignores are
+                    // already skipped by process_workspace via `ignored_deps`.
+                    if !ctx.workspace.ignored_deps.contains(dep.get_ref().as_str()) {
+                        result.used_packages.insert(pkg.to_owned());
+                    }
                     suppressed_ignores.insert(import);
                     continue;
                 }

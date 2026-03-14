@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["lib"]
+members = ["app", "lib"]
 
 [workspace.dependencies]
 # Unused
