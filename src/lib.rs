@@ -285,7 +285,8 @@ impl<W: Write> CargoShear<W> {
         match self.shear() {
             Ok(()) => {
                 let color = self.options.color.enabled();
-                let mut renderer = Renderer::new(&mut self.writer, self.options.format, color);
+                let format = self.options.format.resolve();
+                let mut renderer = Renderer::new(&mut self.writer, format, color);
 
                 if let Err(err) = renderer.render(&self.analysis) {
                     let _ = writeln!(self.writer, "error rendering report: {err:?}");

@@ -20,6 +20,21 @@ pub enum OutputFormat {
     GitHub,
 }
 
+impl OutputFormat {
+    /// Resolve `Auto` to a concrete format based on environment.
+    ///
+    /// When running in GitHub Actions (`GITHUB_ACTIONS` env var is set),
+    /// `Auto` resolves to `GitHub`. Otherwise it stays as `Auto` (miette).
+    #[must_use]
+    pub fn resolve(self) -> Self {
+        if matches!(self, Self::Auto) && std::env::var_os("GITHUB_ACTIONS").is_some() {
+            Self::GitHub
+        } else {
+            self
+        }
+    }
+}
+
 impl FromStr for OutputFormat {
     type Err = String;
 
@@ -92,13 +107,8 @@ impl<W: io::Write> Renderer<W> {
     pub fn render(&mut self, analysis: &ShearAnalysis) -> io::Result<()> {
         match self.format {
             OutputFormat::Auto => {
-                if std::env::var_os("GITHUB_ACTIONS").is_some() {
-                    let mut renderer = github::GitHubRenderer::new(&mut self.writer);
-                    renderer.render(analysis)
-                } else {
-                    let mut renderer = MietteRenderer::new(&mut self.writer, self.color);
-                    renderer.render(analysis)
-                }
+                let mut renderer = MietteRenderer::new(&mut self.writer, self.color);
+                renderer.render(analysis)
             }
             OutputFormat::Json => {
                 let mut renderer = json::JsonRenderer::new(&mut self.writer);
