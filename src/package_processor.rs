@@ -297,6 +297,9 @@ impl PackageProcessor {
 
             if !code_imports.contains(&*import) {
                 if is_ignored {
+                    // Track ignored deps as used so the workspace analysis doesn't
+                    // remove them from [workspace.dependencies].
+                    result.used_packages.insert(pkg.to_owned());
                     suppressed_ignores.insert(import);
                     continue;
                 }
