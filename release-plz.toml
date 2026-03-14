@@ -1,5 +1,5 @@
 [workspace]
-release_always_increment_minor = true
+features_always_increment_minor = true
 
 [changelog]
 body = """
