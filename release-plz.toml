@@ -1,5 +1,6 @@
 [workspace]
-release_always_increment_minor = true
+features_always_increment_minor = true
+custom_major_increment_regex = "^$_never_match"
 
 [changelog]
 body = """
