@@ -1,6 +1,6 @@
 use std::io;
 
-use miette::{Diagnostic, Severity};
+use miette::{Diagnostic, Severity, SourceCode};
 
 use crate::diagnostics::{ShearAnalysis, ShearDiagnostic};
 
@@ -29,49 +29,39 @@ impl<W: io::Write> GitHubRenderer<W> {
     fn render_diagnostic(&mut self, diagnostic: &ShearDiagnostic) -> io::Result<()> {
         let level = match diagnostic.kind.severity() {
             Severity::Error => "error",
-            Severity::Warning | Severity::Advice => "warning",
+            Severity::Warning => "warning",
+            Severity::Advice => "notice",
         };
 
         let code = diagnostic.kind.code();
         let message = diagnostic.kind.message();
 
-        let mut properties = Vec::new();
+        write!(self.writer, "::{level} ")?;
 
+        let mut needs_comma = false;
         if let Some(source) = &diagnostic.source {
-            properties.push(format!("file={}", source.name()));
+            write!(self.writer, "file={}", source.name())?;
+            needs_comma = true;
 
-            if let Some(span) = diagnostic.span {
-                let source_content: &str = source.inner();
-                let (line, col) = offset_to_line_col(source_content, span.offset());
-                properties.push(format!("line={line}"));
-                properties.push(format!("col={col}"));
+            if let Some(span) = diagnostic.span
+                && let Ok(contents) = source.read_span(&span, 0, 0)
+            {
+                let line = contents.line() + 1;
+                let col = contents.column() + 1;
+                write!(self.writer, ",line={line},col={col}")?;
             }
         }
 
-        properties.push(format!("title={code}"));
+        if needs_comma {
+            write!(self.writer, ",")?;
+        }
+        write!(self.writer, "title={code}::{message}")?;
 
-        let help_suffix = diagnostic.help().map(|h| format!(" ({h})")).unwrap_or_default();
+        if let Some(help) = diagnostic.help() {
+            write!(self.writer, " ({help})")?;
+        }
 
-        writeln!(self.writer, "::{level} {}::{message}{help_suffix}", properties.join(","))?;
-
+        writeln!(self.writer)?;
         Ok(())
     }
-}
-
-/// Convert a byte offset to a 1-based line and column number.
-fn offset_to_line_col(source: &str, offset: usize) -> (usize, usize) {
-    let mut line = 1;
-    let mut col = 1;
-    for (i, ch) in source.char_indices() {
-        if i >= offset {
-            break;
-        }
-        if ch == '\n' {
-            line += 1;
-            col = 1;
-        } else {
-            col += 1;
-        }
-    }
-    (line, col)
 }
