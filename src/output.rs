@@ -8,6 +8,7 @@ pub mod miette;
 
 /// Output format for cargo-shear.
 #[derive(Debug, Clone, Copy, Default)]
+#[non_exhaustive]
 pub enum OutputFormat {
     /// Auto format with colors and unicode.
     #[default]
@@ -50,6 +51,7 @@ impl FromStr for OutputFormat {
 
 /// Color mode for output.
 #[derive(Debug, Clone, Copy, Default)]
+#[non_exhaustive]
 pub enum ColorMode {
     /// Automatically detect based on environment.
     #[default]
