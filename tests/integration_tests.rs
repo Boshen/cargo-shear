@@ -1581,6 +1581,24 @@ fn unused_feature_weak_fix() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// `anyhow` is unused and should be removed, but the empty `experimental = []` feature should be preserved.
+#[test]
+fn unused_empty_feature_fix() -> Result<(), Box<dyn Error>> {
+    let (exit_code, _output, temp_dir) =
+        CargoShearRunner::new("unused_empty_feature").options(CargoShearOptions::with_fix).run()?;
+    assert_eq!(exit_code, ExitCode::FAILURE);
+
+    let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
+    assert!(!manifest.dependencies.contains_key("anyhow"));
+
+    // Empty marker feature should be preserved
+    let content = fs::read_to_string(temp_dir.path().join("Cargo.toml"))?;
+    assert!(content.contains("[features]"));
+    assert!(content.contains("experimental = []"));
+
+    Ok(())
+}
+
 // `serde_json` (import `serde_json`) is not used in code.
 #[test]
 fn unused_naming_hyphen_detection() -> Result<(), Box<dyn Error>> {
