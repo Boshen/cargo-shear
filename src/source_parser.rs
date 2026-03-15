@@ -143,9 +143,8 @@ impl SourceParser {
                                             | "compile_fail"
                                     )
                                 });
-                                let is_non_executable = tags.iter().any(|tag| {
-                                    matches!(*tag, "ignore" | "no_run" | "compile_fail")
-                                });
+                                let is_non_executable =
+                                    tags.iter().any(|tag| matches!(*tag, "ignore"));
                                 (is_rust, is_rust && !is_non_executable)
                             }
                         }
@@ -719,7 +718,7 @@ mod tests {
     }
 
     #[test]
-    fn non_executable_doctest_no_run() {
+    fn doctest_no_run() {
         let source = r#"
         /// ```no_run
         /// # use url::Url;
@@ -730,11 +729,11 @@ mod tests {
 
         let parsed = ParsedSource::from_str(source, Path::new("lib.rs"));
         assert_eq!(parsed.imports, FxHashSet::from_iter(["url".to_owned()]));
-        assert!(!parsed.has_doctests);
+        assert!(parsed.has_doctests);
     }
 
     #[test]
-    fn non_executable_doctest_compile_fail() {
+    fn doctest_compile_fail() {
         let source = r#"
         /// ```compile_fail
         /// # use url::Url;
@@ -745,7 +744,7 @@ mod tests {
 
         let parsed = ParsedSource::from_str(source, Path::new("lib.rs"));
         assert_eq!(parsed.imports, FxHashSet::from_iter(["url".to_owned()]));
-        assert!(!parsed.has_doctests);
+        assert!(parsed.has_doctests);
     }
 
     #[test]
