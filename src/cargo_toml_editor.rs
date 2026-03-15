@@ -248,23 +248,6 @@ impl CargoTomlEditor {
             workspace.remove("dependencies");
         }
 
-        // Clean empty feature entries, then [features]
-        if let Some(features) = manifest.get_mut("features").and_then(|i| i.as_table_mut()) {
-            let keys: Vec<String> = features.iter().map(|(k, _)| k.to_owned()).collect();
-            for key in &keys {
-                if features
-                    .get(key)
-                    .and_then(|i| i.as_array())
-                    .is_some_and(toml_edit::Array::is_empty)
-                {
-                    features.remove(key);
-                }
-            }
-        }
-        if manifest.get("features").and_then(|i| i.as_table()).is_some_and(Table::is_empty) {
-            manifest.remove("features");
-        }
-
         // Clean [lib]
         if manifest.get("lib").and_then(|i| i.as_table()).is_some_and(Table::is_empty) {
             manifest.remove("lib");

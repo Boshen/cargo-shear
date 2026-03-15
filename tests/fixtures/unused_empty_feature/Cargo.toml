@@ -1,0 +1,11 @@
+[package]
+name = "unused_empty_feature"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+experimental = []
+
+[dependencies]
+# Unused
+anyhow = "1.0"
