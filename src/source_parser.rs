@@ -132,20 +132,21 @@ impl SourceParser {
                             if info.is_empty() {
                                 (true, true)
                             } else {
-                                let tags: Vec<&str> = info.split(',').map(str::trim).collect();
-                                let is_rust = tags.iter().any(|tag| {
-                                    matches!(
-                                        *tag,
-                                        "rust"
-                                            | "ignore"
-                                            | "no_run"
-                                            | "should_panic"
-                                            | "compile_fail"
-                                    )
-                                });
-                                let is_non_executable =
-                                    tags.iter().any(|tag| matches!(*tag, "ignore"));
-                                (is_rust, is_rust && !is_non_executable)
+                                let mut is_rust = false;
+                                let mut has_ignore = false;
+                                for tag in info.split(',').map(str::trim) {
+                                    match tag {
+                                        "ignore" => {
+                                            is_rust = true;
+                                            has_ignore = true;
+                                        }
+                                        "rust" | "no_run" | "should_panic" | "compile_fail" => {
+                                            is_rust = true;
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                                (is_rust, is_rust && !has_ignore)
                             }
                         }
                     };
