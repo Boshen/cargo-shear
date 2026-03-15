@@ -38,7 +38,8 @@ pub struct ParsedSource {
     /// Whether this file contains `#[test]` or `#[cfg(test)]`.
     pub has_tests: bool,
 
-    /// Whether this file contains doc tests (Rust code blocks in doc comments).
+    /// Whether this file contains doc tests that require compilation
+    /// (i.e., Rust code blocks in doc comments excluding `ignore` blocks).
     pub has_doctests: bool,
 }
 
@@ -126,26 +127,35 @@ impl SourceParser {
         for event in Parser::new(&markdown) {
             match event {
                 Event::Start(Tag::CodeBlock(kind)) => {
-                    let is_rust = match kind {
-                        CodeBlockKind::Indented => true,
+                    let (is_rust, is_executable) = match kind {
+                        CodeBlockKind::Indented => (true, true),
                         CodeBlockKind::Fenced(info) => {
-                            // Empty fence defaults to Rust
                             if info.is_empty() {
-                                true
+                                (true, true)
                             } else {
-                                // Check for Rust related tags
-                                info.split(',').any(|tag| {
-                                    matches!(
-                                        tag.trim(),
-                                        "rust" | "ignore" | "no_run" | "should_panic"
-                                    )
-                                })
+                                let mut is_rust = false;
+                                let mut has_ignore = false;
+                                for tag in info.split(',').map(str::trim) {
+                                    match tag {
+                                        "ignore" => {
+                                            is_rust = true;
+                                            has_ignore = true;
+                                        }
+                                        "rust" | "no_run" | "should_panic" | "compile_fail" => {
+                                            is_rust = true;
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                                (is_rust, is_rust && !has_ignore)
                             }
                         }
                     };
 
                     if is_rust {
                         current = Some(String::new());
+                    }
+                    if is_executable {
                         self.result.has_doctests = true;
                     }
                 }
@@ -658,6 +668,7 @@ mod tests {
 
         let parsed = ParsedSource::from_str(source, Path::new("lib.rs"));
         assert_eq!(parsed.imports, FxHashSet::from_iter(["url".to_owned()]));
+        assert!(parsed.has_doctests);
     }
 
     #[test]
@@ -675,6 +686,7 @@ mod tests {
 
         let parsed = ParsedSource::from_str(source, Path::new("lib.rs"));
         assert_eq!(parsed.imports, FxHashSet::from_iter(["async_trait".to_owned()]));
+        assert!(parsed.has_doctests);
     }
 
     #[test]
@@ -689,6 +701,82 @@ mod tests {
 
         let parsed = ParsedSource::from_str(source, Path::new("lib.rs"));
         assert_eq!(parsed.imports, FxHashSet::from_iter(["serde_json".to_owned()]));
+        assert!(parsed.has_doctests);
+    }
+
+    #[test]
+    fn non_executable_doctest_ignore() {
+        let source = r#"
+        /// ```ignore
+        /// # use url::Url;
+        /// let url = Url::parse("https://example.com").unwrap();
+        /// ```
+        fn demo() {}
+        "#;
+
+        let parsed = ParsedSource::from_str(source, Path::new("lib.rs"));
+        assert_eq!(parsed.imports, FxHashSet::from_iter(["url".to_owned()]));
+        assert!(!parsed.has_doctests);
+    }
+
+    #[test]
+    fn doctest_no_run() {
+        let source = r#"
+        /// ```no_run
+        /// # use url::Url;
+        /// let url = Url::parse("https://example.com").unwrap();
+        /// ```
+        fn demo() {}
+        "#;
+
+        let parsed = ParsedSource::from_str(source, Path::new("lib.rs"));
+        assert_eq!(parsed.imports, FxHashSet::from_iter(["url".to_owned()]));
+        assert!(parsed.has_doctests);
+    }
+
+    #[test]
+    fn doctest_compile_fail() {
+        let source = r#"
+        /// ```compile_fail
+        /// # use url::Url;
+        /// let url = Url::parse("https://example.com").unwrap();
+        /// ```
+        fn demo() {}
+        "#;
+
+        let parsed = ParsedSource::from_str(source, Path::new("lib.rs"));
+        assert_eq!(parsed.imports, FxHashSet::from_iter(["url".to_owned()]));
+        assert!(parsed.has_doctests);
+    }
+
+    #[test]
+    fn executable_doctest_should_panic() {
+        let source = r#"
+        /// ```should_panic
+        /// # use url::Url;
+        /// let url = Url::parse("https://example.com").unwrap();
+        /// ```
+        fn demo() {}
+        "#;
+
+        let parsed = ParsedSource::from_str(source, Path::new("lib.rs"));
+        assert_eq!(parsed.imports, FxHashSet::from_iter(["url".to_owned()]));
+        assert!(parsed.has_doctests);
+    }
+
+    #[test]
+    fn executable_doctest_empty_fence() {
+        let source = r#"
+        /// ```
+        /// # use url::Url;
+        /// let url = Url::parse("https://example.com").unwrap();
+        /// ```
+        fn demo() {}
+        "#;
+
+        let parsed = ParsedSource::from_str(source, Path::new("lib.rs"));
+        assert_eq!(parsed.imports, FxHashSet::from_iter(["url".to_owned()]));
+        assert!(parsed.has_doctests);
     }
 
     #[test]
