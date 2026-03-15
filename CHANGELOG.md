@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.11.2](https://github.com/Boshen/cargo-shear/compare/v1.11.1...v1.11.2) - 2026-03-15
+
+### <!-- 1 -->🐛 Bug Fixes
+- don't remove empty features during --fix ([#464](https://github.com/Boshen/cargo-shear/pull/464)) (by @Boshen)
+- don't count non-executable doc tests as executable ([#463](https://github.com/Boshen/cargo-shear/pull/463)) (by @Boshen)
+
+### Contributors
+
+* @Boshen
+
 ## [1.11.1](https://github.com/Boshen/cargo-shear/compare/v1.11.0...v1.11.1) - 2026-03-14
 
 ### <!-- 1 -->🐛 Bug Fixes
