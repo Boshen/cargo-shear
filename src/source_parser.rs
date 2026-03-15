@@ -38,7 +38,8 @@ pub struct ParsedSource {
     /// Whether this file contains `#[test]` or `#[cfg(test)]`.
     pub has_tests: bool,
 
-    /// Whether this file contains doc tests (Rust code blocks in doc comments).
+    /// Whether this file contains doc tests that require compilation
+    /// (i.e., Rust code blocks in doc comments excluding `ignore` blocks).
     pub has_doctests: bool,
 }
 
