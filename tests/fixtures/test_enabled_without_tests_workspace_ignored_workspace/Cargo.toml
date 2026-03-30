@@ -1,0 +1,6 @@
+[workspace]
+members = ["crates/*"]
+resolver = "3"
+
+[workspace.metadata.cargo-shear]
+ignore-test-warnings = true

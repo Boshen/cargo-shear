@@ -98,6 +98,22 @@ ignored = ["crate-name"]
 ignored-paths = ["*/proto/*.rs"]
 ```
 
+### Ignore test/doctest warnings
+
+In multi-package workspaces, `cargo shear` warns when a target has `test = true` or `doctest = true` (the defaults) but contains no tests or doc tests. To suppress these warnings without setting `test = false` in `Cargo.toml`, use `ignore-test-warnings`:
+
+```toml
+[package.metadata.cargo-shear]
+ignore-test-warnings = true
+```
+
+This can also be set at the workspace level to suppress the warnings for all packages:
+
+```toml
+[workspace.metadata.cargo-shear]
+ignore-test-warnings = true
+```
+
 Otherwise please report the issue as a bug.
 
 ## CI

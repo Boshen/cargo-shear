@@ -169,6 +169,8 @@ pub struct ShearConfig {
     pub ignored: FxHashSet<Spanned<String>>,
     #[serde(default, rename = "ignored-paths")]
     pub ignored_paths: Vec<SpannedGlob>,
+    #[serde(default, rename = "ignore-test-warnings")]
+    pub ignore_test_warnings: bool,
 }
 
 #[derive(Deserialize, Default)]
