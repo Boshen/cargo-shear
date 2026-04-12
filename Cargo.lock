@@ -565,15 +565,15 @@ dependencies = [
 
 [[package]]
 name = "ra_ap_edition"
-version = "0.0.326"
+version = "0.0.327"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20bc629dcad9c674f4054cb86645f9d6683c5b4917c6e64e8f6dabfa29e1e561"
+checksum = "4265268a45a8fca75cc7dfcaceb01fd3538df3a1b4207dfb4d9ab01a3a365133"
 
 [[package]]
 name = "ra_ap_parser"
-version = "0.0.326"
+version = "0.0.327"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a8b6a93c6587137304a09ab3d8051300b26fd2317c45f68be7f440a6e321c6a"
+checksum = "b31cb07c45929f05f0bf4291e9419eafc3721698d0bd44cf1458c5e717fcda25"
 dependencies = [
  "drop_bomb",
  "ra-ap-rustc_lexer",
@@ -585,9 +585,9 @@ dependencies = [
 
 [[package]]
 name = "ra_ap_stdx"
-version = "0.0.326"
+version = "0.0.327"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25c8727153693ae88b056a79e3c0c03debb4d81ff59f107072227c74fdbbfaa7"
+checksum = "15ee73aa1f477af0ef1e08e9eb4d76fccd6a6a5dd5aa4b7c59187d3d69ea8ea3"
 dependencies = [
  "crossbeam-channel",
  "crossbeam-utils",
@@ -601,9 +601,9 @@ dependencies = [
 
 [[package]]
 name = "ra_ap_syntax"
-version = "0.0.326"
+version = "0.0.327"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "715665a87b9b9ab9affb4ee85fe46bbd1828c51a52839d72fd96f23c8b50cf9f"
+checksum = "b717c09c6b18e9dc64068778b9c2e48c6aecfaad608be8fe2371cae90066fa25"
 dependencies = [
  "either",
  "itertools",
@@ -656,9 +656,9 @@ checksum = "dc897dd8d9e8bd1ed8cdad82b5966c3e0ecae09fb1907d58efaa013543185d0a"
 
 [[package]]
 name = "rowan"
-version = "0.15.17"
+version = "0.15.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d4f1e4a001f863f41ea8d0e6a0c34b356d5b733db50dadab3efef640bafb779b"
+checksum = "62f509095fc8cc0c8c8564016771d458079c11a8d857e65861f045145c0d3208"
 dependencies = [
  "countme",
  "hashbrown 0.14.5",
@@ -938,9 +938,9 @@ dependencies = [
 
 [[package]]
 name = "toml_edit"
-version = "0.25.10+spec-1.1.0"
+version = "0.25.11+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a82418ca169e235e6c399a84e395ab6debeb3bc90edc959bf0f48647c6a32d1b"
+checksum = "0b59c4d22ed448339746c59b905d24568fcbb3ab65a500494f7b8c3e97739f2b"
 dependencies = [
  "indexmap",
  "toml_datetime 1.1.1+spec-1.1.0",
