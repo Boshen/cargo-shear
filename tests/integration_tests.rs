@@ -2303,6 +2303,43 @@ fn test_enabled_without_tests_workspace_fix() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// In a workspace, `ignore-test-warnings = true` in package config suppresses test/doctest warnings for that package only.
+#[test]
+fn test_enabled_without_tests_workspace_ignored() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _temp_dir) =
+        CargoShearRunner::new("test_enabled_without_tests_workspace_ignored").run()?;
+    assert_eq!(exit_code, ExitCode::SUCCESS);
+    // `without_tests` warnings suppressed; `with_tests` still warns about missing doc tests
+    insta::assert_snapshot!(output, @r#"
+    shear/doctest_enabled_without_doctests
+
+      ⚠ `doctest = true` on lib target `with_tests` but source contains no doc tests
+      help: set `doctest = false` to avoid running doc tests for this target
+
+    shear/summary
+
+      ⚠ 1 warning
+
+    Advice:
+      ☞ run with `--fix` to fix 1 issue
+    "#);
+    Ok(())
+}
+
+// In a workspace, `ignore-test-warnings = true` in workspace config suppresses test/doctest warnings for all packages.
+#[test]
+fn test_enabled_without_tests_workspace_ignored_workspace() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _temp_dir) =
+        CargoShearRunner::new("test_enabled_without_tests_workspace_ignored_workspace").run()?;
+    assert_eq!(exit_code, ExitCode::SUCCESS);
+    insta::assert_snapshot!(output, @r#"
+    shear/summary
+
+      ✓ no issues found
+    "#);
+    Ok(())
+}
+
 // JSON output format should produce valid JSON with structured diagnostic data.
 #[test]
 fn json_output_format() -> Result<(), Box<dyn Error>> {

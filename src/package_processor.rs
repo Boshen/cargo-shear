@@ -442,6 +442,8 @@ impl PackageProcessor {
 
         // Analyze test/doctest mismatches
         let is_workspace = ctx.workspace.packages.len() > 1;
+        let ignore_test_warnings = ctx.manifest.package.metadata.cargo_shear.ignore_test_warnings
+            || ctx.workspace.manifest.workspace.metadata.cargo_shear.ignore_test_warnings;
         for info in &used_imports.target_test_info {
             #[expect(clippy::wildcard_enum_match_arm, reason = "Only lib-like targets reach here")]
             let kind_str = match &info.target_kind {
@@ -460,7 +462,7 @@ impl PackageProcessor {
                 });
             }
 
-            if is_workspace && info.test_enabled && !info.has_tests {
+            if is_workspace && info.test_enabled && !info.has_tests && !ignore_test_warnings {
                 result.test_enabled_without_tests.push(TestEnabledWithoutTests {
                     target_name: info.target_name.clone(),
                     target_kind: kind_str.to_owned(),
@@ -473,7 +475,7 @@ impl PackageProcessor {
                     .push(DoctestDisabledWithDoctests { target_name: info.target_name.clone() });
             }
 
-            if is_workspace && info.doctest_enabled && !info.has_doctests {
+            if is_workspace && info.doctest_enabled && !info.has_doctests && !ignore_test_warnings {
                 result
                     .doctest_enabled_without_doctests
                     .push(DoctestEnabledWithoutDoctests { target_name: info.target_name.clone() });
