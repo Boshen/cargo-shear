@@ -16,7 +16,7 @@ use ra_ap_syntax::{
     AstNode, AstToken, Edition, NodeOrToken, SourceFile, SyntaxKind, SyntaxNode, SyntaxToken,
     ast::{
         Attr, Comment, CommentShape, ExternCrate, HasAttrs, HasModuleItem, HasName, MacroCall,
-        MacroRules, Module, Path, String as AstString, TokenTree, Use, UseTree,
+        MacroRules, Meta, Module, Path, String as AstString, TokenTree, Use, UseTree,
     },
 };
 use rustc_hash::FxHashSet;
@@ -268,16 +268,12 @@ impl SourceParser {
 
     fn visit_attribute(&mut self, node: &SyntaxNode) {
         let Some(attr) = Attr::cast(node.clone()) else { return };
+        let Some(meta) = attr.meta() else { return };
 
-        // Detect #[test] and #[cfg(test)]
-        if let Some(path) = attr.path() {
-            let path_str = path.to_string();
-            if path_str == "test" {
-                self.result.has_tests = true;
-            } else if (path_str == "cfg" || path_str == "cfg_attr")
-                && let Some(token_tree) = attr.token_tree()
-            {
-                let has_test_token = token_tree
+        // Detect #[test] and #[cfg(test)] / #[cfg_attr(test, ...)]
+        match &meta {
+            Meta::CfgMeta(_) | Meta::CfgAttrMeta(_) => {
+                let has_test_token = meta
                     .syntax()
                     .descendants_with_tokens()
                     .filter_map(NodeOrToken::into_token)
@@ -286,13 +282,19 @@ impl SourceParser {
                     self.result.has_tests = true;
                 }
             }
+            _ if meta.path().is_some_and(|path| path.to_string() == "test") => {
+                self.result.has_tests = true;
+            }
+            _ => {}
         }
 
-        if let Some(token_tree) = attr.token_tree() {
+        if let Meta::TokenTreeMeta(tt_meta) = &meta
+            && let Some(token_tree) = tt_meta.token_tree()
+        {
             self.collect_token_tree(&token_tree);
 
             // Special casing for known attributes
-            if attr.path().is_some_and(|path| path.to_string() == "serde") {
+            if tt_meta.path().is_some_and(|path| path.to_string() == "serde") {
                 self.collect_serde_attribute(&token_tree);
             }
         }
@@ -568,7 +570,8 @@ impl SourceParser {
         // Add default paths unless there's an unconditional #[path = "..."]
         // (cfg_attr paths are conditional, so we still need defaults for those)
         let has_path_attr = module.attrs().any(|attr| {
-            attr.path().is_some_and(|path| path.to_string() == "path") && attr.expr().is_some()
+            let Some(Meta::KeyValueMeta(meta)) = attr.meta() else { return false };
+            meta.path().is_some_and(|path| path.to_string() == "path") && meta.expr().is_some()
         });
 
         if !has_path_attr {
