@@ -40,7 +40,7 @@ jobs:
           cargo fmt --all -- --check
           cargo run .
 
-      - uses: crate-ci/typos@bbaefadf97b0ec5fdc942684b647f1a6ab250274 # v1.46.0
+      - uses: crate-ci/typos@5374cbf686e897b15713110e233094e2874de7ef # v1.46.1
         if: matrix.os == 'ubuntu-latest'
         with:
           files: .
