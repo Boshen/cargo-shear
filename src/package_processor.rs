@@ -175,7 +175,7 @@ pub struct PackageProcessor {
     expand_macros: bool,
 
     /// Whether to emit test/doctest flag mismatch diagnostics.
-    check_test_flags: bool,
+    check_test_targets: bool,
 }
 
 /// Result of processing a package.
@@ -259,8 +259,8 @@ pub struct WorkspaceAnalysis {
 
 impl PackageProcessor {
     /// Create a new package processor.
-    pub const fn new(expand_macros: bool, check_test_flags: bool) -> Self {
-        Self { expand_macros, check_test_flags }
+    pub const fn new(expand_macros: bool, check_test_targets: bool) -> Self {
+        Self { expand_macros, check_test_targets }
     }
 
     /// Process a package to find package level issues.
@@ -444,7 +444,7 @@ impl PackageProcessor {
             .collect();
 
         // Analyze test/doctest mismatches
-        if self.check_test_flags {
+        if self.check_test_targets {
             let is_workspace = ctx.workspace.packages.len() > 1;
             for info in &used_imports.target_test_info {
                 #[expect(
