@@ -1,4 +1,4 @@
-//! Package analysis for `cargo-shear`.
+//! Per-package import collection and source-file inventory.
 
 use std::{
     env,
@@ -17,45 +17,46 @@ use crate::{
     source_parser::ParsedSource,
 };
 
-/// Per-target test/doctest presence info.
+/// Configured `test`/`doctest` flags for one lib-like target alongside what its source actually contains.
 #[derive(Debug)]
 pub struct TargetTestInfo {
-    /// Target name.
+    /// Cargo target name.
     pub target_name: String,
-    /// Target kind (e.g., lib, bin).
+    /// Target kind from `cargo_metadata` (lib, rlib, proc-macro, ...).
     pub target_kind: TargetKind,
-    /// Whether `test = true` in `Cargo.toml` (from `cargo_metadata`).
+    /// `test = true` in `Cargo.toml` (or absent, since `true` is the default).
     pub test_enabled: bool,
-    /// Whether `doctest = true` in `Cargo.toml` (from `cargo_metadata`).
+    /// `doctest = true` in `Cargo.toml` (or absent, since `true` is the default).
     pub doctest_enabled: bool,
-    /// Whether any source file has `#[test]` or `#[cfg(test)]`.
+    /// At least one source file in this target has `#[test]` or `#[cfg(test)]`.
     pub has_tests: bool,
-    /// Whether any source file has doc tests (lib targets only).
+    /// At least one source file has executable doc tests (Rust code blocks, non-`ignore`).
     pub has_doctests: bool,
 }
 
-/// Result of analyzing a package.
+/// Everything `PackageAnalyzer` accumulates for one package: imports bucketed by target
+/// kind, plus the file-level findings used for unlinked/empty diagnostics.
 #[derive(Debug, Default)]
 pub struct AnalysisResult {
-    /// Imports used in normal targets (lib, bin, ...).
+    /// Imports observed in normal targets (lib, bin, ...).
     pub normal: FxHashSet<String>,
 
-    /// Imports used in dev targets (test, bench, example).
+    /// Imports observed in dev targets (test, bench, example).
     pub dev: FxHashSet<String>,
 
-    /// Imports used in build scripts.
+    /// Imports observed in build scripts.
     pub build: FxHashSet<String>,
 
-    /// Mapping of imports to any relevant features.
+    /// Imports referenced from `[features]` entries, with the feature entries that name them.
     pub features: FxHashMap<String, Vec<FeatureRef>>,
 
-    /// Files that aren't reachable from any entry point.
+    /// Source files not reachable from any entry point (lib.rs, main.rs, ...).
     pub unlinked_files: FxHashSet<PathBuf>,
 
-    /// Files that are empty (no items, only whitespace/comments).
+    /// Reachable source files that contain no items (only whitespace/comments).
     pub empty_files: FxHashSet<PathBuf>,
 
-    /// Per-target test/doctest presence info.
+    /// One entry per lib-like target: configured `test`/`doctest` flags vs. observed contents.
     pub target_test_info: Vec<TargetTestInfo>,
 }
 
@@ -70,19 +71,21 @@ impl AnalysisResult {
     }
 }
 
-/// Analyzes a package to find unused dependencies and unlinked files.
+/// Walks a package's targets and source files to populate an [`AnalysisResult`].
 ///
-/// The analyzer can operate in two modes:
-/// - Normal: Parses source files directly (faster but may miss macro-generated code)
-/// - Expand: Uses cargo expand to expand macros first (slower but more accurate)
+/// Two modes:
+/// - Normal: parses source files directly. Fast, but misses imports introduced
+///   by macro expansion.
+/// - Expand: shells out to `cargo expand` first, then parses the expanded output.
+///   More accurate but significantly slower and nightly-only.
 pub struct PackageAnalyzer<'a> {
-    /// Whether to use `cargo expand` to expand macros
+    /// Use `cargo expand` to expand macros before parsing.
     expand_macros: bool,
 
-    /// Package context.
+    /// Workspace + package context this analyzer reads from.
     ctx: &'a PackageContext<'a>,
 
-    /// Accumulated analysis result.
+    /// Findings collected so far; returned from [`analyze`](Self::analyze).
     result: AnalysisResult,
 }
 
@@ -149,9 +152,9 @@ impl<'a> PackageAnalyzer<'a> {
                 DepTable::Build => self.result.build.extend(imports),
             }
 
-            // Collect test/doctest info for lib-like targets only.
-            // Bin targets share source directories with lib targets,
-            // so we can't reliably determine their test presence.
+            // Lib-like targets only. Bin targets share source directories with the
+            // package's lib target, so we can't tell which file's tests "belong" to
+            // which target — recording for both would produce duplicate diagnostics.
             let is_lib = matches!(
                 kind,
                 TargetKind::Lib
@@ -267,7 +270,8 @@ impl<'a> PackageAnalyzer<'a> {
             .files
             .keys()
             .filter(|path| {
-                // Skip files belonging to other packages when analyzing workspace root
+                // The workspace root walks every Rust file in the tree, including those
+                // owned by member packages. Don't double-count their files here.
                 if self.ctx.directory == self.ctx.workspace.root
                     && self.ctx.workspace.packages.len() > 1
                 {
@@ -296,12 +300,13 @@ impl<'a> PackageAnalyzer<'a> {
             .iter()
             .filter(|(path, parsed)| {
                 let path_bytes = path.as_os_str().as_encoded_bytes();
-                // Only check files in this package that are linked (not entry points)
+                // Restrict to files inside this package that are reachable from a module tree.
                 path_bytes.starts_with(dir_bytes)
                     && matches!(path_bytes.get(dir_bytes.len()), Some(&(b'/' | b'\\')))
                     && self.ctx.workspace.linked.contains(*path)
                     && parsed.is_empty
-                    // Exclude entry points like lib.rs, main.rs, build.rs
+                    // Entry points (lib.rs, main.rs, build.rs, ...) are routinely
+                    // empty when scaffolding a new target — never warn on those.
                     && !self.ctx.targets.iter().any(|target| &target.src_path == *path)
             })
             .map(|(path, _)| path.clone())

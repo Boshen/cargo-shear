@@ -7,7 +7,8 @@ use owo_colors::OwoColorize;
 
 use crate::diagnostics::ShearAnalysis;
 
-/// A renderer using `miette`.
+/// Default human-readable renderer: writes `miette` graphical reports for each
+/// diagnostic, then a styled summary line and any advice snippets.
 pub struct MietteRenderer<W> {
     writer: W,
     color: bool,
@@ -25,14 +26,14 @@ impl<W: io::Write> MietteRenderer<W> {
         let handler = GraphicalReportHandler::new_themed(theme.clone());
         let mut output = String::new();
 
-        // Print all diagnostics
+        // Render each diagnostic into a reusable buffer.
         for diagnostic in &analysis.findings {
             output.clear();
             handler.render_report(&mut output, diagnostic).map_err(io::Error::other)?;
             writeln!(self.writer, "{output}")?;
         }
 
-        // Print summary
+        // Summary header (styled like `miette`'s "advice" diagnostics).
         writeln!(self.writer, "{}", "shear/summary".style(theme.styles.advice))?;
         writeln!(self.writer)?;
 
@@ -53,7 +54,7 @@ impl<W: io::Write> MietteRenderer<W> {
             return Ok(());
         }
 
-        // Print stats
+        // Per-severity counters that make up the summary block.
         if analysis.errors > 0 {
             writeln!(
                 self.writer,

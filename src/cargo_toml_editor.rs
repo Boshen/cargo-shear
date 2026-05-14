@@ -1,13 +1,12 @@
-//! Cargo.toml editing module for cargo-shear.
+//! Format-preserving rewrites for `Cargo.toml`. Built on `toml_edit`, so
+//! comments, ordering, and styling survive the edit.
 //!
-//! This module provides functionality to safely remove unused dependencies
-//! from Cargo.toml files while preserving formatting and other content.
-//! It handles:
-//!
-//! - Package-level dependencies (`[dependencies]`, `[dev-dependencies]`, etc.)
-//! - Workspace dependencies (`[workspace.dependencies]`)
-//! - Target specific dependencies (`[target.'cfg(...)'.dependencies]`)
-//! - Feature flags that reference removed dependencies
+//! Covers:
+//! - Package-level dependencies (`[dependencies]`, `[dev-dependencies]`, ...).
+//! - Workspace dependencies (`[workspace.dependencies]`).
+//! - Target-specific dependencies (`[target.'cfg(...)'.{table}]`).
+//! - `[features]` entries that name removed dependencies.
+//! - Lib-target flags `test` / `doctest`.
 
 use rustc_hash::FxHashSet;
 use toml_edit::{DocumentMut, Item, Table, value};
@@ -19,15 +18,15 @@ use crate::{
 
 const DEP_TABLE_KEYS: &[&str] = &["dependencies", "dev-dependencies", "build-dependencies"];
 
-/// Provides methods to edit Cargo.toml files and remove unused dependencies.
+/// Stateless namespace for the `Cargo.toml` rewrite operations.
 pub struct CargoTomlEditor;
 
 impl CargoTomlEditor {
-    /// Remove unused dependencies from a manifest.
+    /// Remove each entry in `unused_deps` from its declared location, scrub any
+    /// dangling references from `[features]`, and prune now-empty parent tables.
     ///
-    /// # Returns
-    ///
-    /// The number of dependencies removed.
+    /// Returns the number of dependencies actually removed (entries that no
+    /// longer exist in the manifest are silently skipped).
     pub fn remove_dependencies(
         manifest: &mut DocumentMut,
         unused_deps: &[UnusedDependency],
@@ -64,11 +63,11 @@ impl CargoTomlEditor {
         count
     }
 
-    /// Remove unused workspace dependencies from a manifest.
+    /// Remove each entry in `unused_deps` from `[workspace.dependencies]`,
+    /// scrub any dangling references from `[features]`, and prune the
+    /// containing tables if they end up empty.
     ///
-    /// # Returns
-    ///
-    /// The number of dependencies removed.
+    /// Returns the number of dependencies actually removed.
     pub fn remove_workspace_deps(
         manifest: &mut DocumentMut,
         unused_deps: &[UnusedWorkspaceDependency],
@@ -95,11 +94,10 @@ impl CargoTomlEditor {
         count
     }
 
-    /// Move dependencies from `[dependencies]` to `[dev-dependencies]`.
+    /// Move each entry from its current (non-dev) table to the matching
+    /// `dev-dependencies` table, preserving its `cfg` target if any.
     ///
-    /// # Returns
-    ///
-    /// The number of dependencies moved.
+    /// Returns the number of dependencies actually moved.
     pub fn move_to_dev_dependencies(
         manifest: &mut DocumentMut,
         misplaced_deps: &[MisplacedDependency],
@@ -122,7 +120,7 @@ impl CargoTomlEditor {
     }
 
     fn move_root_to_dev(manifest: &mut DocumentMut, dep: &MisplacedDependency) -> bool {
-        // Remove from `[dependencies]`
+        // Lift the entry out of `[dependencies]` so we can re-insert it elsewhere.
         let Some(value) = manifest
             .get_mut("dependencies")
             .and_then(|item| item.as_table_mut())
@@ -131,12 +129,14 @@ impl CargoTomlEditor {
             return false;
         };
 
-        // Ensure `[dev-dependencies]` exists
+        // Create `[dev-dependencies]` on the fly if the manifest doesn't have one yet.
         if !manifest.contains_key("dev-dependencies") {
             manifest["dev-dependencies"] = Item::Table(Table::new());
         }
 
-        // Insert into `[dev-dependencies]`
+        // Re-insert into `[dev-dependencies]`. The earlier `contains_key` check
+        // means this should always succeed, but stay defensive in case of a
+        // non-table value at that key.
         if let Some(dev_deps) =
             manifest.get_mut("dev-dependencies").and_then(|item| item.as_table_mut())
         {
@@ -161,7 +161,7 @@ impl CargoTomlEditor {
             return false;
         };
 
-        // Remove from `[target.'cfg(...)'.dependencies]`
+        // Lift the entry out of `[target.'cfg(...)'.dependencies]`.
         let Some(value) = target
             .get_mut("dependencies")
             .and_then(|item| item.as_table_mut())
@@ -170,12 +170,12 @@ impl CargoTomlEditor {
             return false;
         };
 
-        // Ensure `[target.'cfg(...)'.dev-dependencies]` exists
+        // Create the dev-dependencies table for this `cfg` if it isn't there yet.
         if !target.contains_key("dev-dependencies") {
             target["dev-dependencies"] = Item::Table(Table::new());
         }
 
-        // Insert into `[target.'cfg(...)'.dev-dependencies]`
+        // Re-insert into `[target.'cfg(...)'.dev-dependencies]`.
         if let Some(dev_deps) =
             target.get_mut("dev-dependencies").and_then(|item| item.as_table_mut())
         {
@@ -186,7 +186,8 @@ impl CargoTomlEditor {
         false
     }
 
-    /// Remove a flag (e.g. `test` or `doctest`) from the `[lib]` section.
+    /// Remove a single flag (e.g. `test` or `doctest`) from the `[lib]` table.
+    /// Returns `true` if the key was present and removed.
     pub fn remove_lib_flag(manifest: &mut DocumentMut, flag: &str) -> bool {
         let removed = manifest
             .get_mut("lib")
@@ -199,7 +200,8 @@ impl CargoTomlEditor {
         removed
     }
 
-    /// Set a flag to `false` in the `[lib]` section, creating the section if needed.
+    /// Force a flag to `false` under `[lib]`, creating the table if it's absent.
+    /// Used to suppress Cargo's defaults of `test = true` / `doctest = true`.
     pub fn set_lib_flag_false(manifest: &mut DocumentMut, flag: &str) {
         if !manifest.contains_key("lib") {
             manifest["lib"] = Item::Table(Table::new());
@@ -210,14 +212,15 @@ impl CargoTomlEditor {
     }
 
     fn cleanup_empty_tables(manifest: &mut DocumentMut) {
-        // Clean root-level dep tables
+        // Top-level `[dependencies]` / `[dev-dependencies]` / `[build-dependencies]`.
         for key in DEP_TABLE_KEYS {
             if manifest.get(key).and_then(|i| i.as_table()).is_some_and(Table::is_empty) {
                 manifest.remove(key);
             }
         }
 
-        // Clean target-specific tables (bottom-up)
+        // Target-specific tables, walked bottom-up: snapshot the keys first so
+        // we can mutate `targets` without invalidating an in-flight iterator.
         if let Some(targets) = manifest.get_mut("target").and_then(|i| i.as_table_mut()) {
             let target_keys: Vec<String> = targets.iter().map(|(k, _)| k.to_owned()).collect();
             for cfg_key in &target_keys {
@@ -241,14 +244,15 @@ impl CargoTomlEditor {
             manifest.remove("target");
         }
 
-        // Clean workspace.dependencies
+        // `[workspace.dependencies]` — only drop the `dependencies` sub-key, not
+        // the whole `[workspace]` table (it carries members, resolver, etc.).
         if let Some(workspace) = manifest.get_mut("workspace").and_then(|i| i.as_table_mut())
             && workspace.get("dependencies").and_then(|i| i.as_table()).is_some_and(Table::is_empty)
         {
             workspace.remove("dependencies");
         }
 
-        // Clean [lib]
+        // `[lib]` — drop the table when it has no remaining keys.
         if manifest.get("lib").and_then(|i| i.as_table()).is_some_and(Table::is_empty) {
             manifest.remove("lib");
         }

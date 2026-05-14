@@ -71,10 +71,12 @@ const VERSION: &str = match option_env!("SHEAR_VERSION") {
 
 /// Command-line options for cargo-shear.
 ///
-/// This struct is parsed from command-line arguments using `bpaf`.
-/// The "batteries" feature strips the binary name using `bpaf::cargo_helper`.
+/// Parsed from `argv` by `bpaf`. The doc comments on individual fields below
+/// become the `--help` text Cargo's users see, so keep them user-facing.
 ///
-/// See <https://docs.rs/bpaf/latest/bpaf/batteries/fn.cargo_helper.html>
+/// The "batteries" `cargo_helper` strips the leading `shear` argument when
+/// invoked as `cargo shear`, so this struct sees the same shape either way.
+/// See <https://docs.rs/bpaf/latest/bpaf/batteries/fn.cargo_helper.html>.
 #[derive(Debug, Clone, Bpaf)]
 #[bpaf(options("shear"), version(VERSION))]
 pub struct CargoShearOptions {
@@ -144,7 +146,8 @@ pub struct CargoShearOptions {
 }
 
 impl CargoShearOptions {
-    /// Create new options with the given path.
+    /// Construct an options value with every flag at its default and the project
+    /// rooted at `path`. Programmatic callers usually layer `with_*` builders on top.
     #[must_use]
     pub fn new(path: PathBuf) -> Self {
         Self {
@@ -163,87 +166,86 @@ impl CargoShearOptions {
         }
     }
 
-    /// Enable fix mode.
+    /// Enable `--fix`: rewrite manifests to apply fixable diagnostics.
     #[must_use]
     pub const fn with_fix(mut self) -> Self {
         self.fix = true;
         self
     }
 
-    /// Enable macro expansion.
+    /// Enable `--expand`: run `cargo expand` first to surface macro-generated imports.
     #[must_use]
     pub const fn with_expand(mut self) -> Self {
         self.expand = true;
         self
     }
 
-    /// Enable test/doctest flag mismatch checks.
+    /// Enable `--check-test-targets`: emit `test`/`doctest` flag mismatch diagnostics.
     #[must_use]
     pub const fn with_check_test_targets(mut self) -> Self {
         self.check_test_targets = true;
         self
     }
 
-    /// Enable deny warnings mode.
+    /// Enable `--deny-warnings`: turn any warning into a non-zero exit.
     #[must_use]
     pub const fn with_deny_warnings(mut self) -> Self {
         self.deny_warnings = true;
         self
     }
 
-    /// Enable locked mode.
+    /// Enable `--locked`: forwarded to `cargo metadata`.
     #[must_use]
     pub const fn with_locked(mut self) -> Self {
         self.locked = true;
         self
     }
 
-    /// Enable offline mode.
+    /// Enable `--offline`: forwarded to `cargo metadata`.
     #[must_use]
     pub const fn with_offline(mut self) -> Self {
         self.offline = true;
         self
     }
 
-    /// Enable frozen mode.
+    /// Enable `--frozen`: forwarded to `cargo metadata` (implies `--locked` and `--offline`).
     #[must_use]
     pub const fn with_frozen(mut self) -> Self {
         self.frozen = true;
         self
     }
 
-    /// Set packages to check.
+    /// Restrict the run to these workspace members. Empty means "all".
     #[must_use]
     pub fn with_packages(mut self, packages: Vec<String>) -> Self {
         self.package = packages;
         self
     }
 
-    /// Set packages to exclude.
+    /// Exclude these workspace members from the run.
     #[must_use]
     pub fn with_excludes(mut self, excludes: Vec<String>) -> Self {
         self.exclude = excludes;
         self
     }
 
-    /// Set output format.
+    /// Pick the renderer used for diagnostics.
     #[must_use]
     pub const fn with_format(mut self, format: OutputFormat) -> Self {
         self.format = format;
         self
     }
 
-    /// Set color mode.
+    /// Override automatic color detection.
     #[must_use]
     pub const fn with_color(mut self, color: ColorMode) -> Self {
         self.color = color;
         self
     }
 
-    /// Resolve auto-detected options based on environment.
-    ///
-    /// This should be called after CLI parsing to resolve `Auto` format
-    /// to a concrete format based on environment (e.g., GitHub Actions).
+    /// Apply environment-based resolution to defaults — currently only
+    /// substitutes the GitHub renderer for `format = Auto` under CI.
+    /// Call this after CLI parsing but before passing options to `CargoShear`.
     #[must_use]
     pub fn resolve(mut self) -> Self {
         self.format = self.format.resolve();
@@ -255,30 +257,23 @@ pub(crate) fn default_path() -> Result<PathBuf> {
     Ok(env::current_dir()?)
 }
 
-/// The main struct that orchestrates the dependency analysis and removal process.
-///
-/// `CargoShear` coordinates the analysis of a Rust project to find unused dependencies
-/// and optionally removes them from Cargo.toml files.
+/// Top-level entry point: orchestrates `cargo metadata`, runs each package
+/// through [`PackageProcessor`], optionally rewrites manifests, and renders
+/// the aggregated [`ShearAnalysis`] to `writer`.
 pub struct CargoShear<W> {
-    /// Writer for output
+    /// Sink for rendered diagnostics (typically `std::io::stdout()`).
     writer: W,
 
-    /// Configuration options for the analysis
+    /// Caller-supplied configuration; immutable once `run` starts.
     options: CargoShearOptions,
 
-    /// Result of the analysis.
+    /// Diagnostics accumulated as each package is processed.
     analysis: ShearAnalysis,
 }
 
 impl<W: Write> CargoShear<W> {
-    /// Create a new `CargoShear` instance with the given options.
-    ///
-    /// # Arguments
-    ///
-    /// * `writer` - Output writer
-    /// * `options` - Configuration options for the analysis
-    ///
-    /// # Example
+    /// Build a runner that will write diagnostics to `writer` using the
+    /// settings in `options`.
     ///
     /// ```
     /// use cargo_shear::{CargoShear, CargoShearOptions};
@@ -293,20 +288,14 @@ impl<W: Write> CargoShear<W> {
         Self { writer, options, analysis }
     }
 
-    /// Run the dependency analysis and optionally fix unused dependencies.
+    /// Execute the full pipeline: analyze every selected package, optionally
+    /// apply `--fix` rewrites, render the report, and translate the result
+    /// into a process exit code.
     ///
-    /// This method performs the complete analysis workflow:
-    /// 1. Analyzes all packages in the workspace
-    /// 2. Detects unused dependencies
-    /// 3. Optionally removes them if `--fix` is enabled
-    /// 4. Reports results to the writer
-    ///
-    /// # Returns
-    ///
-    /// Returns an `ExitCode` indicating success or failure:
-    /// - `0` if no issues were found or all issues were fixed
-    /// - `1` if unused dependencies were found (without `--fix`)
-    /// - `2` if an error occurred
+    /// Returns:
+    /// - `0` if no issues were found, or every found issue was fixed by `--fix`.
+    /// - `1` if issues were found and not all of them were fixed.
+    /// - `2` if a fatal error occurred (cargo failure, IO error, ...).
     #[must_use]
     pub fn run(mut self) -> ExitCode {
         match self.shear() {
@@ -328,14 +317,15 @@ impl<W: Write> CargoShear<W> {
         }
     }
 
-    /// Determine the exit code based on analysis results and options.
+    /// Translate accumulated counts into the documented `0`/`1`/`2` exit code.
+    /// `2` is reserved for fatal errors and is set in [`run`](Self::run).
     const fn determine_exit_code(&self) -> ExitCode {
-        // If we fixed issues successfully and there are no remaining errors, exit with success
+        // `--fix` succeeded if at least one repair landed and nothing else errored.
         if self.options.fix && self.analysis.fixed > 0 && self.analysis.errors == 0 {
             return ExitCode::SUCCESS;
         }
 
-        // Exit with failure if there are errors or warnings (when --deny-warnings is set)
+        // Errors always fail; warnings only fail when `--deny-warnings` was passed.
         let has_errors = self.analysis.errors > 0;
         let has_warnings = self.options.deny_warnings && self.analysis.warnings > 0;
 
@@ -369,12 +359,12 @@ impl<W: Write> CargoShear<W> {
         let packages: Vec<_> = packages
             .into_iter()
             .filter(|package| {
-                // Skip if package is in the exclude list
+                // `--exclude` always wins over `--package` (matches Cargo's behaviour).
                 if self.options.exclude.iter().any(|name| name == package.name.as_str()) {
                     return false;
                 }
 
-                // Skip if specific packages are specified and this package is not in the list
+                // When `--package` is given, restrict the run to its allowlist.
                 if !self.options.package.is_empty()
                     && !self.options.package.iter().any(|name| name == package.name.as_str())
                 {
@@ -387,7 +377,9 @@ impl<W: Write> CargoShear<W> {
 
         let total = packages.len();
         let results: Vec<_> = if self.options.expand {
-            // Process packages sequentially, since expand needs to invoke `cargo build`.
+            // `cargo expand` shells out to `cargo build` per package, which holds
+            // a global build lock — running these in parallel would just serialize
+            // on the lock and lose the progress output. Stay sequential.
             packages
                 .iter()
                 .enumerate()
@@ -420,7 +412,9 @@ impl<W: Write> CargoShear<W> {
             self.analysis.add_package_result(&ctx, &result, fixed);
         }
 
-        // Only analyze workspace if we're targeting all packages.
+        // Workspace-level diagnostics need a complete view of which workspace
+        // dependencies are actually used; skip them when the user has narrowed
+        // the run with `--package`/`--exclude` and the picture is incomplete.
         if self.options.package.is_empty() && self.options.exclude.is_empty() {
             let workspace_result = PackageProcessor::process_workspace(
                 &workspace_ctx,

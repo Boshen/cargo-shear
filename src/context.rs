@@ -1,4 +1,7 @@
-//! Context types for processing workspaces and packages.
+//! Pre-computed inputs shared across the per-package and workspace passes:
+//! the parsed source files, which ones are reachable from a module tree, and
+//! the dependency-name maps the analyzer needs to translate import names back
+//! to package names.
 
 use std::path::{Path, PathBuf};
 
@@ -10,28 +13,28 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{manifest::Manifest, source_parser::ParsedSource, util::read_to_string};
 
-/// Context for processing a workspace.
+/// Workspace-wide state computed once and shared by every per-package run.
 pub struct WorkspaceContext {
-    /// Workspace root path.
+    /// Absolute path to the workspace root directory.
     pub root: PathBuf,
 
-    /// Absolute path to `Cargo.toml`.
+    /// Absolute path to the workspace `Cargo.toml`.
     pub manifest_path: PathBuf,
-    /// Raw manifest content.
+    /// Raw `Cargo.toml` content (kept so renderers can show source spans).
     pub manifest_content: String,
-    /// The workspace manifest.
+    /// Parsed workspace manifest.
     pub manifest: Manifest,
 
-    /// Package path to source file map.
+    /// All Rust source files in the workspace, keyed by absolute path.
     pub files: FxHashMap<PathBuf, ParsedSource>,
-    /// All linked files.
+    /// Files reachable from at least one entry point's module tree.
     pub linked: FxHashSet<PathBuf>,
-    /// Paths of all packages in the workspace.
+    /// Absolute directories of every workspace member.
     pub packages: FxHashSet<PathBuf>,
 
-    /// Mapping from dependency key to package name.
+    /// `[workspace.dependencies]` key → underlying package name (handles `package = "..."`).
     pub dep_to_pkg: FxHashMap<String, String>,
-    /// Ignored dependency keys.
+    /// `[workspace.metadata.cargo-shear].ignored` entries (raw dependency keys).
     pub ignored_deps: FxHashSet<String>,
 }
 
@@ -57,7 +60,8 @@ impl WorkspaceContext {
             .map(|target| target.src_path.as_std_path().to_path_buf())
             .collect();
 
-        // Get parent dirs of entry points
+        // Walk from each entry point's parent directory, not from the package root —
+        // some packages put `lib.rs` outside `src/`, and we want to follow the actual layout.
         let parents: FxHashSet<PathBuf> =
             entry_points.iter().filter_map(|path| path.parent()).map(Path::to_path_buf).collect();
 
@@ -66,7 +70,10 @@ impl WorkspaceContext {
             .flat_map_iter(|parent| {
                 let packages = packages.clone();
                 WalkBuilder::new(&parent)
-                    // Skip nested packages (but allow package roots)
+                    // Don't descend into directories that are themselves Cargo packages
+                    // (each member is walked from its own entry points). We *do* still
+                    // visit the package root itself — packages.contains(path) lets the
+                    // current member's root through.
                     .filter_entry(move |entry| {
                         if let Some(file_type) = entry.file_type()
                             && file_type.is_dir()
@@ -81,7 +88,7 @@ impl WorkspaceContext {
                     })
                     .build()
                     .filter_map(Result::ok)
-                    // Only process Rust files
+                    // Only `.rs` files; the walker also yields directories and other extensions.
                     .filter(|entry| {
                         entry.file_type().is_some_and(|file_type| file_type.is_file())
                             && entry.path().extension().is_some_and(|extension| extension == "rs")
@@ -90,7 +97,8 @@ impl WorkspaceContext {
             })
             .collect();
 
-        // Include single file entry points (build.rs)
+        // `WalkBuilder` was started from parent directories, which misses single-file
+        // entry points whose parent isn't itself walked (e.g. `build.rs` at the package root).
         let paths: FxHashSet<PathBuf> =
             entry_points.iter().filter(|path| path.is_file()).cloned().chain(walked).collect();
 
@@ -106,7 +114,8 @@ impl WorkspaceContext {
             .into_iter()
             .chain(files.values().flat_map(|parsed| {
                 parsed.paths.iter().filter_map(|path| {
-                    // Only canonicalize if needed.
+                    // Only canonicalize when the path is relative (`./`, `../`); otherwise
+                    // skip the syscall — the file may not exist on disk yet.
                     if path.as_os_str().as_encoded_bytes().starts_with(b".") {
                         path.canonicalize().ok()
                     } else {
@@ -150,31 +159,31 @@ impl WorkspaceContext {
     }
 }
 
-/// Context for processing a package.
+/// Per-package state derived from `cargo metadata` plus the package's own manifest.
 pub struct PackageContext<'a> {
-    /// The workspace context.
+    /// Shared workspace state (source file map, ignored deps, ...).
     pub workspace: &'a WorkspaceContext,
 
-    /// Package name.
+    /// Package name as declared in `[package].name`.
     pub name: String,
-    /// Package directory.
+    /// Absolute path to the package's directory (parent of its `Cargo.toml`).
     pub directory: PathBuf,
 
-    /// Absolute path to `Cargo.toml`.
+    /// Absolute path to the package's `Cargo.toml`.
     pub manifest_path: PathBuf,
-    /// Raw manifest content.
+    /// Raw manifest content (kept so renderers can show source spans).
     pub manifest_content: String,
-    /// Package manifest.
+    /// Parsed package manifest.
     pub manifest: Manifest,
-    /// Cargo targets for this package.
+    /// Cargo targets declared by this package (lib, bin, test, ...).
     pub targets: Vec<Target>,
 
-    /// Mapping from import name to package name.
+    /// Import name → package name (e.g. `tokio_util` → `tokio-util`).
     pub import_to_pkg: FxHashMap<String, String>,
-    /// Mapping from package name to import name.
+    /// Package name → import name (inverse of `import_to_pkg`).
     pub pkg_to_import: FxHashMap<String, String>,
 
-    /// Ignored import names.
+    /// Union of package- and workspace-level `ignored = [...]` entries, normalised to import names.
     pub ignored_imports: FxHashSet<String>,
 }
 

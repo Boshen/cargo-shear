@@ -42,191 +42,192 @@ use crate::{
     package_analyzer::PackageAnalyzer,
 };
 
-/// An unused dependency.
+/// A dependency declared in a manifest but never imported by any target.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct UnusedDependency {
-    /// The dependency key.
+    /// Dependency key as it appears in `[dependencies]` (or a target/dev/build variant).
     pub name: Spanned<String>,
 
-    /// Where the dependency is in the manifest.
+    /// Which dependency table the entry lives in.
     pub location: DepLocation,
 }
 
-/// An unused optional dependency.
+/// An `optional = true` dependency that no enabled feature pulls in.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct UnusedOptionalDependency {
-    /// The dependency key.
+    /// Dependency key as it appears in `[dependencies]`.
     pub name: Spanned<String>,
 
-    /// Features referencing this dependency.
+    /// Feature entries that reference this dependency, for the diagnostic to render.
     pub features: Vec<FeatureRef>,
 }
 
-/// An unused dependency only referenced in features.
+/// A dependency only referenced from `[features]`, never imported in code.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct UnusedFeatureDependency {
-    /// The dependency key.
+    /// Dependency key as it appears in `[dependencies]`.
     pub name: Spanned<String>,
 
-    /// Features referencing this dependency.
+    /// Feature entries that reference this dependency.
     pub features: Vec<FeatureRef>,
 }
 
-/// An unused workspace dependency.
+/// A `[workspace.dependencies]` entry not used by any workspace member.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct UnusedWorkspaceDependency {
-    /// The dependency key.
+    /// Dependency key as it appears in `[workspace.dependencies]`.
     pub name: Spanned<String>,
 }
 
-/// A misplaced dependency.
+/// A dependency in `[dependencies]` whose only usages are dev/test/bench/example targets.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MisplacedDependency {
-    /// The dependency key.
+    /// Dependency key as it appears in the (non-dev) dependency table.
     pub name: Spanned<String>,
 
-    /// Where the dependency is in the manifest.
+    /// Which dependency table the entry currently lives in.
     pub location: DepLocation,
 }
 
-/// A misplaced optional dependency.
+/// A misplaced dependency that is also marked `optional`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MisplacedOptionalDependency {
-    /// The dependency key.
+    /// Dependency key as it appears in the (non-dev) dependency table.
     pub name: Spanned<String>,
 
-    /// Where the dependency is in the manifest.
+    /// Which dependency table the entry currently lives in.
     pub location: DepLocation,
 
-    /// Features referencing this dependency.
+    /// Feature entries that reference this dependency.
     pub features: Vec<FeatureRef>,
 }
 
-/// An unlinked file.
+/// A source file that exists on disk but isn't reachable from any module tree.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct UnlinkedFile {
-    /// The relative path to the unlinked file.
+    /// Path relative to the package directory.
     pub path: PathBuf,
 }
 
-/// An unknown ignore.
+/// An entry in `ignored = [...]` that doesn't match any declared dependency.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct UnknownIgnore {
-    /// The dependency key.
+    /// The unrecognised dependency key.
     pub name: Spanned<String>,
 }
 
-/// A redundant ignore.
+/// An ignore entry whose dependency is actually used, so the ignore is suppressing nothing.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RedundantIgnore {
-    /// The dependency key.
+    /// The dependency key listed in `ignored = [...]`.
     pub name: Spanned<String>,
 }
 
-/// A redundant ignored path pattern.
+/// A glob in `ignored-paths` that matches no unlinked or empty file.
 #[derive(Debug, Clone)]
 pub struct RedundantIgnorePath {
-    /// The redundant glob pattern.
+    /// The glob pattern as written in the manifest.
     pub pattern: Spanned<String>,
 }
 
-/// An empty file.
+/// A linked source file that contains no items (only whitespace/comments).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EmptyFile {
-    /// The relative path to the empty file.
+    /// Path relative to the package directory.
     pub path: PathBuf,
 }
 
-/// A target with `test = false` that contains tests.
+/// A target with `test = false` whose source still contains tests.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TestDisabledWithTests {
-    /// The target name.
+    /// Cargo target name.
     pub target_name: String,
-    /// The target kind.
+    /// Target kind label (e.g. `lib`, `rlib`, `proc-macro`).
     pub target_kind: String,
 }
 
-/// A target with `test = true` (default) that contains no tests.
+/// A target with `test = true` (the default) whose source contains no tests.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TestEnabledWithoutTests {
-    /// The target name.
+    /// Cargo target name.
     pub target_name: String,
-    /// The target kind.
+    /// Target kind label (e.g. `lib`, `rlib`, `proc-macro`).
     pub target_kind: String,
 }
 
-/// A lib target with `doctest = false` that contains doc tests.
+/// A lib target with `doctest = false` whose source still contains doc tests.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DoctestDisabledWithDoctests {
-    /// The target name.
+    /// Cargo target name.
     pub target_name: String,
 }
 
-/// A lib target with `doctest = true` (default) that contains no doc tests.
+/// A lib target with `doctest = true` (the default) whose source contains no doc tests.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DoctestEnabledWithoutDoctests {
-    /// The target name.
+    /// Cargo target name.
     pub target_name: String,
 }
 
-/// Processes packages to identify issues.
+/// Drives per-package and workspace-level analysis.
 pub struct PackageProcessor {
-    /// Whether to use `cargo expand` to expand macros
+    /// Run `cargo expand` first so macro-generated imports become visible (slower; nightly only).
     expand_macros: bool,
 
     /// Whether to emit test/doctest flag mismatch diagnostics.
     check_test_targets: bool,
 }
 
-/// Result of processing a package.
+/// Diagnostics collected for a single package.
 #[derive(Default)]
 pub struct PackageAnalysis {
-    /// Used package names.
+    /// Package names whose imports were detected in this package's source.
     pub used_packages: FxHashSet<String>,
 
-    /// Unused dependencies.
+    /// Non-optional dependencies that no target imports.
     pub unused_dependencies: Vec<UnusedDependency>,
 
-    /// Unused optional dependencies.
+    /// `optional = true` dependencies not enabled by any imported feature.
     pub unused_optional_dependencies: Vec<UnusedOptionalDependency>,
 
-    /// Unused dependencies only referenced in features.
+    /// Dependencies only referenced from `[features]`, never imported in code.
     pub unused_feature_dependencies: Vec<UnusedFeatureDependency>,
 
-    /// Misplaced dependencies.
+    /// Dependencies that should move from `[dependencies]` to `[dev-dependencies]`.
     pub misplaced_dependencies: Vec<MisplacedDependency>,
 
-    /// Misplaced optional dependencies.
+    /// Misplaced dependencies that are also marked `optional`.
     pub misplaced_optional_dependencies: Vec<MisplacedOptionalDependency>,
 
-    /// Unlinked files.
+    /// Source files not reachable from any entry point.
     pub unlinked_files: Vec<UnlinkedFile>,
 
-    /// Empty files.
+    /// Source files reachable from an entry point but containing no items.
     pub empty_files: Vec<EmptyFile>,
 
-    /// Unknown ignores.
+    /// `ignored = [...]` entries that don't match any declared dependency.
     pub unknown_ignores: Vec<UnknownIgnore>,
 
-    /// Redundant ignores.
+    /// `ignored = [...]` entries whose dependency is actually in use.
     pub redundant_ignores: Vec<RedundantIgnore>,
 
-    /// Redundant ignored path patterns.
+    /// `ignored-paths` globs that matched neither an unlinked nor an empty file.
     pub redundant_ignore_paths: Vec<RedundantIgnorePath>,
 
-    /// Workspace ignored path patterns that were used by this package.
+    /// Workspace-level `ignored-paths` globs that matched a file in this package
+    /// (used to suppress workspace-level "redundant ignore path" diagnostics).
     pub used_workspace_ignore_paths: FxHashSet<String>,
 
-    /// Targets with `test = false` that contain tests.
+    /// Lib-like targets with `test = false` whose source still contains tests.
     pub test_disabled_with_tests: Vec<TestDisabledWithTests>,
 
-    /// Targets with `test = true` but no tests.
+    /// Lib-like targets that default to `test = true` but contain no tests.
     pub test_enabled_without_tests: Vec<TestEnabledWithoutTests>,
 
-    /// Lib targets with `doctest = false` that contain doc tests.
+    /// Lib targets with `doctest = false` whose source still contains doc tests.
     pub doctest_disabled_with_doctests: Vec<DoctestDisabledWithDoctests>,
 
-    /// Lib targets with `doctest = true` but no doc tests.
+    /// Lib targets that default to `doctest = true` but contain no doc tests.
     pub doctest_enabled_without_doctests: Vec<DoctestEnabledWithoutDoctests>,
 }
 
@@ -241,29 +242,28 @@ impl PackageAnalysis {
     }
 }
 
-/// Result of processing a workspace.
+/// Diagnostics collected for the workspace root manifest itself.
 #[derive(Default)]
 pub struct WorkspaceAnalysis {
-    /// Unused workspace dependencies.
+    /// `[workspace.dependencies]` entries no member depends on.
     pub unused_dependencies: Vec<UnusedWorkspaceDependency>,
 
-    /// Unknown workspace ignores.
+    /// `ignored = [...]` entries that don't match any workspace dependency key.
     pub unknown_ignores: Vec<UnknownIgnore>,
 
-    /// Redundant workspace ignores.
+    /// `ignored = [...]` entries whose dependency is actually used.
     pub redundant_ignores: Vec<RedundantIgnore>,
 
-    /// Redundant workspace ignored path patterns.
+    /// `ignored-paths` globs that didn't match any file in any package.
     pub redundant_ignore_paths: Vec<RedundantIgnorePath>,
 }
 
 impl PackageProcessor {
-    /// Create a new package processor.
     pub const fn new(expand_macros: bool, check_test_targets: bool) -> Self {
         Self { expand_macros, check_test_targets }
     }
 
-    /// Process a package to find package level issues.
+    /// Run all per-package diagnostics.
     #[expect(
         clippy::too_many_lines,
         reason = "Complex function handling multiple diagnostic types"
@@ -277,7 +277,7 @@ impl PackageProcessor {
 
         let mut result = PackageAnalysis::default();
 
-        // Collect used packages
+        // For each declared dep, mark the underlying package "used" if any of its imports show up.
         for (import, pkg) in &ctx.import_to_pkg {
             if code_imports.contains(import.as_str()) || feature_imports.contains(import.as_str()) {
                 result.used_packages.insert(pkg.clone());
@@ -287,7 +287,7 @@ impl PackageProcessor {
         // An ignore is only redundant if removing it wouldn't trigger any other diagnostics.
         let mut suppressed_ignores: FxHashSet<String> = FxHashSet::default();
 
-        // Analyze dependencies
+        // Walk every dependency entry in this manifest and bucket it into a diagnostic (or none).
         for (dep, dependency, location) in ctx.manifest.all_dependencies() {
             let pkg = dependency.get_ref().package().unwrap_or_else(|| dep.get_ref().as_str());
             let import = ctx
@@ -360,7 +360,7 @@ impl PackageProcessor {
             }
         }
 
-        // Analyze ignores
+        // Classify each `ignored = [...]` entry as unknown, redundant, or load-bearing.
         let package_ignored_deps = &ctx.manifest.package.metadata.cargo_shear.ignored;
         for ignored_dep in package_ignored_deps {
             let ignored_import = ignored_dep.get_ref().replace('-', "_");
@@ -375,14 +375,13 @@ impl PackageProcessor {
             }
         }
 
-        // Analyze unlinked files
+        // Rebase paths to be package-relative so they match patterns in `ignored-paths`.
         let unlinked_files: FxHashSet<PathBuf> = used_imports
             .unlinked_files
             .iter()
             .filter_map(|path| path.strip_prefix(&ctx.directory).ok().map(Path::to_path_buf))
             .collect();
 
-        // Analyze empty files
         let empty_files: FxHashSet<PathBuf> = used_imports
             .empty_files
             .iter()
@@ -392,10 +391,12 @@ impl PackageProcessor {
         let pkg_ignored_paths = &ctx.manifest.package.metadata.cargo_shear.ignored_paths;
         let ws_ignored_paths = &ctx.workspace.manifest.workspace.metadata.cargo_shear.ignored_paths;
 
-        // Ensure ignores are relative to package directory
+        // Workspace-level globs are written relative to the workspace root, so we'll
+        // need to rejoin package-relative paths under this prefix when matching them.
         let root = ctx.directory.strip_prefix(&ctx.workspace.root).unwrap_or(&ctx.directory);
 
-        // An ignore pattern is redundant only if it doesn't match any unlinked OR empty files
+        // A package-level pattern is redundant only if it matches neither an unlinked
+        // nor an empty file in this package.
         result.redundant_ignore_paths = pkg_ignored_paths
             .iter()
             .filter(|glob| {
@@ -405,7 +406,9 @@ impl PackageProcessor {
             .map(|glob| RedundantIgnorePath { pattern: glob.pattern.clone() })
             .collect();
 
-        // Track which workspace ignored path patterns were used
+        // Record workspace-level globs that actually matched something here, so the
+        // workspace pass can distinguish them from globs that match nothing anywhere.
+        // A pattern that's already covered by a package-level glob doesn't count.
         for glob in ws_ignored_paths {
             let matches_unlinked = unlinked_files.iter().any(|path| {
                 let not_matched_by_pkg =
@@ -424,6 +427,7 @@ impl PackageProcessor {
             }
         }
 
+        // Drop files matched by either a package- or workspace-level ignore.
         result.unlinked_files = unlinked_files
             .into_iter()
             .filter(|path| {
@@ -433,7 +437,6 @@ impl PackageProcessor {
             .map(|path| UnlinkedFile { path })
             .collect();
 
-        // Process empty files
         result.empty_files = empty_files
             .into_iter()
             .filter(|path| {
@@ -443,7 +446,7 @@ impl PackageProcessor {
             .map(|path| EmptyFile { path })
             .collect();
 
-        // Analyze test/doctest mismatches
+        // Compare each lib-like target's `test`/`doctest` flag against actual source contents.
         if self.check_test_targets {
             let is_workspace = ctx.workspace.packages.len() > 1;
             for info in &used_imports.target_test_info {
@@ -491,7 +494,8 @@ impl PackageProcessor {
         Ok(result)
     }
 
-    /// Process workspace to find workspace level issues.
+    /// Run diagnostics that only make sense at the workspace level (i.e. require
+    /// the per-package "used" sets to already be merged together).
     pub fn process_workspace(
         ctx: &WorkspaceContext,
         workspace_used_pkgs: &FxHashSet<String>,
@@ -499,7 +503,7 @@ impl PackageProcessor {
     ) -> WorkspaceAnalysis {
         let mut result = WorkspaceAnalysis::default();
 
-        // Warn on unused workspace ignored paths
+        // Workspace-level glob is redundant if no package reported it as load-bearing.
         let ws_ignored_paths = &ctx.manifest.workspace.metadata.cargo_shear.ignored_paths;
         for glob in ws_ignored_paths {
             if !used_workspace_ignore_paths.contains(glob.pattern.get_ref()) {
