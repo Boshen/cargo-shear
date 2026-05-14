@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.0](https://github.com/Boshen/cargo-shear/compare/v1.11.2...v1.12.0) - 2026-05-14
+
+### <!-- 0 -->🚀 Features
+- gate test/doctest flag mismatch detection behind --check-test-targets ([#494](https://github.com/Boshen/cargo-shear/pull/494)) (by @Boshen)
+
+### <!-- 3 -->📚 Documentation
+- consolidate agent docs and rewrite source comments ([#495](https://github.com/Boshen/cargo-shear/pull/495)) (by @Boshen)
+
+### Contributors
+
+* @Boshen
+* @renovate[bot]
+
 ## [1.11.2](https://github.com/Boshen/cargo-shear/compare/v1.11.1...v1.11.2) - 2026-03-15
 
 ### <!-- 1 -->🐛 Bug Fixes
