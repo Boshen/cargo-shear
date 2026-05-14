@@ -2167,10 +2167,27 @@ fn unused_workspace_libname_fix() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// Without `--check-test-flags`, test/doctest mismatches are silent.
+#[test]
+fn test_disabled_with_tests_default_off() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("test_disabled_with_tests").run()?;
+    assert_eq!(exit_code, ExitCode::SUCCESS);
+
+    insta::assert_snapshot!(output, @r"
+    shear/summary
+
+      ✓ no issues found
+    ");
+
+    Ok(())
+}
+
 // `test = false` but source has `#[test]` / `#[cfg(test)]`.
 #[test]
 fn test_disabled_with_tests() -> Result<(), Box<dyn Error>> {
-    let (exit_code, output, _temp_dir) = CargoShearRunner::new("test_disabled_with_tests").run()?;
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("test_disabled_with_tests")
+        .options(CargoShearOptions::with_check_test_flags)
+        .run()?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
     insta::assert_snapshot!(output, @r#"
@@ -2193,8 +2210,9 @@ fn test_disabled_with_tests() -> Result<(), Box<dyn Error>> {
 // `doctest = false` but source has doc tests.
 #[test]
 fn doctest_disabled_with_doctests() -> Result<(), Box<dyn Error>> {
-    let (exit_code, output, _temp_dir) =
-        CargoShearRunner::new("doctest_disabled_with_doctests").run()?;
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("doctest_disabled_with_doctests")
+        .options(CargoShearOptions::with_check_test_flags)
+        .run()?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
     insta::assert_snapshot!(output, @r#"
@@ -2218,6 +2236,7 @@ fn doctest_disabled_with_doctests() -> Result<(), Box<dyn Error>> {
 #[test]
 fn test_disabled_with_tests_fix() -> Result<(), Box<dyn Error>> {
     let (exit_code, _output, temp_dir) = CargoShearRunner::new("test_disabled_with_tests")
+        .options(CargoShearOptions::with_check_test_flags)
         .options(CargoShearOptions::with_fix)
         .run()?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
@@ -2234,6 +2253,7 @@ fn test_disabled_with_tests_fix() -> Result<(), Box<dyn Error>> {
 #[test]
 fn doctest_disabled_with_doctests_fix() -> Result<(), Box<dyn Error>> {
     let (exit_code, _output, temp_dir) = CargoShearRunner::new("doctest_disabled_with_doctests")
+        .options(CargoShearOptions::with_check_test_flags)
         .options(CargoShearOptions::with_fix)
         .run()?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
@@ -2250,7 +2270,9 @@ fn doctest_disabled_with_doctests_fix() -> Result<(), Box<dyn Error>> {
 #[test]
 fn test_enabled_without_tests_workspace() -> Result<(), Box<dyn Error>> {
     let (exit_code, output, _temp_dir) =
-        CargoShearRunner::new("test_enabled_without_tests_workspace").run()?;
+        CargoShearRunner::new("test_enabled_without_tests_workspace")
+            .options(CargoShearOptions::with_check_test_flags)
+            .run()?;
     assert_eq!(exit_code, ExitCode::SUCCESS);
 
     insta::assert_snapshot!(output, @r#"
@@ -2285,6 +2307,7 @@ fn test_enabled_without_tests_workspace() -> Result<(), Box<dyn Error>> {
 fn test_enabled_without_tests_workspace_fix() -> Result<(), Box<dyn Error>> {
     let (exit_code, _output, temp_dir) =
         CargoShearRunner::new("test_enabled_without_tests_workspace")
+            .options(CargoShearOptions::with_check_test_flags)
             .options(CargoShearOptions::with_fix)
             .run()?;
     assert_eq!(exit_code, ExitCode::SUCCESS);

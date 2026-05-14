@@ -92,6 +92,15 @@ pub struct CargoShearOptions {
     #[bpaf(long)]
     expand: bool,
 
+    /// Detect mismatches between `test`/`doctest` target settings and source content.
+    ///
+    /// When set, cargo-shear warns when `[lib] test = false` is paired with source
+    /// that contains tests (or `doctest = false` with source that contains doc tests),
+    /// and — within a workspace — when `test`/`doctest` are left at their default of
+    /// `true` for lib targets that contain none.
+    #[bpaf(long("check-test-flags"))]
+    check_test_flags: bool,
+
     /// Treat warnings as errors.
     ///
     /// When set, warnings will cause cargo-shear to exit with a failure code.
@@ -142,6 +151,7 @@ impl CargoShearOptions {
             path,
             fix: false,
             expand: false,
+            check_test_flags: false,
             deny_warnings: false,
             locked: false,
             offline: false,
@@ -164,6 +174,13 @@ impl CargoShearOptions {
     #[must_use]
     pub const fn with_expand(mut self) -> Self {
         self.expand = true;
+        self
+    }
+
+    /// Enable test/doctest flag mismatch checks.
+    #[must_use]
+    pub const fn with_check_test_flags(mut self) -> Self {
+        self.check_test_flags = true;
         self
     }
 
@@ -345,7 +362,7 @@ impl<W: Write> CargoShear<W> {
             .exec()
             .map_err(|e| anyhow::anyhow!("Metadata error: {e}"))?;
 
-        let processor = PackageProcessor::new(self.options.expand);
+        let processor = PackageProcessor::new(self.options.expand, self.options.check_test_flags);
         let workspace_ctx = WorkspaceContext::new(&metadata)?;
 
         let packages = metadata.workspace_packages();
