@@ -173,6 +173,9 @@ pub struct DoctestEnabledWithoutDoctests {
 pub struct PackageProcessor {
     /// Whether to use `cargo expand` to expand macros
     expand_macros: bool,
+
+    /// Whether to emit test/doctest flag mismatch diagnostics.
+    check_test_targets: bool,
 }
 
 /// Result of processing a package.
@@ -256,8 +259,8 @@ pub struct WorkspaceAnalysis {
 
 impl PackageProcessor {
     /// Create a new package processor.
-    pub const fn new(expand_macros: bool) -> Self {
-        Self { expand_macros }
+    pub const fn new(expand_macros: bool, check_test_targets: bool) -> Self {
+        Self { expand_macros, check_test_targets }
     }
 
     /// Process a package to find package level issues.
@@ -441,42 +444,47 @@ impl PackageProcessor {
             .collect();
 
         // Analyze test/doctest mismatches
-        let is_workspace = ctx.workspace.packages.len() > 1;
-        for info in &used_imports.target_test_info {
-            #[expect(clippy::wildcard_enum_match_arm, reason = "Only lib-like targets reach here")]
-            let kind_str = match &info.target_kind {
-                TargetKind::CDyLib => "cdylib",
-                TargetKind::DyLib => "dylib",
-                TargetKind::ProcMacro => "proc-macro",
-                TargetKind::RLib => "rlib",
-                TargetKind::StaticLib => "staticlib",
-                _ => "lib",
-            };
+        if self.check_test_targets {
+            let is_workspace = ctx.workspace.packages.len() > 1;
+            for info in &used_imports.target_test_info {
+                #[expect(
+                    clippy::wildcard_enum_match_arm,
+                    reason = "Only lib-like targets reach here"
+                )]
+                let kind_str = match &info.target_kind {
+                    TargetKind::CDyLib => "cdylib",
+                    TargetKind::DyLib => "dylib",
+                    TargetKind::ProcMacro => "proc-macro",
+                    TargetKind::RLib => "rlib",
+                    TargetKind::StaticLib => "staticlib",
+                    _ => "lib",
+                };
 
-            if !info.test_enabled && info.has_tests {
-                result.test_disabled_with_tests.push(TestDisabledWithTests {
-                    target_name: info.target_name.clone(),
-                    target_kind: kind_str.to_owned(),
-                });
-            }
+                if !info.test_enabled && info.has_tests {
+                    result.test_disabled_with_tests.push(TestDisabledWithTests {
+                        target_name: info.target_name.clone(),
+                        target_kind: kind_str.to_owned(),
+                    });
+                }
 
-            if is_workspace && info.test_enabled && !info.has_tests {
-                result.test_enabled_without_tests.push(TestEnabledWithoutTests {
-                    target_name: info.target_name.clone(),
-                    target_kind: kind_str.to_owned(),
-                });
-            }
+                if is_workspace && info.test_enabled && !info.has_tests {
+                    result.test_enabled_without_tests.push(TestEnabledWithoutTests {
+                        target_name: info.target_name.clone(),
+                        target_kind: kind_str.to_owned(),
+                    });
+                }
 
-            if !info.doctest_enabled && info.has_doctests {
-                result
-                    .doctest_disabled_with_doctests
-                    .push(DoctestDisabledWithDoctests { target_name: info.target_name.clone() });
-            }
+                if !info.doctest_enabled && info.has_doctests {
+                    result.doctest_disabled_with_doctests.push(DoctestDisabledWithDoctests {
+                        target_name: info.target_name.clone(),
+                    });
+                }
 
-            if is_workspace && info.doctest_enabled && !info.has_doctests {
-                result
-                    .doctest_enabled_without_doctests
-                    .push(DoctestEnabledWithoutDoctests { target_name: info.target_name.clone() });
+                if is_workspace && info.doctest_enabled && !info.has_doctests {
+                    result.doctest_enabled_without_doctests.push(DoctestEnabledWithoutDoctests {
+                        target_name: info.target_name.clone(),
+                    });
+                }
             }
         }
 

@@ -52,6 +52,14 @@ cargo shear --format=json
 
 This is particularly useful for CI/CD pipelines and custom tooling that need to programmatically process the results.
 
+Detect mismatches between `[lib]` target settings and source content:
+
+```bash
+cargo shear --check-test-targets
+```
+
+When set, cargo-shear warns when `test = false` is paired with source that contains tests (or `doctest = false` with source that contains doc tests), and — within a workspace — when `test` / `doctest` are left at their default of `true` for lib targets that contain none. Disabled by default; pair with `--fix` to automatically reconcile the flags.
+
 ## Limitations
 
 > [!IMPORTANT]
