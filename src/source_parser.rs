@@ -23,39 +23,41 @@ use rustc_hash::FxHashSet;
 
 use crate::util::read_to_string;
 
-/// Result of parsing a source file.
+/// Everything `SourceParser` extracts from one Rust source file.
 #[derive(Debug, Default)]
 pub struct ParsedSource {
-    /// Imports referenced in the source.
+    /// External-crate names this file imports (deduplicated, normalised to import form).
     pub imports: FxHashSet<String>,
 
-    /// Rust paths referenced by this source file.
+    /// Files referenced by `mod`/`include!`/`#[path = "..."]`, used to compute reachability.
     pub paths: FxHashSet<PathBuf>,
 
-    /// Whether this file is empty (no items, only whitespace/comments).
+    /// True when the file contains no items — only whitespace and/or comments.
     pub is_empty: bool,
 
-    /// Whether this file contains `#[test]` or `#[cfg(test)]`.
+    /// True when the file contains `#[test]` or `#[cfg(test)]` somewhere in its tree.
     pub has_tests: bool,
 
-    /// Whether this file contains doc tests that require compilation
-    /// (i.e., Rust code blocks in doc comments excluding `ignore` blocks).
+    /// True when the file contains executable doc tests (Rust code blocks in doc
+    /// comments, excluding ones tagged `ignore`).
     pub has_doctests: bool,
 }
 
 impl ParsedSource {
-    /// Parse a file.
+    /// Read `path` from disk and parse it. `is_entry_point` toggles entry-point
+    /// behaviour for `mod` resolution (see [`SourceParser::new`]).
     pub fn from_path(path: &StdPath, is_entry_point: bool) -> io::Result<Self> {
         let source = read_to_string(path)?;
         Ok(SourceParser::parse(&source, Some(path), is_entry_point))
     }
 
-    /// Parse source code.
+    /// Parse `source` directly. Treats `path` as an entry point — for
+    /// non-entry-point parsing in tests, use [`from_path_test`](Self::from_path_test).
     pub fn from_str(source: &str, path: &StdPath) -> Self {
         SourceParser::parse(source, Some(path), true)
     }
 
-    /// Parse source code with explicit entry point flag.
+    /// Test-only constructor that lets the caller choose `is_entry_point` explicitly.
     #[cfg(test)]
     pub fn from_path_test(source: &str, path: &StdPath, is_entry_point: bool) -> Self {
         SourceParser::parse(source, Some(path), is_entry_point)
@@ -65,15 +67,16 @@ impl ParsedSource {
 struct SourceParser {
     result: ParsedSource,
 
-    /// Parent directory.
-    /// Used for resolving `include!` declarations.
+    /// Directory containing the file being parsed; resolves `include!("...")`
+    /// arguments (always relative to the file).
     parent: Option<PathBuf>,
 
-    /// Module directory.
-    /// Used for resolving `mod` declarations.
+    /// Directory `mod foo;` declarations resolve against. Differs from `parent`
+    /// for non-entry-point files (see [`new`](Self::new)).
     module: Option<PathBuf>,
 
-    /// All doc comments, merged into one markdown string.
+    /// All doc-comment text concatenated as markdown, deferred and parsed in
+    /// `parse_markdown` once the syntax walk finishes.
     markdown: String,
 }
 
@@ -81,8 +84,10 @@ impl SourceParser {
     fn new(path: Option<&StdPath>, is_entry_point: bool) -> Self {
         let parent = path.and_then(|path| path.parent()).map(StdPath::to_path_buf);
 
-        // Entry points: modules resolve relative to parent directory.
-        // Regular files: modules resolve relative to sibling directory.
+        // For an entry point (lib.rs, main.rs, build.rs) `mod foo;` resolves to
+        // a sibling next to the file. For any other file `foo.rs`, `mod bar;`
+        // resolves into a sibling directory `foo/bar.rs` — except for the
+        // special case `mod.rs`, which behaves like an entry point.
         let module = path.and_then(|path| {
             let parent = path.parent()?;
 
@@ -105,7 +110,8 @@ impl SourceParser {
         let tree = SourceFile::parse(source, Edition::CURRENT);
         let tree = tree.tree();
 
-        // Check if file is empty (no items, only whitespace/comments)
+        // "Empty" = no top-level items; any whitespace/comments around an
+        // otherwise empty file shouldn't promote it to non-empty.
         parser.result.is_empty = tree.items().next().is_none();
 
         for element in tree.syntax().descendants_with_tokens() {
@@ -332,7 +338,9 @@ impl SourceParser {
         self.markdown.push('\n');
     }
 
-    /// Collect from a token tree.
+    /// Walk an arbitrary `TokenTree` (e.g. macro arguments) for paths and
+    /// imports. If the contents look like Rust (`use`/`extern`/`mod`), also
+    /// re-parse them so things like `lazy_static! { use foo; }` get visited.
     fn collect_token_tree(&mut self, token_tree: &TokenTree) {
         let tokens: Vec<_> = token_tree
             .syntax()
@@ -364,7 +372,9 @@ impl SourceParser {
         self.collect_path_imports(&tokens);
     }
 
-    /// Collect imports from a raw token stream
+    /// Scan a flat token stream for `::` operators and recover the leading
+    /// path segment as an import. Used inside macro bodies where there's no
+    /// AST to inspect.
     fn collect_path_imports(&mut self, tokens: &[SyntaxToken]) {
         for (index, token) in tokens.iter().enumerate() {
             // Look for `::` to find path expressions
@@ -579,7 +589,9 @@ impl SourceParser {
         }
     }
 
-    /// Extract `path = "..."`
+    /// Pull every `path = "..."` value out of an `#[...]` attribute. Multiple
+    /// hits per attribute are possible for `#[cfg_attr(..., path = "..." )]`
+    /// stacks. Returned in source order.
     fn extract_path_attr(attr: &Attr) -> Vec<String> {
         let mut paths = vec![];
 
@@ -610,15 +622,17 @@ impl SourceParser {
             return;
         }
 
-        // Skip reserved paths
+        // `crate`/`super`/`self`/`std` aren't external crates we'd ever want to track.
         if Self::is_known_import(import) {
             return;
         }
 
-        // Handle raw identifiers: r#async -> async
+        // Strip the raw-identifier prefix (`r#async` → `async`) so it matches the
+        // Cargo dependency name.
         let clean = import.strip_prefix("r#").unwrap_or(import);
 
-        // Must start with lowercase letter or underscore
+        // External crate names start with a lowercase letter or underscore by
+        // convention. Use this to filter out type names like `Foo::bar()`.
         if !clean.chars().next().is_some_and(|char| char.is_ascii_lowercase() || char == '_') {
             return;
         }
@@ -630,7 +644,9 @@ impl SourceParser {
         matches!(import, "crate" | "super" | "self" | "std")
     }
 
-    /// Add module paths: `foo.rs` and `foo/mod.rs`
+    /// Record both possible on-disk locations Cargo will look for a `mod foo;`
+    /// declaration: `foo.rs` and `foo/mod.rs`. The unlinked-files pass treats
+    /// any of those paths as "linked" if it actually exists.
     fn add_module_path(&mut self, name: &str, dir: Option<&StdPath>) {
         let Some(module) = &self.module else { return };
 
@@ -641,7 +657,8 @@ impl SourceParser {
         self.result.paths.insert(base.join(name).join("mod.rs"));
     }
 
-    /// Add explicit path from `#[path = "..."]`
+    /// Record the file pointed at by an explicit `#[path = "..."]` attribute.
+    /// Joined onto `dir` (or the file's parent if `dir` is `None`).
     fn add_explicit_path(&mut self, path: &str, dir: Option<&StdPath>) {
         let Some(parent) = &self.parent else { return };
 

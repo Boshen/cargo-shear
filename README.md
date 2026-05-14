@@ -5,7 +5,7 @@ Detect and fix issues in Rust projects:
 - **Unused dependencies** in `Cargo.toml`
 - **Misplaced dependencies** (dev/build dependencies in wrong sections)
 - **Unlinked source files** (Rust files not reachable from any module tree)
-  
+
 > [!NOTE]
 > This tool is considered feature-complete. We continue to welcome contributions that focus on bug fixes, dependency upgrades, and UI/UX improvements.
 
@@ -113,7 +113,7 @@ Otherwise please report the issue as a bug.
 > [!NOTE]
 > `cargo shear` uses static analysis and operates on source code without compiling.
 > This means it only needs to run once on a single platform (e.g., Linux) to detect issues across all target platforms, including those with platform-specific dependencies and conditional compilation.
-> 
+>
 > The only exception is when using the `--expand` flag, which invokes `cargo build` and may produce platform-specific results.
 
 ```yaml

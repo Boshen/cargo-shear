@@ -6,26 +6,27 @@ pub mod github;
 pub mod json;
 pub mod miette;
 
-/// Output format for cargo-shear.
+/// Picks the renderer used for diagnostics on stdout.
 #[derive(Debug, Clone, Copy, Default)]
 #[non_exhaustive]
 pub enum OutputFormat {
-    /// Auto format with colors and unicode.
+    /// Miette renderer with colors and unicode (resolves to `GitHub` under CI).
     #[default]
     Auto,
 
-    /// JSON format for machine-readable output.
+    /// Newline-terminated JSON for machine consumers.
     Json,
 
-    /// GitHub Actions workflow commands format.
+    /// `::error file=...` workflow commands consumed by GitHub Actions.
     GitHub,
 }
 
 impl OutputFormat {
-    /// Resolve `Auto` to a concrete format based on environment.
+    /// Resolve `Auto` against the environment.
     ///
-    /// When running in GitHub Actions (`GITHUB_ACTIONS` env var is set),
-    /// `Auto` resolves to `GitHub`. Otherwise it stays as `Auto` (miette).
+    /// When running in GitHub Actions (the `GITHUB_ACTIONS` env var is set),
+    /// `Auto` switches to `GitHub` so failures show up as PR annotations.
+    /// Otherwise it stays as `Auto` (the miette renderer).
     #[must_use]
     pub fn resolve(self) -> Self {
         if matches!(self, Self::Auto) && std::env::var_os("GITHUB_ACTIONS").is_some() {
@@ -49,23 +50,23 @@ impl FromStr for OutputFormat {
     }
 }
 
-/// Color mode for output.
+/// Whether the terminal renderer should emit ANSI colors.
 #[derive(Debug, Clone, Copy, Default)]
 #[non_exhaustive]
 pub enum ColorMode {
-    /// Automatically detect based on environment.
+    /// Honour `NO_COLOR` and only colourise when stdout is a TTY.
     #[default]
     Auto,
 
-    /// Always use colors.
+    /// Always emit colors, even when piped.
     Always,
 
-    /// Never use colors.
+    /// Strip all colors from the output.
     Never,
 }
 
 impl ColorMode {
-    /// Whether to show color.
+    /// Resolve to a concrete `bool` based on the mode plus the environment.
     #[must_use]
     pub fn enabled(self) -> bool {
         match self {

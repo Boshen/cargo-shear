@@ -20,41 +20,41 @@ use crate::{
 const KNOWN_CODEGEN_PKGS: &[&str] =
     &["automod", "prost-build", "tonic-build", "tonic-prost-build", "trybuild"];
 
-/// Result of processing all packages across the workspace.
+/// Aggregated diagnostics and counts across every package and the workspace root.
 #[derive(Debug)]
 pub struct ShearAnalysis {
-    /// Options used for this analysis.
+    /// Options the run was invoked with (kept for renderers and exit-code logic).
     pub options: CargoShearOptions,
 
-    /// All diagnostic findings.
+    /// Every diagnostic produced by this run, in the order they were emitted.
     pub findings: Vec<ShearDiagnostic>,
 
-    /// All package names used across the workspace.
+    /// Names of all packages whose imports were observed somewhere in the workspace.
     pub packages: FxHashSet<String>,
 
-    /// Count of errors.
+    /// Number of error-severity findings.
     pub errors: usize,
 
-    /// Count of warnings.
-    /// Anything that can't be automatically fixed is considered a warning.
+    /// Number of non-error findings.
+    /// Anything that `--fix` can't repair is classified as a warning.
     pub warnings: usize,
 
-    /// Count of fixable issues (unfixed).
+    /// Findings that `--fix` could repair but were left untouched (no `--fix` was passed).
     pub fixable: usize,
 
-    /// Count of fixed issues.
+    /// Number of findings actually rewritten on disk during this run.
     pub fixed: usize,
 
-    /// Whether to show the `--expand` advice.
+    /// Suggest `--expand` because a known codegen crate is in play.
     pub show_expand: bool,
 
-    /// Whether to show the `--fix` advice.
+    /// Suggest `--fix` because at least one fixable diagnostic is unfixed.
     pub show_fix: bool,
 
-    /// Whether to show the `ignored` advice.
+    /// Surface the `ignored = [...]` snippet in the rendered output.
     pub show_ignored: bool,
 
-    /// Whether to show the `ignored-paths` advice.
+    /// Surface the `ignored-paths = [...]` snippet in the rendered output.
     pub show_ignored_paths: bool,
 }
 
@@ -218,21 +218,21 @@ impl ShearAnalysis {
     }
 }
 
-/// Unified diagnostic type that contains all information needed for display.
+/// A renderer-ready diagnostic: payload plus everything needed to point at source.
 pub struct ShearDiagnostic {
-    /// The kind of diagnostic.
+    /// Which diagnostic this is, with the data needed to format its message.
     pub kind: DiagnosticKind,
 
-    /// Source content.
+    /// The source file (typically a `Cargo.toml`) that `span` points into.
     pub source: Option<NamedSource<String>>,
 
-    /// Primary span.
+    /// Primary span within `source` to highlight.
     pub span: Option<SourceSpan>,
 
-    /// Any related diagnostics.
+    /// Secondary diagnostics that get rendered alongside this one (e.g. feature locations).
     pub related: Vec<Box<dyn Diagnostic + Send + Sync>>,
 
-    /// Optional help text.
+    /// Suggested fix shown to the user.
     pub help: Option<String>,
 }
 
@@ -656,7 +656,8 @@ impl Diagnostic for ShearDiagnostic {
     }
 }
 
-/// A related diagnostic.
+/// A secondary diagnostic attached to a primary one — used to point at the
+/// `[features]` entries that reference an optional/feature-only dependency.
 #[derive(Debug)]
 struct ShearRelatedDiagnostic {
     message: String,

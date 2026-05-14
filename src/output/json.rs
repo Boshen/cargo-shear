@@ -5,7 +5,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::diagnostics::{ShearAnalysis, ShearDiagnostic};
 
-/// JSON renderer for cargo-shear output.
+/// Pretty-prints a [`ShearAnalysis`] as JSON. The schema is the public
+/// `--format=json` contract documented in the README.
 pub struct JsonRenderer<W> {
     writer: W,
 }
@@ -23,13 +24,13 @@ impl<W: io::Write> JsonRenderer<W> {
     }
 }
 
-/// Root JSON output structure.
+/// Top-level JSON object emitted by `--format=json`.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct JsonOutput {
-    /// Summary statistics.
+    /// Aggregate counts (errors, warnings, fixed).
     pub summary: Summary,
 
-    /// List of all findings.
+    /// One entry per diagnostic, in emission order.
     pub findings: Vec<Finding>,
 }
 
@@ -46,54 +47,54 @@ impl JsonOutput {
     }
 }
 
-/// Summary statistics.
+/// Aggregate counts shown in the JSON `summary` field.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Summary {
-    /// Number of errors found.
+    /// Error-severity findings.
     pub errors: usize,
 
-    /// Number of warnings found.
+    /// Non-error findings (warnings + advice).
     pub warnings: usize,
 
-    /// Number of issues fixed (only when --fix is used).
+    /// Findings actually rewritten on disk (only non-zero with `--fix`).
     pub fixed: usize,
 }
 
-/// A single finding/diagnostic.
+/// One JSON-rendered diagnostic.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Finding {
-    /// The diagnostic code (e.g., "`shear/unused_dependency`").
+    /// Stable diagnostic code (e.g. `shear/unused_dependency`).
     pub code: String,
 
-    /// The severity level: "error" or "warning".
+    /// One of `error`, `warning`, `advice`.
     pub severity: String,
 
     /// Human-readable message describing the issue.
     pub message: String,
 
-    /// Optional file path where the issue was found.
+    /// Path of the file the diagnostic points into (typically a `Cargo.toml`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub file: Option<String>,
 
-    /// Optional location within the file.
+    /// Byte range within `file` to highlight.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub location: Option<Location>,
 
-    /// Optional help/suggestion text.
+    /// Suggested fix text shown alongside the message.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub help: Option<String>,
 
-    /// Whether this issue can be automatically fixed with `--fix`.
+    /// Whether `--fix` could repair this diagnostic automatically.
     pub fixable: bool,
 }
 
-/// Location information within a file.
+/// Byte range inside a file, used by `Finding::location`.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Location {
     /// Byte offset from the start of the file.
     pub offset: usize,
 
-    /// Length in bytes.
+    /// Length in bytes (a zero-length span points just before `offset`).
     pub length: usize,
 }
 

@@ -87,9 +87,9 @@ impl fmt::Display for DepTable {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum DepLocation {
-    /// Top level table
+    /// Top-level: `[dependencies]`, `[dev-dependencies]`, `[build-dependencies]`.
     Root(DepTable),
-    /// Target specific table
+    /// Target-specific: `[target.'cfg(...)'.{table}]`.
     Target { cfg: String, table: DepTable },
 }
 
@@ -99,7 +99,9 @@ impl DepLocation {
         matches!(self, Self::Root(DepTable::Normal) | Self::Target { table: DepTable::Normal, .. })
     }
 
-    /// Move this location to a different table.
+    /// Returns this location with its `DepTable` swapped — preserves the `cfg`
+    /// expression for `Target`. Used when computing the destination of a
+    /// "misplaced dependency" fix.
     #[must_use]
     pub fn as_table(&self, new: DepTable) -> Self {
         match self {
@@ -210,7 +212,10 @@ pub struct Manifest {
 }
 
 impl Manifest {
-    /// Iterate over all dependencies, with included location.
+    /// Iterate every dependency declaration in this manifest, tagged with the
+    /// table it came from. Yields entries from `[dependencies]`,
+    /// `[dev-dependencies]`, `[build-dependencies]`, and each
+    /// `[target.'cfg(...)'.*]` variant in turn.
     pub fn all_dependencies(
         &self,
     ) -> impl Iterator<Item = (&Spanned<String>, &Spanned<Dependency>, DepLocation)> {
