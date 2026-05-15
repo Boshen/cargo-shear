@@ -1313,6 +1313,47 @@ fn expand_hint_deny_warnings() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// `rust_decimal` is a dev-dependency only referenced through macro expansion of
+// `dec!()` from `rust_decimal_macros` inside a `#[cfg(test)]` block. Without
+// `--expand`, the macro is not expanded and `rust_decimal` appears unused.
+// With `--expand --profile=test`, the macro expands to `::rust_decimal::Decimal::...`
+// and the dependency is correctly detected.
+#[test]
+fn expand_dev_macro_detection() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("expand_dev_macro").run()?;
+    assert_eq!(exit_code, ExitCode::FAILURE);
+
+    insta::assert_snapshot!(output, @r#"
+    shear/unused_dependency
+
+      × unused dependency `rust_decimal`
+       ╭─[Cargo.toml:7:1]
+     6 │ [dev-dependencies]
+     7 │ rust_decimal = "1"
+       · ──────┬─────
+       ·       ╰── not used in code
+     8 │ rust_decimal_macros = "1"
+       ╰────
+      help: remove this dependency
+
+    shear/summary
+
+      ✗ 1 error
+
+    Advice:
+      ☞ run with `--fix` to fix 1 issue
+      ☞ to suppress a dependency issue
+       ╭─[Cargo.toml:2:12]
+     1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
+     2 │ ignored = ["crate-name"]
+       ·            ──────┬─────
+       ·                  ╰── add a crate name here
+       ╰────
+    "#);
+
+    Ok(())
+}
+
 // `anyhow` is unused.
 #[test]
 fn unused_detection() -> Result<(), Box<dyn Error>> {

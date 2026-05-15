@@ -235,6 +235,44 @@ impl<'a> PackageAnalyzer<'a> {
                 DepTable::Dev => self.result.dev.extend(parsed.imports),
                 DepTable::Build => self.result.build.extend(parsed.imports),
             }
+
+            // For lib-like targets, also expand with --profile=test to capture
+            // macro-expanded imports inside `#[cfg(test)]` blocks. The check profile
+            // strips `#[cfg(test)]` before expansion, so dev-dependencies referenced
+            // only through macro expansion in inline tests are missed.
+            let is_lib = matches!(
+                kind,
+                TargetKind::Lib
+                    | TargetKind::CDyLib
+                    | TargetKind::DyLib
+                    | TargetKind::ProcMacro
+                    | TargetKind::RLib
+                    | TargetKind::StaticLib
+            );
+
+            if is_lib {
+                let cargo = env::var_os("CARGO").unwrap_or_else(|| OsString::from("cargo"));
+
+                let mut cmd = Command::new(cargo);
+                cmd.arg("rustc")
+                    .arg(&arg)
+                    .arg("--all-features")
+                    .arg("--profile=test")
+                    .arg("--")
+                    .arg("-Zunpretty=expanded")
+                    .current_dir(&self.ctx.directory)
+                    .stderr(Stdio::inherit());
+
+                let output = cmd.output()?;
+
+                if output.status.success() {
+                    let output = String::from_utf8(output.stdout)?;
+                    if !output.is_empty() {
+                        let parsed = ParsedSource::from_str(&output, target.src_path.as_ref());
+                        self.result.dev.extend(parsed.imports);
+                    }
+                }
+            }
         }
 
         Ok(())
