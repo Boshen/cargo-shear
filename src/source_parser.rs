@@ -294,15 +294,35 @@ impl SourceParser {
             _ => {}
         }
 
-        if let Meta::TokenTreeMeta(tt_meta) = &meta
-            && let Some(token_tree) = tt_meta.token_tree()
-        {
-            self.collect_token_tree(&token_tree);
+        self.collect_meta_imports(&meta);
+    }
 
-            // Special casing for known attributes
-            if tt_meta.path().is_some_and(|path| path.to_string() == "serde") {
-                self.collect_serde_attribute(&token_tree);
+    /// Walk a `Meta` for path imports inside its token tree, recursing through
+    /// `cfg_attr(cond, inner)` and `unsafe(inner)` wrappers so paths like
+    /// `#[cfg_attr(feature = "x", derive(serde::Serialize))]` are picked up.
+    fn collect_meta_imports(&mut self, meta: &Meta) {
+        match meta {
+            Meta::TokenTreeMeta(tt_meta) => {
+                if let Some(token_tree) = tt_meta.token_tree() {
+                    self.collect_token_tree(&token_tree);
+
+                    // Special casing for known attributes
+                    if tt_meta.path().is_some_and(|path| path.to_string() == "serde") {
+                        self.collect_serde_attribute(&token_tree);
+                    }
+                }
             }
+            Meta::CfgAttrMeta(cfg_attr_meta) => {
+                for inner in cfg_attr_meta.metas() {
+                    self.collect_meta_imports(&inner);
+                }
+            }
+            Meta::UnsafeMeta(unsafe_meta) => {
+                if let Some(inner) = unsafe_meta.meta() {
+                    self.collect_meta_imports(&inner);
+                }
+            }
+            _ => {}
         }
     }
 
@@ -1117,5 +1137,26 @@ mod tests {
         "#;
         let parsed = ParsedSource::from_str(source, Path::new("lib.rs"));
         assert!(parsed.has_tests);
+    }
+
+    #[test]
+    fn collects_imports_inside_cfg_attr() {
+        // Regression test for https://github.com/Boshen/cargo-shear/issues/497
+        let source = r#"
+            #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+            pub struct Repro;
+        "#;
+        let parsed = ParsedSource::from_str(source, Path::new("lib.rs"));
+        assert!(parsed.imports.contains("serde"));
+    }
+
+    #[test]
+    fn collects_imports_inside_nested_cfg_attr() {
+        let source = r#"
+            #[cfg_attr(feature = "a", cfg_attr(feature = "b", derive(serde::Serialize)))]
+            pub struct Repro;
+        "#;
+        let parsed = ParsedSource::from_str(source, Path::new("lib.rs"));
+        assert!(parsed.imports.contains("serde"));
     }
 }
