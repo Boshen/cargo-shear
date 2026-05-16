@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.1](https://github.com/Boshen/cargo-shear/compare/v1.12.0...v1.12.1) - 2026-05-16
+
+### <!-- 1 -->🐛 Bug Fixes
+- *(expand)* include dev-deps so cfg(test) macros expand correctly ([#502](https://github.com/Boshen/cargo-shear/pull/502)) (by @Boshen)
+- collect imports inside cfg_attr meta wrappers ([#501](https://github.com/Boshen/cargo-shear/pull/501)) (by @Boshen)
+
+### <!-- 9 -->💼 Other
+- Add line count diff thanks to cargo sheer from vinhnx/vtcode ([#496](https://github.com/Boshen/cargo-shear/pull/496)) (by @vinhnx)
+
+### Contributors
+
+* @Boshen
+* @vinhnx
+
 ## [1.12.0](https://github.com/Boshen/cargo-shear/compare/v1.11.2...v1.12.0) - 2026-05-14
 
 ### <!-- 0 -->🚀 Features
