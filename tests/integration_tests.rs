@@ -1313,6 +1313,45 @@ fn expand_hint_deny_warnings() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// Regression for https://github.com/Boshen/cargo-shear/issues/499 —
+// `--expand` used to strip `#[cfg(test)]` blocks before macro expansion, so
+// dev-deps referenced only through macros inside them (e.g. `dec!()` from
+// `rust_decimal_macros` expanding to `::rust_decimal::Decimal`) were flagged
+// unused. `-Zunpretty=expanded` is nightly-only; `RUSTC_BOOTSTRAP=1` lets
+// stable rustc accept it so the test works with the project's default
+// toolchain.
+#[test]
+fn expand_cfg_test_dev_dep_via_macro() -> Result<(), Box<dyn Error>> {
+    let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("expand_cfg_test");
+
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_cargo-shear"))
+        .arg("--color=never")
+        .arg("--expand")
+        .arg(&fixture_path)
+        .current_dir(&fixture_path)
+        .env("RUSTC_BOOTSTRAP", "1")
+        .env_remove("GITHUB_ACTIONS")
+        .output()?;
+
+    let stdout = String::from_utf8(output.stdout)?;
+    assert!(
+        output.status.success(),
+        "cargo-shear failed:\nstdout: {stdout}\nstderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    insta::assert_snapshot!(stdout, @r"
+    shear/summary
+
+      ✓ no issues found
+    ");
+
+    Ok(())
+}
+
 // `anyhow` is unused.
 #[test]
 fn unused_detection() -> Result<(), Box<dyn Error>> {
