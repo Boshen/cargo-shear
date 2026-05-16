@@ -188,12 +188,16 @@ impl<'a> PackageAnalyzer<'a> {
             };
 
             let name = &target.name;
-            let arg = match kind {
+            // `--profile=test` makes cargo include dev-dependencies and pass `--test` to
+            // rustc, so `#[cfg(test)]` blocks survive expansion and dev-deps used only
+            // through macros inside them are visible. `--test=` / `--bench=` already
+            // build in test mode, so they keep the cheaper `--profile=check`.
+            let (arg, profile) = match kind {
                 TargetKind::CustomBuild => continue,
-                TargetKind::Bin => format!("--bin={name}"),
-                TargetKind::Example => format!("--example={name}"),
-                TargetKind::Test => format!("--test={name}"),
-                TargetKind::Bench => format!("--bench={name}"),
+                TargetKind::Bin => (format!("--bin={name}"), "--profile=test"),
+                TargetKind::Example => (format!("--example={name}"), "--profile=test"),
+                TargetKind::Test => (format!("--test={name}"), "--profile=check"),
+                TargetKind::Bench => (format!("--bench={name}"), "--profile=check"),
                 TargetKind::CDyLib
                 | TargetKind::DyLib
                 | TargetKind::Lib
@@ -201,7 +205,7 @@ impl<'a> PackageAnalyzer<'a> {
                 | TargetKind::RLib
                 | TargetKind::StaticLib
                 | TargetKind::Unknown(_)
-                | _ => "--lib".to_owned(),
+                | _ => ("--lib".to_owned(), "--profile=test"),
             };
 
             let cargo = env::var_os("CARGO").unwrap_or_else(|| OsString::from("cargo"));
@@ -210,7 +214,7 @@ impl<'a> PackageAnalyzer<'a> {
             cmd.arg("rustc")
                 .arg(&arg)
                 .arg("--all-features")
-                .arg("--profile=check")
+                .arg(profile)
                 .arg("--")
                 .arg("-Zunpretty=expanded")
                 .current_dir(&self.ctx.directory)
