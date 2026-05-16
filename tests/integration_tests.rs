@@ -1317,9 +1317,9 @@ fn expand_hint_deny_warnings() -> Result<(), Box<dyn Error>> {
 // `--expand` used to strip `#[cfg(test)]` blocks before macro expansion, so
 // dev-deps referenced only through macros inside them (e.g. `dec!()` from
 // `rust_decimal_macros` expanding to `::rust_decimal::Decimal`) were flagged
-// unused. Runs as a subprocess (like `ignored_artifact`) so the fixture's
-// nightly `rust-toolchain.toml` is honored — `-Zunpretty=expanded` is
-// nightly-only.
+// unused. `-Zunpretty=expanded` is nightly-only; `RUSTC_BOOTSTRAP=1` lets
+// stable rustc accept it so the test works with the project's default
+// toolchain.
 #[test]
 fn expand_cfg_test_dev_dep_via_macro() -> Result<(), Box<dyn Error>> {
     let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -1332,8 +1332,7 @@ fn expand_cfg_test_dev_dep_via_macro() -> Result<(), Box<dyn Error>> {
         .arg("--expand")
         .arg(&fixture_path)
         .current_dir(&fixture_path)
-        .env_remove("RUSTUP_TOOLCHAIN")
-        .env_remove("CARGO")
+        .env("RUSTC_BOOTSTRAP", "1")
         .env_remove("GITHUB_ACTIONS")
         .output()?;
 
