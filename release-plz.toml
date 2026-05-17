@@ -1,5 +1,9 @@
 [workspace]
 features_always_increment_minor = true
+# Create the GitHub release as a draft so release-binaries.yml can upload
+# assets to it. A follow-up job in that workflow undrafts the release after
+# all binaries are uploaded.
+git_release_draft = true
 
 [changelog]
 body = """
