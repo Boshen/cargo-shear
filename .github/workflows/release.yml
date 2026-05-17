@@ -8,6 +8,10 @@ on:
     branches:
       - main
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   release-plz:
     name: Release-plz
@@ -17,7 +21,126 @@ jobs:
       pull-requests: write
       contents: write
       id-token: write
+    outputs:
+      released: ${{ steps.release-plz.outputs.releases_created }}
+      releases: ${{ steps.release-plz.outputs.releases }}
     steps:
-      - uses: oxc-project/release-plz@e2b12f55ad64a22af8e93634b94439c42913afca # v1.0.6
+      - id: release-plz
+        uses: oxc-project/release-plz@e2b12f55ad64a22af8e93634b94439c42913afca # v1.0.6
         with:
           PAT: ${{ secrets.RELEASE_PLZ_TOKEN }}
+
+  build-binaries:
+    name: ${{ matrix.target }}
+    needs: release-plz
+    if: needs.release-plz.outputs.released == 'true' && github.repository_owner == 'Boshen'
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-22.04
+
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-22.04
+
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-22.04
+
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-22.04
+
+          - target: x86_64-unknown-freebsd
+            os: ubuntu-22.04
+
+          - target: aarch64-apple-darwin
+            os: macos-latest
+
+          - target: x86_64-apple-darwin
+            os: macos-latest
+
+          - target: universal-apple-darwin
+            os: macos-latest
+
+          - target: aarch64-pc-windows-msvc
+            os: windows-latest
+
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+        with:
+          ref: refs/tags/${{ fromJSON(needs.release-plz.outputs.releases)[0].tag }}
+
+      - name: Set environment variables
+        run: echo "CC=clang" >> $GITHUB_ENV # for mimalloc
+
+      - uses: oxc-project/setup-rust@23f38cfb0c04af97a055f76acee94d5be71c7c82 # v1.0.16
+
+      - uses: taiki-e/setup-cross-toolchain-action@129361238c06ff2cc1c4ca5c5d2217af441ffdf6 # v1.40.1
+        with:
+          target: ${{ matrix.target }}
+
+      - run: echo "RUSTFLAGS=${RUSTFLAGS} -C target-feature=+crt-static -C link-self-contained=yes" >>"${GITHUB_ENV}"
+        if: contains(matrix.target, '-linux-musl')
+
+      - uses: taiki-e/upload-rust-binary-action@f0d45ae91ee7b8ee928de7a9d04d893a08bcbec6 # v1.30.2
+        with:
+          bin: cargo-shear
+          target: ${{ matrix.target }}
+          tar: all
+          zip: windows
+          features: allocator
+          ref: refs/tags/${{ fromJSON(needs.release-plz.outputs.releases)[0].tag }}
+          dry-run: true
+          dry-run-intended: true
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: binary-${{ matrix.target }}
+          path: cargo-shear-${{ matrix.target }}.*
+          if-no-files-found: error
+          retention-days: 1
+
+  publish-release:
+    name: Publish Release
+    needs: [release-plz, build-binaries]
+    if: needs.release-plz.outputs.released == 'true' && github.repository_owner == 'Boshen'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+        with:
+          ref: refs/tags/${{ fromJSON(needs.release-plz.outputs.releases)[0].tag }}
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: dist
+          pattern: binary-*
+          merge-multiple: true
+
+      - name: Extract release notes
+        env:
+          VERSION: ${{ fromJSON(needs.release-plz.outputs.releases)[0].version }}
+        run: |
+          awk -v ver="$VERSION" '
+            BEGIN { gsub(/\./, "\\.", ver) }
+            /^## \[/ {
+              if (in_section) exit
+              if ($0 ~ "\\[" ver "\\]") in_section = 1
+              next
+            }
+            in_section
+          ' CHANGELOG.md > release-notes.md
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ fromJSON(needs.release-plz.outputs.releases)[0].tag }}
+        run: gh release create "$TAG" dist/* --title "$TAG" --notes-file release-notes.md

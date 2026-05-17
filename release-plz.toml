@@ -1,9 +1,9 @@
 [workspace]
 features_always_increment_minor = true
-# Create the GitHub release as a draft so release-binaries.yml can upload
-# assets to it. A follow-up job in that workflow undrafts the release after
-# all binaries are uploaded.
-git_release_draft = true
+# release.yml builds binaries first, then creates the GitHub release with all
+# assets attached at once via `gh release create`. release-plz only publishes
+# to crates.io and pushes the tag.
+git_release_enable = false
 
 [changelog]
 body = """
