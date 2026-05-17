@@ -4,7 +4,7 @@ permissions: {}
 
 on:
   release:
-    types: [published]
+    types: [created]
 
 defaults:
   run:
@@ -77,3 +77,18 @@ jobs:
           zip: windows
           features: allocator
           token: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-release:
+    name: Publish Release
+    needs: upload-assets
+    if: github.repository_owner == 'Boshen'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Undraft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.release.tag_name }}
+          REPO: ${{ github.repository }}
+        run: gh release edit "$TAG" --draft=false --repo "$REPO"
