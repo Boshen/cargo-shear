@@ -521,9 +521,9 @@ dependencies = [
 
 [[package]]
 name = "pulldown-cmark"
-version = "0.13.3"
+version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7c3a14896dfa883796f1cb410461aef38810ea05f2b2c33c5aded3649095fdad"
+checksum = "e9f068eba8e7071c5f9511831b44f32c740d5adf574e990f946ddb53db2f314e"
 dependencies = [
  "bitflags",
  "memchr",
@@ -565,15 +565,15 @@ dependencies = [
 
 [[package]]
 name = "ra_ap_edition"
-version = "0.0.332"
+version = "0.0.333"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a3f8b83a206006da985412a63fdc9f8009254290c08b892735dcb3aa2791e80b"
+checksum = "8977f8a5c807f0ce139223db8a639fb1e344e0a9ee6237062fe5a8b91f8e4d30"
 
 [[package]]
 name = "ra_ap_parser"
-version = "0.0.332"
+version = "0.0.333"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d9ea10572fab9a74606c287b5aa815a0733307bc03eee160aeeaee188422a9f"
+checksum = "b04b67813de1973e21b1352ccc2d1f8c9d4f1c029899ed9e46b24599d9b8c877"
 dependencies = [
  "drop_bomb",
  "ra-ap-rustc_lexer",
@@ -585,9 +585,9 @@ dependencies = [
 
 [[package]]
 name = "ra_ap_stdx"
-version = "0.0.332"
+version = "0.0.333"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9b22de4468431433c5d76d2f5bcf0e39830ed87456bb6bea2c24d774e9ffc9d"
+checksum = "954f944ee11cc5a571b7368b9534c328ad88027ceada2ce1b833890b1166f62d"
 dependencies = [
  "crossbeam-channel",
  "crossbeam-utils",
@@ -601,9 +601,9 @@ dependencies = [
 
 [[package]]
 name = "ra_ap_syntax"
-version = "0.0.332"
+version = "0.0.333"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fba746bd7e6db6cb2fa41cf071610436fff100f9a1c93807efb894bb9304ace"
+checksum = "7565fc61811cd59b6e0f5c80305f68020259e1bf39d41a02b86331bd2e9e53b1"
 dependencies = [
  "either",
  "itertools",
@@ -750,9 +750,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.149"
+version = "1.0.150"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83fc039473c5595ace860d8c4fafa220ff474b3fc6bfdb4293327f1a37e94d86"
+checksum = "e8014e44b4736ed0538adeecded0fce2a272f22dc9578a7eb6b2d9993c74cfb9"
 dependencies = [
  "itoa",
  "memchr",
