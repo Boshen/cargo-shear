@@ -36,7 +36,7 @@ jobs:
 
       - run: |
           cargo test
-          cargo clippy -- -D warnings
+          cargo clippy --all-targets -- -D warnings
           cargo fmt --all -- --check
           cargo run .
 

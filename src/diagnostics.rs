@@ -343,36 +343,35 @@ impl ShearDiagnostic {
     }
 
     pub fn unlinked_files(diagnostics: &[UnlinkedFile], package: &str) -> Self {
-        let paths: BTreeSet<_> = diagnostics.iter().map(|file| file.path.clone()).collect();
-        let help = if paths.len() == 1 {
-            "delete this file".to_owned()
-        } else {
-            "delete these files".to_owned()
-        };
-
-        Self {
-            kind: DiagnosticKind::UnlinkedFiles { package: package.to_owned(), paths },
-            source: None,
-            span: None,
-            related: Vec::new(),
-            help: Some(help),
-        }
+        let paths = diagnostics.iter().map(|file| file.path.clone()).collect();
+        Self::file_list(paths, |paths| DiagnosticKind::UnlinkedFiles {
+            package: package.to_owned(),
+            paths,
+        })
     }
 
     pub fn empty_files(diagnostics: &[EmptyFile], package: &str) -> Self {
-        let paths: BTreeSet<_> = diagnostics.iter().map(|file| file.path.clone()).collect();
-        let help = if paths.len() == 1 {
-            "delete this file".to_owned()
-        } else {
-            "delete these files".to_owned()
-        };
+        let paths = diagnostics.iter().map(|file| file.path.clone()).collect();
+        Self::file_list(paths, |paths| DiagnosticKind::EmptyFiles {
+            package: package.to_owned(),
+            paths,
+        })
+    }
 
+    /// Shared builder for the sourceless "delete file(s)" diagnostics
+    /// (`unlinked_files` / `empty_files`): both collect a `BTreeSet` of paths
+    /// and differ only in the `DiagnosticKind` they wrap it in.
+    fn file_list(
+        paths: BTreeSet<PathBuf>,
+        make_kind: impl FnOnce(BTreeSet<PathBuf>) -> DiagnosticKind,
+    ) -> Self {
+        let help = if paths.len() == 1 { "delete this file" } else { "delete these files" };
         Self {
-            kind: DiagnosticKind::EmptyFiles { package: package.to_owned(), paths },
+            kind: make_kind(paths),
             source: None,
             span: None,
             related: Vec::new(),
-            help: Some(help),
+            help: Some(help.to_owned()),
         }
     }
 
@@ -491,27 +490,9 @@ impl DiagnosticKind {
                 format!("misplaced optional dependency `{name}`")
             }
             Self::UnlinkedFiles { package, paths } => {
-                let count = paths.len();
-                let s = if count == 1 { "" } else { "s" };
-                let paths = paths
-                    .iter()
-                    .map(|path| path.display().to_string().replace('\\', "/"))
-                    .collect::<Vec<_>>()
-                    .join("\n");
-
-                format!("{count} unlinked file{s} in `{package}`\n{paths}")
+                Self::file_list_message("unlinked", package, paths)
             }
-            Self::EmptyFiles { package, paths } => {
-                let count = paths.len();
-                let s = if count == 1 { "" } else { "s" };
-                let paths = paths
-                    .iter()
-                    .map(|path| path.display().to_string().replace('\\', "/"))
-                    .collect::<Vec<_>>()
-                    .join("\n");
-
-                format!("{count} empty file{s} in `{package}`\n{paths}")
-            }
+            Self::EmptyFiles { package, paths } => Self::file_list_message("empty", package, paths),
             Self::UnknownIgnore { name } => format!("unknown ignore `{name}`"),
             Self::RedundantIgnore { name } => format!("redundant ignore `{name}`"),
             Self::RedundantIgnorePath { pattern } => {
@@ -538,6 +519,21 @@ impl DiagnosticKind {
                 )
             }
         }
+    }
+
+    /// Render the multi-line message shared by `UnlinkedFiles` / `EmptyFiles`:
+    /// a count line followed by one path per line, with backslashes normalised
+    /// to forward slashes.
+    fn file_list_message(label: &str, package: &str, paths: &BTreeSet<PathBuf>) -> String {
+        let count = paths.len();
+        let s = if count == 1 { "" } else { "s" };
+        let paths = paths
+            .iter()
+            .map(|path| path.display().to_string().replace('\\', "/"))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        format!("{count} {label} file{s} in `{package}`\n{paths}")
     }
 
     pub const fn label(&self) -> Option<&'static str> {

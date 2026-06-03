@@ -1097,33 +1097,33 @@ mod tests {
 
     #[test]
     fn detects_normal_test() {
-        let source = r#"
+        let source = r"
             #[test]
             fn my_test() {}
-        "#;
+        ";
         let parsed = ParsedSource::from_str(source, Path::new("lib.rs"));
         assert!(parsed.has_tests);
     }
 
     #[test]
     fn detects_cfg_test_module() {
-        let source = r#"
+        let source = r"
             #[cfg(test)]
             mod tests {
                 fn my_test() {}
             }
-        "#;
+        ";
         let parsed = ParsedSource::from_str(source, Path::new("lib.rs"));
         assert!(parsed.has_tests);
     }
 
     #[test]
     fn detects_test_behind_non_test_cfg() {
-        let source = r#"
+        let source = r"
             #[test]
             #[cfg(any(coverage, coverage_nightly))]
             fn my_test() {}
-        "#;
+        ";
         let parsed = ParsedSource::from_str(source, Path::new("lib.rs"));
         assert!(parsed.has_tests);
     }

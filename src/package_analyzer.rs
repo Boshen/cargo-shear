@@ -13,7 +13,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     context::PackageContext,
-    manifest::{DepTable, FeatureRef},
+    manifest::{DepTable, FeatureRef, lib_kind_label},
     source_parser::ParsedSource,
 };
 
@@ -65,9 +65,12 @@ impl AnalysisResult {
         self.normal.union(&self.dev).chain(&self.build).cloned().collect()
     }
 
-    pub fn feature_imports(&self) -> FxHashSet<String> {
-        let code = self.code_imports();
-        self.features.keys().filter(|key| !code.contains(*key)).cloned().collect()
+    /// Imports referenced only from `[features]`, excluding any that already
+    /// appear in code. `code_imports` is taken as a parameter so callers that
+    /// already computed it (via [`code_imports`](Self::code_imports)) don't pay
+    /// to rebuild the union set.
+    pub fn feature_imports(&self, code_imports: &FxHashSet<String>) -> FxHashSet<String> {
+        self.features.keys().filter(|key| !code_imports.contains(*key)).cloned().collect()
     }
 }
 
@@ -155,17 +158,7 @@ impl<'a> PackageAnalyzer<'a> {
             // Lib-like targets only. Bin targets share source directories with the
             // package's lib target, so we can't tell which file's tests "belong" to
             // which target — recording for both would produce duplicate diagnostics.
-            let is_lib = matches!(
-                kind,
-                TargetKind::Lib
-                    | TargetKind::CDyLib
-                    | TargetKind::DyLib
-                    | TargetKind::ProcMacro
-                    | TargetKind::RLib
-                    | TargetKind::StaticLib
-            );
-
-            if is_lib {
+            if lib_kind_label(kind).is_some() {
                 let has_tests = matching_files.iter().any(|(_, parsed)| parsed.has_tests);
                 let has_doctests = matching_files.iter().any(|(_, parsed)| parsed.has_doctests);
 
