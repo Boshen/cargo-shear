@@ -22,7 +22,7 @@ fmt:
   taplo format
 
 lint:
-  cargo clippy
+  cargo clippy --all-targets
 
 snapshots:
   cargo insta test --accept
