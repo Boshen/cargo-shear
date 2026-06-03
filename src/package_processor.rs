@@ -34,11 +34,9 @@ use anyhow::Result;
 use rustc_hash::FxHashSet;
 use toml::Spanned;
 
-use cargo_metadata::TargetKind;
-
 use crate::{
     context::{PackageContext, WorkspaceContext},
-    manifest::{DepLocation, FeatureRef},
+    manifest::{DepLocation, FeatureRef, lib_kind_label},
     package_analyzer::PackageAnalyzer,
 };
 
@@ -273,7 +271,7 @@ impl PackageProcessor {
         let used_imports = analyzer.analyze()?;
 
         let code_imports = used_imports.code_imports();
-        let feature_imports = used_imports.feature_imports();
+        let feature_imports = used_imports.feature_imports(&code_imports);
 
         let mut result = PackageAnalysis::default();
 
@@ -450,18 +448,9 @@ impl PackageProcessor {
         if self.check_test_targets {
             let is_workspace = ctx.workspace.packages.len() > 1;
             for info in &used_imports.target_test_info {
-                #[expect(
-                    clippy::wildcard_enum_match_arm,
-                    reason = "Only lib-like targets reach here"
-                )]
-                let kind_str = match &info.target_kind {
-                    TargetKind::CDyLib => "cdylib",
-                    TargetKind::DyLib => "dylib",
-                    TargetKind::ProcMacro => "proc-macro",
-                    TargetKind::RLib => "rlib",
-                    TargetKind::StaticLib => "staticlib",
-                    _ => "lib",
-                };
+                // Only lib-like targets populate `target_test_info`, so the
+                // fallback is unreachable in practice.
+                let kind_str = lib_kind_label(&info.target_kind).unwrap_or("lib");
 
                 if !info.test_enabled && info.has_tests {
                     result.test_disabled_with_tests.push(TestDisabledWithTests {

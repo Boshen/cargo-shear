@@ -85,6 +85,29 @@ impl fmt::Display for DepTable {
     }
 }
 
+/// Canonical Cargo label for a lib-like target kind (the string Cargo uses,
+/// e.g. `lib`, `rlib`, `proc-macro`). Returns `None` for non-lib kinds (`bin`,
+/// `test`, `bench`, `example`, custom build scripts), so the same call doubles
+/// as the "is this a lib-like target?" predicate via [`Option::is_some`].
+#[must_use]
+pub const fn lib_kind_label(kind: &TargetKind) -> Option<&'static str> {
+    match kind {
+        TargetKind::Lib => Some("lib"),
+        TargetKind::CDyLib => Some("cdylib"),
+        TargetKind::DyLib => Some("dylib"),
+        TargetKind::ProcMacro => Some("proc-macro"),
+        TargetKind::RLib => Some("rlib"),
+        TargetKind::StaticLib => Some("staticlib"),
+        TargetKind::Bin
+        | TargetKind::Bench
+        | TargetKind::Example
+        | TargetKind::Test
+        | TargetKind::CustomBuild
+        | TargetKind::Unknown(_)
+        | _ => None,
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum DepLocation {
     /// Top-level: `[dependencies]`, `[dev-dependencies]`, `[build-dependencies]`.
