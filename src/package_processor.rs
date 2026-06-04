@@ -267,6 +267,14 @@ impl PackageProcessor {
         reason = "Complex function handling multiple diagnostic types"
     )]
     pub fn process_package(&self, ctx: &PackageContext<'_>) -> Result<PackageAnalysis> {
+        // A `cargo hakari` `workspace-hack` crate declares dependencies purely to
+        // unify Cargo features; none are imported (its lib is a stub), so analyzing
+        // it would flag every dependency — and its stub source — as unused. Skip it
+        // whole; the dependency edges pointing at it are handled by the loops below.
+        if ctx.workspace.hakari_packages.contains(&ctx.name) {
+            return Ok(PackageAnalysis::default());
+        }
+
         let analyzer = PackageAnalyzer::new(ctx, self.expand_macros);
         let used_imports = analyzer.analyze()?;
 
@@ -293,6 +301,18 @@ impl PackageProcessor {
                 .get(pkg)
                 .cloned()
                 .unwrap_or_else(|| dep.get_ref().replace('-', "_"));
+
+            // A dependency on a `cargo hakari` `workspace-hack` crate is intentionally
+            // never imported — it only exists to unify features. Treat it as used, and
+            // keep any pre-existing `ignored = [...]` workaround load-bearing rather than
+            // flagging it as redundant now that the detection handles it.
+            if ctx.workspace.hakari_packages.contains(pkg) {
+                result.used_packages.insert(pkg.to_owned());
+                if ctx.ignored_imports.contains(&import) {
+                    suppressed_ignores.insert(import);
+                }
+                continue;
+            }
 
             let is_ignored = ctx.ignored_imports.contains(&import);
 
@@ -512,6 +532,13 @@ impl PackageProcessor {
             }
 
             let pkg = dependency.get_ref().package().unwrap_or(dep.get_ref());
+
+            // Members depend on a `cargo hakari` `workspace-hack` crate without ever
+            // importing it, so never flag it as an unused workspace dependency.
+            if ctx.hakari_packages.contains(pkg) {
+                continue;
+            }
+
             if !workspace_used_pkgs.contains(pkg) {
                 result.unused_dependencies.push(UnusedWorkspaceDependency { name: dep.clone() });
             }

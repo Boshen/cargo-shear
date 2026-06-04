@@ -1,0 +1,12 @@
+[package]
+name = "app"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+test = false
+doctest = false
+
+[dependencies]
+anyhow = "1.0"
+workspace-hack = { path = "../workspace-hack" }

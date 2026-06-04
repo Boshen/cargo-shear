@@ -141,6 +141,43 @@ fn clean_workspace_fix() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// A `cargo hakari` `workspace-hack` crate (detected by the `### BEGIN HAKARI SECTION`
+// marker) declares dependencies it never imports, and `app` depends on it without
+// importing it. Neither the hack crate's own deps nor the edge pointing at it should
+// be flagged. See https://github.com/Boshen/cargo-shear/issues/478.
+#[test]
+fn hakari_detection() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("hakari").run()?;
+    assert_eq!(exit_code, ExitCode::SUCCESS);
+
+    insta::assert_snapshot!(output, @r"
+    shear/summary
+
+      ✓ no issues found
+    ");
+
+    Ok(())
+}
+
+// `--fix` must never remove a `workspace-hack` crate's generated dependencies nor a
+// member's dependency on it.
+#[test]
+fn hakari_fix() -> Result<(), Box<dyn Error>> {
+    let (exit_code, _output, temp_dir) =
+        CargoShearRunner::new("hakari").options(CargoShearOptions::with_fix).run()?;
+    assert_eq!(exit_code, ExitCode::SUCCESS);
+
+    let hack = Manifest::from_path(temp_dir.path().join("workspace-hack").join("Cargo.toml"))?;
+    assert!(hack.dependencies.contains_key("rustc-hash"));
+    assert!(hack.dependencies.contains_key("serde_json"));
+
+    let app = Manifest::from_path(temp_dir.path().join("app").join("Cargo.toml"))?;
+    assert!(app.dependencies.contains_key("anyhow"));
+    assert!(app.dependencies.contains_key("workspace-hack"));
+
+    Ok(())
+}
+
 // Complex fixture with one of each issue type of issue.
 #[test]
 #[expect(clippy::too_many_lines, reason = "Output stress test")]
