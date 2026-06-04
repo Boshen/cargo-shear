@@ -106,6 +106,10 @@ ignored = ["crate-name"]
 ignored-paths = ["*/proto/*.rs"]
 ```
 
+### cargo-hakari `workspace-hack` crates
+
+[`cargo-hakari`](https://docs.rs/cargo-hakari) generates a `workspace-hack` crate that declares many dependencies it never imports (to unify Cargo features) and is depended on by every workspace member without being imported. `cargo shear` detects such a crate automatically — via the `### BEGIN HAKARI SECTION` marker in its `Cargo.toml` — and skips both the crate itself and the dependency edges pointing at it, so no `ignored` configuration is needed.
+
 Otherwise please report the issue as a bug.
 
 ## CI

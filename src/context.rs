@@ -13,6 +13,12 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{manifest::Manifest, source_parser::ParsedSource, util::read_to_string};
 
+/// Marker that `cargo hakari` writes into a `workspace-hack` crate's `Cargo.toml`
+/// to delimit its generated dependency section. Its presence uniquely identifies
+/// such a crate, regardless of the name the user gave it. See
+/// <https://docs.rs/cargo-hakari>.
+const HAKARI_SECTION_MARKER: &str = "### BEGIN HAKARI SECTION";
+
 /// Workspace-wide state computed once and shared by every per-package run.
 pub struct WorkspaceContext {
     /// Absolute path to the workspace root directory.
@@ -36,6 +42,13 @@ pub struct WorkspaceContext {
     pub dep_to_pkg: FxHashMap<String, String>,
     /// `[workspace.metadata.cargo-shear].ignored` entries (raw dependency keys).
     pub ignored_deps: FxHashSet<String>,
+
+    /// Names of workspace members that are `cargo hakari` `workspace-hack` crates,
+    /// detected by the `### BEGIN HAKARI SECTION` marker in their `Cargo.toml`.
+    /// They exist solely to unify Cargo features: they declare many dependencies
+    /// they never import, and every member depends on them without importing them,
+    /// so they're exempt from unused-dependency analysis entirely.
+    pub hakari_packages: FxHashSet<String>,
 }
 
 impl WorkspaceContext {
@@ -145,6 +158,8 @@ impl WorkspaceContext {
             .map(|ignore| ignore.get_ref().clone())
             .collect();
 
+        let hakari_packages = Self::detect_hakari_packages(metadata);
+
         Ok(Self {
             root,
             manifest_path,
@@ -155,7 +170,24 @@ impl WorkspaceContext {
             packages,
             dep_to_pkg,
             ignored_deps,
+            hakari_packages,
         })
+    }
+
+    /// Identify the workspace members that are `cargo hakari` `workspace-hack`
+    /// crates by scanning each member's `Cargo.toml` for the hakari section
+    /// marker, returning their package names. The manifests are read in parallel,
+    /// like every other bulk pass in [`Self::new`].
+    fn detect_hakari_packages(metadata: &Metadata) -> FxHashSet<String> {
+        metadata
+            .workspace_packages()
+            .into_par_iter()
+            .filter(|pkg| {
+                read_to_string(pkg.manifest_path.as_std_path())
+                    .is_ok_and(|content| content.contains(HAKARI_SECTION_MARKER))
+            })
+            .map(|pkg| pkg.name.to_string())
+            .collect()
     }
 }
 
