@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.13.0](https://github.com/Boshen/cargo-shear/compare/v1.12.4...v1.13.0) - 2026-06-04
+
+### <!-- 0 -->🚀 Features
+- detect and skip cargo-hakari workspace-hack crates ([#520](https://github.com/Boshen/cargo-shear/pull/520)) (by @Boshen)
+
+### <!-- 9 -->💼 Other
+- Lint all targets, reuse code_imports, and dedup target-kind/file-list logic ([#519](https://github.com/Boshen/cargo-shear/pull/519)) (by @Boshen)
+
+### Contributors
+
+* @Boshen
+* @renovate[bot]
+
 ## [1.12.1](https://github.com/Boshen/cargo-shear/compare/v1.12.0...v1.12.1) - 2026-05-16
 
 ### <!-- 1 -->🐛 Bug Fixes
