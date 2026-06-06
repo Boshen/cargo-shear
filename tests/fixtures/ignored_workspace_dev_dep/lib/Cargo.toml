@@ -1,0 +1,12 @@
+[package]
+name = "lib"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+test = false
+doctest = false
+
+[dev-dependencies]
+# Declared but not used in this crate; silenced by the workspace-root ignore
+anyhow = { workspace = true }

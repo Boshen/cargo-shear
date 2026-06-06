@@ -216,6 +216,10 @@ pub struct PackageAnalysis {
     /// (used to suppress workspace-level "redundant ignore path" diagnostics).
     pub used_workspace_ignore_paths: FxHashSet<String>,
 
+    /// Import names (`-` → `_`) of `ignored` entries that suppressed a diagnostic in
+    /// this package. Lets the workspace pass tell which workspace ignores are needed.
+    pub used_ignores: FxHashSet<String>,
+
     /// Lib-like targets with `test = false` whose source still contains tests.
     pub test_disabled_with_tests: Vec<TestDisabledWithTests>,
 
@@ -320,11 +324,7 @@ impl PackageProcessor {
                 if is_ignored {
                     // Track ignored deps as used so the workspace analysis doesn't
                     // remove them from [workspace.dependencies].
-                    // Only for package-level ignores; workspace-level ignores are
-                    // already skipped by process_workspace via `ignored_deps`.
-                    if !ctx.workspace.ignored_deps.contains(dep.get_ref().as_str()) {
-                        result.used_packages.insert(pkg.to_owned());
-                    }
+                    result.used_packages.insert(pkg.to_owned());
                     suppressed_ignores.insert(import);
                     continue;
                 }
@@ -392,6 +392,9 @@ impl PackageProcessor {
                 result.redundant_ignores.push(RedundantIgnore { name: ignored_dep.clone() });
             }
         }
+
+        // Hand the suppressed ignores to the workspace pass (see `used_ignores`).
+        result.used_ignores = suppressed_ignores;
 
         // Rebase paths to be package-relative so they match patterns in `ignored-paths`.
         let unlinked_files: FxHashSet<PathBuf> = used_imports
@@ -509,6 +512,7 @@ impl PackageProcessor {
         ctx: &WorkspaceContext,
         workspace_used_pkgs: &FxHashSet<String>,
         used_workspace_ignore_paths: &FxHashSet<String>,
+        mut used_ignores: FxHashSet<String>,
     ) -> WorkspaceAnalysis {
         let mut result = WorkspaceAnalysis::default();
 
@@ -527,11 +531,11 @@ impl PackageProcessor {
         }
 
         for (dep, dependency) in &ctx.manifest.workspace.dependencies {
-            if ctx.ignored_deps.contains(dep.get_ref()) {
+            let pkg = dependency.get_ref().package().unwrap_or(dep.get_ref());
+
+            if workspace_used_pkgs.contains(pkg) {
                 continue;
             }
-
-            let pkg = dependency.get_ref().package().unwrap_or(dep.get_ref());
 
             // Members depend on a `cargo hakari` `workspace-hack` crate without ever
             // importing it, so never flag it as an unused workspace dependency.
@@ -539,7 +543,10 @@ impl PackageProcessor {
                 continue;
             }
 
-            if !workspace_used_pkgs.contains(pkg) {
+            if ctx.ignored_deps.contains(dep.get_ref()) {
+                let import = dep.get_ref().replace('-', "_");
+                used_ignores.insert(import);
+            } else {
                 result.unused_dependencies.push(UnusedWorkspaceDependency { name: dep.clone() });
             }
         }
@@ -551,11 +558,8 @@ impl PackageProcessor {
                 continue;
             }
 
-            if ctx
-                .dep_to_pkg
-                .get(ignored_dep.get_ref())
-                .is_some_and(|pkg| workspace_used_pkgs.contains(pkg))
-            {
+            let ignored_import = ignored_dep.get_ref().replace('-', "_");
+            if !used_ignores.contains(&ignored_import) {
                 result.redundant_ignores.push(RedundantIgnore { name: ignored_dep.clone() });
             }
         }
