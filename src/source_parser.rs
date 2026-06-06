@@ -15,6 +15,7 @@ use compact_str::CompactString;
 use pulldown_cmark::{CodeBlockKind, Event, Parser, Tag, TagEnd};
 use ra_ap_syntax::{
     AstNode, AstToken, Edition, NodeOrToken, SourceFile, SyntaxKind, SyntaxNode, SyntaxToken,
+    WalkEvent,
     ast::{
         Attr, Comment, CommentShape, ExternCrate, HasAttrs, HasModuleItem, HasName, MacroCall,
         MacroRules, Meta, Module, Path, String as AstString, TokenTree, Use, UseTree,
@@ -117,9 +118,7 @@ impl SourceParser {
         // otherwise empty file shouldn't promote it to non-empty.
         parser.result.is_empty = tree.items().next().is_none();
 
-        for element in tree.syntax().descendants_with_tokens() {
-            parser.visit(element);
-        }
+        parser.walk(tree.syntax());
 
         parser.parse_markdown();
         parser.result
@@ -173,9 +172,7 @@ impl SourceParser {
                         && !code.trim().is_empty()
                     {
                         let snippet = SourceFile::parse(&code, Edition::CURRENT);
-                        for node in snippet.tree().syntax().descendants() {
-                            self.visit_node(&node);
-                        }
+                        self.walk(snippet.tree().syntax());
                     }
                 }
                 Event::Text(text) => {
@@ -198,18 +195,41 @@ impl SourceParser {
         }
     }
 
-    fn visit(&mut self, element: NodeOrToken<SyntaxNode, SyntaxToken>) {
+    /// Preorder walk over `root`, tracking `use`-statement nesting so `visit_path`
+    /// can cheaply skip paths inside `use` trees (they're already collected by
+    /// `visit_use`) instead of walking ancestors on every PATH node.
+    fn walk(&mut self, root: &SyntaxNode) {
+        let mut use_depth = 0u32;
+        for event in root.preorder_with_tokens() {
+            match event {
+                WalkEvent::Enter(element) => {
+                    if let NodeOrToken::Node(node) = &element
+                        && node.kind() == SyntaxKind::USE
+                    {
+                        use_depth += 1;
+                    }
+                    self.visit(element, use_depth > 0);
+                }
+                WalkEvent::Leave(NodeOrToken::Node(node)) if node.kind() == SyntaxKind::USE => {
+                    use_depth -= 1;
+                }
+                WalkEvent::Leave(_) => {}
+            }
+        }
+    }
+
+    fn visit(&mut self, element: NodeOrToken<SyntaxNode, SyntaxToken>, in_use: bool) {
         match element {
-            NodeOrToken::Node(node) => self.visit_node(&node),
+            NodeOrToken::Node(node) => self.visit_node(&node, in_use),
             NodeOrToken::Token(token) => self.visit_token(token),
         }
     }
 
-    fn visit_node(&mut self, node: &SyntaxNode) {
+    fn visit_node(&mut self, node: &SyntaxNode, in_use: bool) {
         match node.kind() {
             SyntaxKind::USE => self.visit_use(node),
             SyntaxKind::EXTERN_CRATE => self.visit_extern_crate(node),
-            SyntaxKind::PATH => self.visit_path(node),
+            SyntaxKind::PATH if !in_use => self.visit_path(node),
             SyntaxKind::MACRO_CALL => self.visit_macro_call(node),
             SyntaxKind::MACRO_RULES => self.visit_macro_rules(node),
             SyntaxKind::ATTR => self.visit_attribute(node),
@@ -239,15 +259,8 @@ impl SourceParser {
     }
 
     fn visit_path(&mut self, node: &SyntaxNode) {
-        // Paths inside `use` statements will already be handled by `visit_use`
-        if node
-            .ancestors()
-            .find(|node| !matches!(node.kind(), SyntaxKind::PATH | SyntaxKind::PATH_SEGMENT))
-            .is_some_and(|node| matches!(node.kind(), SyntaxKind::USE_TREE | SyntaxKind::USE))
-        {
-            return;
-        }
-
+        // Paths inside `use` statements are skipped by the caller (`walk` tracks
+        // `use` nesting) since `visit_use` already collects them.
         if let Some(path) = Path::cast(node.clone()) {
             self.collect_path(&path);
         }
@@ -386,9 +399,7 @@ impl SourceParser {
 
             if !text.is_empty() {
                 let parsed = SourceFile::parse(text, Edition::CURRENT);
-                for element in parsed.tree().syntax().descendants_with_tokens() {
-                    self.visit(element);
-                }
+                self.walk(parsed.tree().syntax());
             }
         }
 
