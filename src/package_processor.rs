@@ -324,11 +324,7 @@ impl PackageProcessor {
                 if is_ignored {
                     // Track ignored deps as used so the workspace analysis doesn't
                     // remove them from [workspace.dependencies].
-                    // Only for package-level ignores; workspace-level ignores are
-                    // already skipped by process_workspace via `ignored_deps`.
-                    if !ctx.workspace.ignored_deps.contains(dep.get_ref().as_str()) {
-                        result.used_packages.insert(pkg.to_owned());
-                    }
+                    result.used_packages.insert(pkg.to_owned());
                     suppressed_ignores.insert(import);
                     continue;
                 }
@@ -516,7 +512,7 @@ impl PackageProcessor {
         ctx: &WorkspaceContext,
         workspace_used_pkgs: &FxHashSet<String>,
         used_workspace_ignore_paths: &FxHashSet<String>,
-        used_ignores: &FxHashSet<String>,
+        mut used_ignores: FxHashSet<String>,
     ) -> WorkspaceAnalysis {
         let mut result = WorkspaceAnalysis::default();
 
@@ -535,11 +531,11 @@ impl PackageProcessor {
         }
 
         for (dep, dependency) in &ctx.manifest.workspace.dependencies {
-            if ctx.ignored_deps.contains(dep.get_ref()) {
+            let pkg = dependency.get_ref().package().unwrap_or(dep.get_ref());
+
+            if workspace_used_pkgs.contains(pkg) {
                 continue;
             }
-
-            let pkg = dependency.get_ref().package().unwrap_or(dep.get_ref());
 
             // Members depend on a `cargo hakari` `workspace-hack` crate without ever
             // importing it, so never flag it as an unused workspace dependency.
@@ -547,7 +543,10 @@ impl PackageProcessor {
                 continue;
             }
 
-            if !workspace_used_pkgs.contains(pkg) {
+            if ctx.ignored_deps.contains(dep.get_ref()) {
+                let import = dep.get_ref().replace('-', "_");
+                used_ignores.insert(import);
+            } else {
                 result.unused_dependencies.push(UnusedWorkspaceDependency { name: dep.clone() });
             }
         }
@@ -559,18 +558,8 @@ impl PackageProcessor {
                 continue;
             }
 
-            // Not redundant if any member needed it to suppress a diagnostic (e.g. a
-            // dep used in one crate but an unused dev-dependency in another).
             let ignored_import = ignored_dep.get_ref().replace('-', "_");
-            if used_ignores.contains(&ignored_import) {
-                continue;
-            }
-
-            if ctx
-                .dep_to_pkg
-                .get(ignored_dep.get_ref())
-                .is_some_and(|pkg| workspace_used_pkgs.contains(pkg))
-            {
+            if !used_ignores.contains(&ignored_import) {
                 result.redundant_ignores.push(RedundantIgnore { name: ignored_dep.clone() });
             }
         }

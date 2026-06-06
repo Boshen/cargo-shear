@@ -422,7 +422,7 @@ impl<W: Write> CargoShear<W> {
                 &workspace_ctx,
                 &self.analysis.packages,
                 &used_workspace_ignore_paths,
-                &used_ignores,
+                used_ignores,
             );
 
             let fixed =
