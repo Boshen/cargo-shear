@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.13.1](https://github.com/Boshen/cargo-shear/compare/v1.13.0...v1.13.1) - 2026-06-06
+
+### <!-- 1 -->🐛 Bug Fixes
+- don't flag load-bearing workspace ignores as redundant ([#524](https://github.com/Boshen/cargo-shear/pull/524)) (by @Boshen)
+
+### <!-- 4 -->⚡ Performance
+- single preorder walk, track use-nesting instead of per-path ancestor scan (by @Boshen)
+- store crate-name imports as CompactString ([#525](https://github.com/Boshen/cargo-shear/pull/525)) (by @Boshen)
+
+### Contributors
+
+* @Boshen
+* @renovate[bot]
+
 ## [1.13.0](https://github.com/Boshen/cargo-shear/compare/v1.12.4...v1.13.0) - 2026-06-04
 
 ### <!-- 0 -->🚀 Features
