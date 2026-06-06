@@ -259,6 +259,8 @@ impl<'a> PackageContext<'a> {
             }
         }
 
+        // A package ignore applies only to its own package; a workspace ignore applies
+        // to every member. Both suppress unused-dependency diagnostics here, so merge them.
         let package_ignored_deps = &manifest.package.metadata.cargo_shear.ignored;
         let workspace_ignored_deps = &workspace.manifest.workspace.metadata.cargo_shear.ignored;
         let ignored_imports = package_ignored_deps

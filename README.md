@@ -106,6 +106,17 @@ ignored = ["crate-name"]
 ignored-paths = ["*/proto/*.rs"]
 ```
 
+### Ignore scope
+
+- **Package ignore** (`[package.metadata.cargo-shear]`) applies only to that package.
+- **Workspace ignore** (`[workspace.metadata.cargo-shear]`) applies to every member
+  *and* to the workspace dependency itself. `ignored-paths` globs are matched relative
+  to the workspace root.
+
+An ignore that suppresses nothing is reported as redundant so it can be removed. A
+workspace ignore is considered redundant only when no member needs it — a dependency
+that is used in one crate but unused in another stays covered by the workspace ignore.
+
 ### cargo-hakari `workspace-hack` crates
 
 [`cargo-hakari`](https://docs.rs/cargo-hakari) generates a `workspace-hack` crate that declares many dependencies it never imports (to unify Cargo features) and is depended on by every workspace member without being imported. `cargo shear` detects such a crate automatically — via the `### BEGIN HAKARI SECTION` marker in its `Cargo.toml` — and skips both the crate itself and the dependency edges pointing at it, so no `ignored` configuration is needed.

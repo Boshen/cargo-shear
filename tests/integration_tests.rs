@@ -757,6 +757,23 @@ fn ignored_workspace_redundant() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// #521: `anyhow` is used in `app` but an unused dev-dependency in `lib`. The workspace
+// ignore suppresses it in `lib`, so it must not be reported redundant. No issues.
+#[test]
+fn ignored_workspace_dev_dep() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _temp_dir) =
+        CargoShearRunner::new("ignored_workspace_dev_dep").run()?;
+    assert_eq!(exit_code, ExitCode::SUCCESS);
+
+    insta::assert_snapshot!(output, @r"
+    shear/summary
+
+      ✓ no issues found
+    ");
+
+    Ok(())
+}
+
 // Both `anyhow` (workspace ignore) and `thiserror` (package ignore) are unused, but ignored.
 #[test]
 fn ignored_workspace_merged() -> Result<(), Box<dyn Error>> {

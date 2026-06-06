@@ -216,6 +216,10 @@ pub struct PackageAnalysis {
     /// (used to suppress workspace-level "redundant ignore path" diagnostics).
     pub used_workspace_ignore_paths: FxHashSet<String>,
 
+    /// Import names (`-` → `_`) of `ignored` entries that suppressed a diagnostic in
+    /// this package. Lets the workspace pass tell which workspace ignores are needed.
+    pub used_ignores: FxHashSet<String>,
+
     /// Lib-like targets with `test = false` whose source still contains tests.
     pub test_disabled_with_tests: Vec<TestDisabledWithTests>,
 
@@ -393,6 +397,9 @@ impl PackageProcessor {
             }
         }
 
+        // Hand the suppressed ignores to the workspace pass (see `used_ignores`).
+        result.used_ignores = suppressed_ignores;
+
         // Rebase paths to be package-relative so they match patterns in `ignored-paths`.
         let unlinked_files: FxHashSet<PathBuf> = used_imports
             .unlinked_files
@@ -509,6 +516,7 @@ impl PackageProcessor {
         ctx: &WorkspaceContext,
         workspace_used_pkgs: &FxHashSet<String>,
         used_workspace_ignore_paths: &FxHashSet<String>,
+        used_ignores: &FxHashSet<String>,
     ) -> WorkspaceAnalysis {
         let mut result = WorkspaceAnalysis::default();
 
@@ -548,6 +556,13 @@ impl PackageProcessor {
         for ignored_dep in ignored_deps {
             if !ctx.dep_to_pkg.contains_key(ignored_dep.get_ref()) {
                 result.unknown_ignores.push(UnknownIgnore { name: ignored_dep.clone() });
+                continue;
+            }
+
+            // Not redundant if any member needed it to suppress a diagnostic (e.g. a
+            // dep used in one crate but an unused dev-dependency in another).
+            let ignored_import = ignored_dep.get_ref().replace('-', "_");
+            if used_ignores.contains(&ignored_import) {
                 continue;
             }
 

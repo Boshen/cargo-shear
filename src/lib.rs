@@ -406,9 +406,11 @@ impl<W: Write> CargoShear<W> {
         };
 
         let mut used_workspace_ignore_paths: FxHashSet<String> = FxHashSet::default();
+        let mut used_ignores: FxHashSet<String> = FxHashSet::default();
         for (ctx, result) in results {
             let fixed = self.fix_package_issues(&ctx.manifest_path, &result)?;
             used_workspace_ignore_paths.extend(result.used_workspace_ignore_paths.iter().cloned());
+            used_ignores.extend(result.used_ignores.iter().cloned());
             self.analysis.add_package_result(&ctx, &result, fixed);
         }
 
@@ -420,6 +422,7 @@ impl<W: Write> CargoShear<W> {
                 &workspace_ctx,
                 &self.analysis.packages,
                 &used_workspace_ignore_paths,
+                &used_ignores,
             );
 
             let fixed =
