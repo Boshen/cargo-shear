@@ -9,6 +9,7 @@ use std::{
 
 use anyhow::{Result, anyhow};
 use cargo_metadata::TargetKind;
+use compact_str::CompactString;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
@@ -39,16 +40,16 @@ pub struct TargetTestInfo {
 #[derive(Debug, Default)]
 pub struct AnalysisResult {
     /// Imports observed in normal targets (lib, bin, ...).
-    pub normal: FxHashSet<String>,
+    pub normal: FxHashSet<CompactString>,
 
     /// Imports observed in dev targets (test, bench, example).
-    pub dev: FxHashSet<String>,
+    pub dev: FxHashSet<CompactString>,
 
     /// Imports observed in build scripts.
-    pub build: FxHashSet<String>,
+    pub build: FxHashSet<CompactString>,
 
     /// Imports referenced from `[features]` entries, with the feature entries that name them.
-    pub features: FxHashMap<String, Vec<FeatureRef>>,
+    pub features: FxHashMap<CompactString, Vec<FeatureRef>>,
 
     /// Source files not reachable from any entry point (lib.rs, main.rs, ...).
     pub unlinked_files: FxHashSet<PathBuf>,
@@ -61,7 +62,7 @@ pub struct AnalysisResult {
 }
 
 impl AnalysisResult {
-    pub fn code_imports(&self) -> FxHashSet<String> {
+    pub fn code_imports(&self) -> FxHashSet<CompactString> {
         self.normal.union(&self.dev).chain(&self.build).cloned().collect()
     }
 
@@ -69,8 +70,11 @@ impl AnalysisResult {
     /// appear in code. `code_imports` is taken as a parameter so callers that
     /// already computed it (via [`code_imports`](Self::code_imports)) don't pay
     /// to rebuild the union set.
-    pub fn feature_imports(&self, code_imports: &FxHashSet<String>) -> FxHashSet<String> {
-        self.features.keys().filter(|key| !code_imports.contains(*key)).cloned().collect()
+    pub fn feature_imports(
+        &self,
+        code_imports: &FxHashSet<CompactString>,
+    ) -> FxHashSet<CompactString> {
+        self.features.keys().filter(|key| !code_imports.contains(key.as_str())).cloned().collect()
     }
 }
 
@@ -144,7 +148,7 @@ impl<'a> PackageAnalyzer<'a> {
                 })
                 .collect();
 
-            let imports: FxHashSet<String> = matching_files
+            let imports: FxHashSet<CompactString> = matching_files
                 .iter()
                 .flat_map(|(_, parsed)| parsed.imports.iter().cloned())
                 .collect();
@@ -241,13 +245,13 @@ impl<'a> PackageAnalyzer<'a> {
         for (feature, values) in &self.ctx.manifest.features {
             for value in values {
                 let (import, feature) = FeatureRef::parse(feature, value);
-                self.result.features.entry(import).or_default().push(feature);
+                self.result.features.entry(import.into()).or_default().push(feature);
             }
         }
 
         for (dep, details) in &self.ctx.manifest.dependencies {
             if details.get_ref().optional() {
-                let import = dep.get_ref().replace('-', "_");
+                let import = CompactString::from(dep.get_ref().replace('-', "_"));
                 let has_explicit = self.result.features.get(&import).is_some_and(|features| {
                     features.iter().any(|feature| matches!(feature, FeatureRef::Explicit { .. }))
                 });

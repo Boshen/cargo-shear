@@ -11,7 +11,7 @@ use crate::{
 #[track_caller]
 fn test(source_text: &str) {
     let parsed = ParsedSource::from_str(source_text, Path::new("lib.rs"));
-    let expected = FxHashSet::from_iter(["foo".to_owned()]);
+    let expected = FxHashSet::from_iter(["foo".into()]);
     assert_eq!(parsed.imports, expected, "{source_text}");
 }
 
@@ -180,7 +180,7 @@ fn multiple_imports_same_crate() {
         }
     ";
     let parsed = ParsedSource::from_str(source, Path::new("lib.rs"));
-    let expected = FxHashSet::from_iter(["foo".to_owned()]);
+    let expected = FxHashSet::from_iter(["foo".into()]);
     assert_eq!(parsed.imports, expected);
 }
 
@@ -290,14 +290,14 @@ fn very_long_path() {
     let long_path = "foo::".repeat(100) + "bar";
     let source = format!("use {long_path};");
     let parsed = ParsedSource::from_str(&source, Path::new("lib.rs"));
-    let expected = FxHashSet::from_iter(["foo".to_owned()]);
+    let expected = FxHashSet::from_iter(["foo".into()]);
     assert_eq!(parsed.imports, expected);
 }
 
 #[test]
 fn unicode_identifiers() {
     let parsed = ParsedSource::from_str("use foo::数据;", Path::new("lib.rs"));
-    let expected = FxHashSet::from_iter(["foo".to_owned()]);
+    let expected = FxHashSet::from_iter(["foo".into()]);
     assert_eq!(parsed.imports, expected);
 }
 
@@ -320,7 +320,7 @@ fn raw_string_inside_macro() {
 #[test]
 fn glob_imports() {
     let parsed = ParsedSource::from_str("use foo::*;", Path::new("lib.rs"));
-    let expected = FxHashSet::from_iter(["foo".to_owned()]);
+    let expected = FxHashSet::from_iter(["foo".into()]);
     assert_eq!(parsed.imports, expected);
 }
 
@@ -373,7 +373,7 @@ fn cargo_shear_with_package_filter() {
             locked: false,
             offline: false,
             frozen: false,
-            package: vec!["cargo-shear".to_owned()],
+            package: vec!["cargo-shear".into()],
             exclude: vec![],
             path: default_path().unwrap(),
             expand: false,
@@ -398,7 +398,7 @@ fn cargo_shear_with_exclude_filter() {
             offline: false,
             frozen: false,
             package: vec![],
-            exclude: vec!["some-package".to_owned()],
+            exclude: vec!["some-package".into()],
             path: default_path().unwrap(),
             expand: false,
             check_test_targets: false,
@@ -419,8 +419,8 @@ fn cargo_shear_options_creation() {
         locked: false,
         offline: false,
         frozen: false,
-        package: vec!["test1".to_owned(), "test2".to_owned()],
-        exclude: vec!["exclude1".to_owned()],
+        package: vec!["test1".into(), "test2".into()],
+        exclude: vec!["exclude1".into()],
         path: std::path::PathBuf::from("/tmp"),
         expand: true,
         check_test_targets: false,
@@ -464,7 +464,7 @@ fn mixed_valid_invalid_imports() {
         use foo::baz::qux;  // valid, same crate as first
     ";
     let parsed = ParsedSource::from_str(source, Path::new("lib.rs"));
-    let expected = FxHashSet::from_iter(["foo".to_owned()]);
+    let expected = FxHashSet::from_iter(["foo".into()]);
     assert_eq!(parsed.imports, expected);
 }
 
@@ -479,7 +479,7 @@ fn test_no_deps(source_text: &str) {
 #[track_caller]
 fn test_multiple_deps(source_text: &str, expected_deps: &[&str]) {
     let parsed = ParsedSource::from_str(source_text, Path::new("lib.rs"));
-    let expected = expected_deps.iter().map(|s| (*s).to_owned()).collect::<FxHashSet<_>>();
+    let expected = expected_deps.iter().map(|s| (*s).into()).collect::<FxHashSet<_>>();
     assert_eq!(parsed.imports, expected, "Dependencies mismatch for: {source_text}");
 }
 
@@ -512,7 +512,7 @@ fn large_file_simulation() {
     }
 
     let parsed = ParsedSource::from_str(&source, Path::new("lib.rs"));
-    let expected = FxHashSet::from_iter(["foo".to_owned()]);
+    let expected = FxHashSet::from_iter(["foo".into()]);
     assert_eq!(parsed.imports, expected);
 }
 
@@ -521,7 +521,7 @@ fn deeply_nested_paths() {
     let nested_path = (0..20).map(|i| format!("level{i}")).collect::<Vec<_>>().join("::");
     let source = format!("use foo::{nested_path};");
     let parsed = ParsedSource::from_str(&source, Path::new("lib.rs"));
-    let expected = FxHashSet::from_iter(["foo".to_owned()]);
+    let expected = FxHashSet::from_iter(["foo".into()]);
     assert_eq!(parsed.imports, expected);
 }
 
@@ -752,7 +752,7 @@ fn many_small_imports() {
         writeln!(source, "use foo::item{i};").unwrap();
     }
     let parsed = ParsedSource::from_str(&source, Path::new("lib.rs"));
-    let expected = FxHashSet::from_iter(["foo".to_owned()]);
+    let expected = FxHashSet::from_iter(["foo".into()]);
     assert_eq!(parsed.imports, expected);
 }
 
@@ -763,7 +763,7 @@ fn deeply_nested_modules() {
         writeln!(source, "mod level{i} {{ use foo::item{i}; }}").unwrap();
     }
     let parsed = ParsedSource::from_str(&source, Path::new("lib.rs"));
-    let expected = FxHashSet::from_iter(["foo".to_owned()]);
+    let expected = FxHashSet::from_iter(["foo".into()]);
     assert_eq!(parsed.imports, expected);
 }
 
@@ -866,7 +866,7 @@ fn multiple_colon_patterns() {
     // Mixed valid and invalid patterns
     let parsed =
         ParsedSource::from_str("fn main() { foo::bar(); baz:::qux(); }", Path::new("lib.rs"));
-    let expected = FxHashSet::from_iter(["foo".to_owned(), "baz".to_owned()]);
+    let expected = FxHashSet::from_iter(["foo".into(), "baz".into()]);
     assert_eq!(parsed.imports, expected);
 }
 

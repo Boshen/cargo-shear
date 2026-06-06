@@ -11,6 +11,7 @@ use std::{
     path::{Path as StdPath, PathBuf},
 };
 
+use compact_str::CompactString;
 use pulldown_cmark::{CodeBlockKind, Event, Parser, Tag, TagEnd};
 use ra_ap_syntax::{
     AstNode, AstToken, Edition, NodeOrToken, SourceFile, SyntaxKind, SyntaxNode, SyntaxToken,
@@ -27,7 +28,9 @@ use crate::util::read_to_string;
 #[derive(Debug, Default)]
 pub struct ParsedSource {
     /// External-crate names this file imports (deduplicated, normalised to import form).
-    pub imports: FxHashSet<String>,
+    /// `CompactString` inlines names up to 24 bytes, so most crate names avoid a heap
+    /// allocation entirely.
+    pub imports: FxHashSet<CompactString>,
 
     /// Files referenced by `mod`/`include!`/`#[path = "..."]`, used to compute reachability.
     pub paths: FxHashSet<PathBuf>,
@@ -657,7 +660,7 @@ impl SourceParser {
             return;
         }
 
-        self.result.imports.insert(clean.to_owned());
+        self.result.imports.insert(clean.into());
     }
 
     fn is_known_import(import: &str) -> bool {
@@ -707,7 +710,7 @@ mod tests {
         "#;
 
         let parsed = ParsedSource::from_str(source, Path::new("lib.rs"));
-        assert_eq!(parsed.imports, FxHashSet::from_iter(["url".to_owned()]));
+        assert_eq!(parsed.imports, FxHashSet::from_iter(["url".into()]));
         assert!(parsed.has_doctests);
     }
 
@@ -725,7 +728,7 @@ mod tests {
         ";
 
         let parsed = ParsedSource::from_str(source, Path::new("lib.rs"));
-        assert_eq!(parsed.imports, FxHashSet::from_iter(["async_trait".to_owned()]));
+        assert_eq!(parsed.imports, FxHashSet::from_iter(["async_trait".into()]));
         assert!(parsed.has_doctests);
     }
 
@@ -740,7 +743,7 @@ mod tests {
         "#;
 
         let parsed = ParsedSource::from_str(source, Path::new("lib.rs"));
-        assert_eq!(parsed.imports, FxHashSet::from_iter(["serde_json".to_owned()]));
+        assert_eq!(parsed.imports, FxHashSet::from_iter(["serde_json".into()]));
         assert!(parsed.has_doctests);
     }
 
@@ -755,7 +758,7 @@ mod tests {
         "#;
 
         let parsed = ParsedSource::from_str(source, Path::new("lib.rs"));
-        assert_eq!(parsed.imports, FxHashSet::from_iter(["url".to_owned()]));
+        assert_eq!(parsed.imports, FxHashSet::from_iter(["url".into()]));
         assert!(!parsed.has_doctests);
     }
 
@@ -770,7 +773,7 @@ mod tests {
         "#;
 
         let parsed = ParsedSource::from_str(source, Path::new("lib.rs"));
-        assert_eq!(parsed.imports, FxHashSet::from_iter(["url".to_owned()]));
+        assert_eq!(parsed.imports, FxHashSet::from_iter(["url".into()]));
         assert!(parsed.has_doctests);
     }
 
@@ -785,7 +788,7 @@ mod tests {
         "#;
 
         let parsed = ParsedSource::from_str(source, Path::new("lib.rs"));
-        assert_eq!(parsed.imports, FxHashSet::from_iter(["url".to_owned()]));
+        assert_eq!(parsed.imports, FxHashSet::from_iter(["url".into()]));
         assert!(parsed.has_doctests);
     }
 
@@ -800,7 +803,7 @@ mod tests {
         "#;
 
         let parsed = ParsedSource::from_str(source, Path::new("lib.rs"));
-        assert_eq!(parsed.imports, FxHashSet::from_iter(["url".to_owned()]));
+        assert_eq!(parsed.imports, FxHashSet::from_iter(["url".into()]));
         assert!(parsed.has_doctests);
     }
 
@@ -815,7 +818,7 @@ mod tests {
         "#;
 
         let parsed = ParsedSource::from_str(source, Path::new("lib.rs"));
-        assert_eq!(parsed.imports, FxHashSet::from_iter(["url".to_owned()]));
+        assert_eq!(parsed.imports, FxHashSet::from_iter(["url".into()]));
         assert!(parsed.has_doctests);
     }
 
