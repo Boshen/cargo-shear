@@ -385,9 +385,9 @@ dependencies = [
 
 [[package]]
 name = "insta"
-version = "1.47.2"
+version = "1.48.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b4a6248eb93a4401ed2f37dfe8ea592d3cf05b7cf4f8efa867b6895af7e094e"
+checksum = "86f0f8fee8c926415c58d6ae43a08523a26faccb2323f5e6b644fe7dd4ef6b82"
 dependencies = [
  "console",
  "once_cell",
@@ -589,15 +589,15 @@ dependencies = [
 
 [[package]]
 name = "ra_ap_edition"
-version = "0.0.335"
+version = "0.0.336"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "003279a668c7938ee180132e8c5de578b5842f2d02785a42da52ab966fc11f6b"
+checksum = "2c348f1614a12215897578e40c3d99134a15003e61d8c05ac4e57c40dd0d311f"
 
 [[package]]
 name = "ra_ap_parser"
-version = "0.0.335"
+version = "0.0.336"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96e868689d4a00136a8434acc7fe07d008d90a0894316015213a2dc99e25f76a"
+checksum = "bbe46b9ea9b5da776a8ec7e570cbc189a73135c610660736d4a75690385f3e89"
 dependencies = [
  "drop_bomb",
  "ra-ap-rustc_lexer",
@@ -609,9 +609,9 @@ dependencies = [
 
 [[package]]
 name = "ra_ap_stdx"
-version = "0.0.335"
+version = "0.0.336"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f37888d8dae68bc5b608e2fa4878d2c235f472e5748fc233bac1757c8c5bbe1d"
+checksum = "95555a88c902fd593a803ba495edb46434e72c8563e84b2eda31d617fb3d37ca"
 dependencies = [
  "crossbeam-channel",
  "crossbeam-utils",
@@ -625,9 +625,9 @@ dependencies = [
 
 [[package]]
 name = "ra_ap_syntax"
-version = "0.0.335"
+version = "0.0.336"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9598e6c0f4574602dda3e5da2bf2c5af90551454457a26b2ef646606ea600d5f"
+checksum = "26f4ac4f10a70ee46be228240df4560c332710b41159dfa7a22cc5d95cb5ac29"
 dependencies = [
  "either",
  "itertools",
@@ -706,9 +706,9 @@ checksum = "94300abf3f1ae2e2b8ffb7b58043de3d399c73fa6f4b73826402a5c457614dbe"
 
 [[package]]
 name = "rustc-literal-escaper"
-version = "0.0.4"
+version = "0.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab03008eb631b703dd16978282ae36c73282e7922fe101a4bd072a40ecea7b8b"
+checksum = "8be87abb9e40db7466e0681dc8ecd9dcfd40360cb10b4c8fe24a7c4c3669b198"
 
 [[package]]
 name = "rustix"
