@@ -274,10 +274,10 @@ impl SourceParser {
         }
 
         if let Some(token_tree) = macro_call.token_tree() {
-            self.collect_token_tree(&token_tree);
+            // `true`: also harvest `include!("foo.rs")`-style path arguments during
+            // this single walk instead of traversing the token tree a second time.
+            self.scan_token_tree(&token_tree, true);
         }
-
-        self.collect_macro_call(&macro_call);
     }
 
     fn visit_macro_rules(&mut self, node: &SyntaxNode) {
@@ -304,7 +304,7 @@ impl SourceParser {
                     self.result.has_tests = true;
                 }
             }
-            _ if meta.path().is_some_and(|path| path.to_string() == "test") => {
+            _ if meta.path().is_some_and(|path| Self::path_is(&path, "test")) => {
                 self.result.has_tests = true;
             }
             _ => {}
@@ -323,7 +323,7 @@ impl SourceParser {
                     self.collect_token_tree(&token_tree);
 
                     // Special casing for known attributes
-                    if tt_meta.path().is_some_and(|path| path.to_string() == "serde") {
+                    if tt_meta.path().is_some_and(|path| Self::path_is(&path, "serde")) {
                         self.collect_serde_attribute(&token_tree);
                     }
                 }
@@ -378,12 +378,37 @@ impl SourceParser {
     /// imports. If the contents look like Rust (`use`/`extern`/`mod`), also
     /// re-parse them so things like `lazy_static! { use foo; }` get visited.
     fn collect_token_tree(&mut self, token_tree: &TokenTree) {
+        self.scan_token_tree(token_tree, false);
+    }
+
+    /// Single-pass token-tree scan. Materialises the non-trivia tokens once and
+    /// reuses them for every check: `include!("foo.rs")`-style path arguments
+    /// (only when `collect_rs_paths`, i.e. real macro calls), the `use`/`extern`/
+    /// `mod` re-parse trigger, and the flat `foo::bar` import scan. Folding these
+    /// into one walk avoids re-traversing (and re-materialising the cursor nodes
+    /// of) the token tree for each concern.
+    fn scan_token_tree(&mut self, token_tree: &TokenTree, collect_rs_paths: bool) {
         let tokens: Vec<_> = token_tree
             .syntax()
             .descendants_with_tokens()
             .filter_map(NodeOrToken::into_token)
             .filter(|token| !token.kind().is_trivia())
             .collect();
+
+        // `include!("foo.rs")` / `include_bytes!("data.rs")` / user macros taking a
+        // `.rs` path literal. Only for macro *calls*; `macro_rules!` bodies and
+        // attribute token trees don't reference source files this way.
+        if collect_rs_paths && let Some(parent) = &self.parent {
+            for token in &tokens {
+                if token.kind() == SyntaxKind::STRING
+                    && let Some(string) = AstString::cast(token.clone())
+                    && let Ok(value) = string.value()
+                    && value.ends_with(".rs")
+                {
+                    self.result.paths.insert(parent.join(value.as_ref()));
+                }
+            }
+        }
 
         // Re-parse inner content as Rust.
         let needs_reparse = tokens.iter().any(|token| {
@@ -531,29 +556,6 @@ impl SourceParser {
         matches!(key, "with" | "deserialize_with" | "serialize_with" | "crate" | "remote")
     }
 
-    /// Collect from macro calls:
-    /// - `include!("foo.rs")` -> `foo.rs`
-    /// - `include_proto!("../proto.rs")` -> `../proto.rs`
-    fn collect_macro_call(&mut self, macro_call: &MacroCall) {
-        let Some(parent) = &self.parent else { return };
-        let Some(token_tree) = macro_call.token_tree() else { return };
-
-        for token in token_tree
-            .syntax()
-            .descendants_with_tokens()
-            .filter_map(NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::STRING)
-            .filter_map(AstString::cast)
-        {
-            let Ok(value) = token.value() else { continue };
-            if !value.ends_with(".rs") {
-                continue;
-            }
-
-            self.result.paths.insert(parent.join(value.as_ref()));
-        }
-    }
-
     /// Collect from module:
     /// - `mod foo;` -> `foo.rs`, `foo/mod.rs`
     /// - `mod foo { mod bar; }` -> `foo/bar.rs`, `foo/bar/mod.rs`
@@ -615,7 +617,7 @@ impl SourceParser {
         // (cfg_attr paths are conditional, so we still need defaults for those)
         let has_path_attr = module.attrs().any(|attr| {
             let Some(Meta::KeyValueMeta(meta)) = attr.meta() else { return false };
-            meta.path().is_some_and(|path| path.to_string() == "path") && meta.expr().is_some()
+            meta.path().is_some_and(|path| Self::path_is(&path, "path")) && meta.expr().is_some()
         });
 
         if !has_path_attr {
@@ -676,6 +678,20 @@ impl SourceParser {
 
     fn is_known_import(import: &str) -> bool {
         matches!(import, "crate" | "super" | "self" | "std")
+    }
+
+    /// Whether `path` is a single-segment path whose identifier is exactly `name`,
+    /// without the `String` allocation `path.to_string() == name` would incur.
+    /// Used for attribute paths (`#[test]`, `#[serde(..)]`, `#[path = ..]`), which
+    /// are always single-segment, so the result matches the old string compare.
+    fn path_is(path: &Path, name: &str) -> bool {
+        let mut segments = path.segments();
+        match (segments.next(), segments.next()) {
+            (Some(segment), None) => {
+                segment.name_ref().is_some_and(|name_ref| name_ref.text().as_ref() == name)
+            }
+            _ => false,
+        }
     }
 
     /// Record both possible on-disk locations Cargo will look for a `mod foo;`
