@@ -875,6 +875,23 @@ fn misplaced_ignored() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// `humantime-serde` is never imported; the `serde(with = "...")` attribute is its
+// only usage. Flagging it as unused pushes users toward an ignore they don't need,
+// which is the start of the cycle in https://github.com/Boshen/cargo-shear/issues/542.
+#[test]
+fn serde_attribute() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("serde_attribute").run()?;
+    assert_eq!(exit_code, ExitCode::SUCCESS);
+
+    insta::assert_snapshot!(output, @r"
+    shear/summary
+
+      ✓ no issues found
+    ");
+
+    Ok(())
+}
+
 // Optional `anyhow` is only used in tests but declared in `dependencies`.
 #[test]
 fn misplaced_optional_detection() -> Result<(), Box<dyn Error>> {
