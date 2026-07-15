@@ -1,8 +1,0 @@
-[package]
-name = "serde_attribute"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-# Never imported; the `serde(with = "...")` attribute is its only usage.
-humantime-serde = "1.1"

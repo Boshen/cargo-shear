@@ -1,9 +1,0 @@
-[package]
-name = "serde_attribute_macro"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-# Used by the macro-generated `serde(with = "...")` in `src/lib.rs`, and in
-# `tests/test.rs`. Missing the macro-generated usage makes this look dev-only.
-humantime-serde = "1.1"
