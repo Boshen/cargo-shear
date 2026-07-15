@@ -403,6 +403,13 @@ impl SourceParser {
             }
         }
 
+        // A macro body keeps its attributes as plain tokens, so a
+        // `#[serde(with = "...")]` inside one never reaches `collect_meta_imports`.
+        // Here the `serde` ident is part of the stream, unlike an attribute's own path.
+        if tokens.iter().any(|token| token.kind() == SyntaxKind::IDENT && token.text() == "serde") {
+            self.collect_serde_attribute(token_tree);
+        }
+
         self.collect_path_imports(&tokens);
     }
 
