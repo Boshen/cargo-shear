@@ -857,6 +857,24 @@ fn misplaced_fix() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// `anyhow` is only detected in a dev target, so the ignore suppresses the
+// `misplaced_dependency` error and must not be reported as a redundant ignore.
+// Otherwise removing the ignore, as the redundant-ignore help suggests, would
+// surface an error instead. See https://github.com/Boshen/cargo-shear/issues/542.
+#[test]
+fn misplaced_ignored() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("misplaced_ignored").run()?;
+    assert_eq!(exit_code, ExitCode::SUCCESS);
+
+    insta::assert_snapshot!(output, @r"
+    shear/summary
+
+      ✓ no issues found
+    ");
+
+    Ok(())
+}
+
 // Optional `anyhow` is only used in tests but declared in `dependencies`.
 #[test]
 fn misplaced_optional_detection() -> Result<(), Box<dyn Error>> {
