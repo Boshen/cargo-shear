@@ -892,6 +892,24 @@ fn serde_attribute() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// A macro body keeps its attributes as tokens, so the `serde(with = "...")` inside
+// one is the only usage of `humantime-serde` in the lib. Missing it makes the
+// `tests/` usage look like the only one, and the dependency gets reported as
+// misplaced — moving it to `[dev-dependencies]` would break the lib.
+#[test]
+fn serde_attribute_macro() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("serde_attribute_macro").run()?;
+    assert_eq!(exit_code, ExitCode::SUCCESS);
+
+    insta::assert_snapshot!(output, @r"
+    shear/summary
+
+      ✓ no issues found
+    ");
+
+    Ok(())
+}
+
 // Optional `anyhow` is only used in tests but declared in `dependencies`.
 #[test]
 fn misplaced_optional_detection() -> Result<(), Box<dyn Error>> {
