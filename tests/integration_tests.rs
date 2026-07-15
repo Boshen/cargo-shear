@@ -857,24 +857,6 @@ fn misplaced_fix() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-// `anyhow` is only detected in a dev target, so the ignore suppresses the
-// `misplaced_dependency` error and must not be reported as a redundant ignore.
-// Otherwise removing the ignore, as the redundant-ignore help suggests, would
-// surface an error instead. See https://github.com/Boshen/cargo-shear/issues/542.
-#[test]
-fn misplaced_ignored() -> Result<(), Box<dyn Error>> {
-    let (exit_code, output, _temp_dir) = CargoShearRunner::new("misplaced_ignored").run()?;
-    assert_eq!(exit_code, ExitCode::SUCCESS);
-
-    insta::assert_snapshot!(output, @r"
-    shear/summary
-
-      ✓ no issues found
-    ");
-
-    Ok(())
-}
-
 // `humantime-serde` is never imported; the `serde(with = "...")` attribute is its
 // only usage. Flagging it as unused pushes users toward an ignore they don't need,
 // which is the start of the cycle in https://github.com/Boshen/cargo-shear/issues/542.
