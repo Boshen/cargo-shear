@@ -116,14 +116,18 @@ fn serde_root_scoped_path() {
 }
 
 // A macro body keeps its attributes as tokens, so these never reach the `Attr` node
-// that `#[serde(with = "...")]` is normally read from.
+// that `#[serde(...)]` is normally read from. Covers every key in
+// `is_serde_attribute_key`, including `crate`, which is a keyword rather than an ident.
 #[test]
-fn serde_with_inside_macro() {
+fn serde_attributes_inside_macro() {
     // `macro_rules!` definition
     test("macro_rules! m { ($n:ident) => { struct $n { #[serde(with = \"foo\")] f: () } }; }");
     // macro invocation
     test("m! { struct Bar { #[serde(with = \"foo\")] f: () } }");
     test("m! { struct Bar { #[serde(deserialize_with = \"foo::deserialize\")] f: () } }");
+    test("m! { struct Bar { #[serde(serialize_with = \"foo::serialize\")] f: () } }");
+    test("m! { #[serde(crate = \"foo\")] struct Bar; }");
+    test("m! { #[serde(remote = \"foo\")] struct Bar; }");
 }
 
 #[test]
