@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.13.2](https://github.com/Boshen/cargo-shear/compare/v1.13.1...v1.13.2) - 2026-07-16
+
+### <!-- 1 -->🐛 Bug Fixes
+- detect serde attributes inside macros ([#543](https://github.com/Boshen/cargo-shear/pull/543)) (by @Boshen)
+
+### <!-- 3 -->📚 Documentation
+- add security policy ([#537](https://github.com/Boshen/cargo-shear/pull/537)) (by @Boshen)
+
+### <!-- 6 -->🧪 Testing
+- cover serde attributes forwarded through another attribute ([#546](https://github.com/Boshen/cargo-shear/pull/546)) (by @Boshen)
+
+### Contributors
+
+* @renovate[bot]
+* @Boshen
+
 ## [1.13.1](https://github.com/Boshen/cargo-shear/compare/v1.13.0...v1.13.1) - 2026-06-06
 
 ### <!-- 1 -->🐛 Bug Fixes
