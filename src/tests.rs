@@ -130,6 +130,16 @@ fn serde_attributes_inside_macro() {
     test("m! { #[serde(remote = \"foo\")] struct Bar; }");
 }
 
+// A `serde(...)` forwarded through another attribute is reached only by the token
+// scan: the `Attr` path is `confik`, so the path check in `collect_meta_imports`
+// never fires. Gating that scan on the attribute path would silently break this.
+// https://docs.rs/confik/0.15.12/confik/#forwarding-attributes
+#[test]
+fn serde_attributes_forwarded_by_another_attribute() {
+    test("struct Foo { #[confik(forward(serde(with = \"foo\")))] f: () }");
+    test("#[confik(forward(serde(crate = \"foo\")))] struct Foo { f: () }");
+}
+
 #[test]
 fn test_lib() {
     let shear = CargoShear::new(
