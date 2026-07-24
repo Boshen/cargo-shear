@@ -141,8 +141,9 @@ fn clean_workspace_fix() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-// Source discovery handles overlapping custom target roots without entering
-// a nested package that is not a workspace member.
+// Source discovery handles overlapping custom target roots, including an
+// explicitly configured root ignored by its parent, without entering a nested
+// package that is not a workspace member.
 #[test]
 fn file_discovery_detection() -> Result<(), Box<dyn Error>> {
     let (exit_code, output, _temp_dir) = CargoShearRunner::new("file_discovery").run()?;
