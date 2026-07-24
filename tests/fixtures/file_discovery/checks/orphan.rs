@@ -1,0 +1,1 @@
+fn check_orphan() {}

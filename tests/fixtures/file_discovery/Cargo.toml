@@ -1,0 +1,12 @@
+[package]
+name = "file_discovery"
+version = "0.1.0"
+edition = "2024"
+build = "build.rs"
+
+[lib]
+path = "code/lib.rs"
+
+[[test]]
+name = "custom"
+path = "checks/custom.rs"

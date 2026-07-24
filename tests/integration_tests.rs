@@ -141,6 +141,39 @@ fn clean_workspace_fix() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// Source discovery handles overlapping custom target roots without entering
+// a nested package that is not a workspace member.
+#[test]
+fn file_discovery_detection() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("file_discovery").run()?;
+    assert_eq!(exit_code, ExitCode::SUCCESS);
+
+    insta::assert_snapshot!(output, @r#"
+    shear/unlinked_files
+
+      ⚠ 3 unlinked files in `file_discovery`
+      │ checks/orphan.rs
+      │ code/orphan.rs
+      │ root_orphan.rs
+      help: delete these files
+
+    shear/summary
+
+      ⚠ 1 warning
+
+    Advice:
+      ☞ to suppress a file issue
+       ╭─[Cargo.toml:2:18]
+     1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
+     2 │ ignored-paths = ["tests/compile/*.rs"]
+       ·                  ──────────┬─────────
+       ·                            ╰── add a file pattern here
+       ╰────
+    "#);
+
+    Ok(())
+}
+
 // A `cargo hakari` `workspace-hack` crate (detected by the `### BEGIN HAKARI SECTION`
 // marker) declares dependencies it never imports, and `app` depends on it without
 // importing it. Neither the hack crate's own deps nor the edge pointing at it should

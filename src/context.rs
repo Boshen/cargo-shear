@@ -3,11 +3,14 @@
 //! the dependency-name maps the analyzer needs to translate import names back
 //! to package names.
 
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    sync::{Mutex, PoisonError},
+};
 
 use anyhow::{Result, anyhow};
 use cargo_metadata::{Metadata, Package, Target};
-use ignore::{DirEntry, WalkBuilder};
+use ignore::{DirEntry, WalkBuilder, WalkState};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -18,6 +21,37 @@ use crate::{manifest::Manifest, source_parser::ParsedSource, util::read_to_strin
 /// such a crate, regardless of the name the user gave it. See
 /// <https://docs.rs/cargo-hakari>.
 const HAKARI_SECTION_MARKER: &str = "### BEGIN HAKARI SECTION";
+
+/// Directory walking is I/O-bound and short-lived; more threads add scheduling
+/// overhead before the CPU-bound parsing pass.
+const MAX_WALK_THREADS: usize = 4;
+
+/// Collects Rust files locally for one walker thread, then merges them once
+/// when the thread finishes to avoid synchronizing for every visited file.
+struct RustFileCollector<'a> {
+    local: Vec<PathBuf>,
+    shared: &'a Mutex<Vec<PathBuf>>,
+}
+
+impl RustFileCollector<'_> {
+    fn visit(&mut self, entry: std::result::Result<DirEntry, ignore::Error>) -> WalkState {
+        if let Ok(entry) = entry
+            && entry.file_type().is_some_and(|file_type| file_type.is_file())
+            && entry.path().extension().is_some_and(|extension| extension == "rs")
+        {
+            self.local.push(entry.into_path());
+        }
+
+        WalkState::Continue
+    }
+}
+
+impl Drop for RustFileCollector<'_> {
+    fn drop(&mut self) {
+        let mut shared = self.shared.lock().unwrap_or_else(PoisonError::into_inner);
+        shared.append(&mut self.local);
+    }
+}
 
 /// Workspace-wide state computed once and shared by every per-package run.
 pub struct WorkspaceContext {
@@ -78,37 +112,35 @@ impl WorkspaceContext {
         let parents: FxHashSet<PathBuf> =
             entry_points.iter().filter_map(|path| path.parent()).map(Path::to_path_buf).collect();
 
-        let walked: FxHashSet<PathBuf> = parents
-            .into_par_iter()
-            .flat_map_iter(|parent| {
-                let packages = packages.clone();
-                WalkBuilder::new(&parent)
-                    // Don't descend into directories that are themselves Cargo packages
-                    // (each member is walked from its own entry points). We *do* still
-                    // visit the package root itself — packages.contains(path) lets the
-                    // current member's root through.
-                    .filter_entry(move |entry| {
-                        if let Some(file_type) = entry.file_type()
-                            && file_type.is_dir()
-                        {
-                            let path = entry.path();
-                            if path.join("Cargo.toml").exists() {
-                                return packages.contains(path);
-                            }
-                        }
+        // A single multi-root walker shares ignore matchers and other traversal
+        // resources across entry-point directories.
+        let mut walk_builder = WalkBuilder::from_iter(parents);
+        let walker_packages = packages.clone();
+        walk_builder
+            .threads(rayon::current_num_threads().min(MAX_WALK_THREADS))
+            // Don't descend into directories that are themselves Cargo packages
+            // (each member is walked from its own entry points). We *do* still
+            // visit the package root itself — packages.contains(path) lets the
+            // current member's root through.
+            .filter_entry(move |entry| {
+                if let Some(file_type) = entry.file_type()
+                    && file_type.is_dir()
+                {
+                    let path = entry.path();
+                    if path.join("Cargo.toml").exists() {
+                        return walker_packages.contains(path);
+                    }
+                }
 
-                        true
-                    })
-                    .build()
-                    .filter_map(Result::ok)
-                    // Only `.rs` files; the walker also yields directories and other extensions.
-                    .filter(|entry| {
-                        entry.file_type().is_some_and(|file_type| file_type.is_file())
-                            && entry.path().extension().is_some_and(|extension| extension == "rs")
-                    })
-                    .map(DirEntry::into_path)
-            })
-            .collect();
+                true
+            });
+
+        let discovered = Mutex::new(Vec::new());
+        walk_builder.build_parallel().run(|| {
+            let mut collector = RustFileCollector { local: Vec::new(), shared: &discovered };
+            Box::new(move |entry| collector.visit(entry))
+        });
+        let walked = discovered.into_inner().unwrap_or_else(PoisonError::into_inner);
 
         // `WalkBuilder` was started from parent directories, which misses single-file
         // entry points whose parent isn't itself walked (e.g. `build.rs` at the package root).
