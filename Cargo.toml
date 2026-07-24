@@ -2,6 +2,7 @@
 name = "cargo-shear"
 version = "1.13.2"
 edition = "2024"
+rust-version = "1.95"
 description = "Detect and fix unused/misplaced dependencies from Cargo.toml"
 authors = ["Boshen <boshenc@gmail.com>"]
 repository = "https://github.com/Boshen/cargo-shear"
