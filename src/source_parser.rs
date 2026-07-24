@@ -261,6 +261,12 @@ impl SourceParser {
     fn visit_path(&mut self, node: &SyntaxNode) {
         // Paths inside `use` statements are skipped by the caller (`walk` tracks
         // `use` nesting) since `visit_use` already collects them.
+        // Qualified paths are nested `PATH` nodes, so only collect the outermost
+        // one instead of probing the same leading import for every qualifier.
+        if node.parent().is_some_and(|parent| parent.kind() == SyntaxKind::PATH) {
+            return;
+        }
+
         if let Some(path) = Path::cast(node.clone()) {
             self.collect_path(&path);
         }
@@ -488,12 +494,10 @@ impl SourceParser {
     /// - `foo::bar()` -> `foo`
     /// - `foo::Bar::new()` -> `foo`
     fn collect_path(&mut self, path: &Path) {
-        let mut segments = path.segments();
-
         // Single segment paths can't be external crates
-        if let Some(first) = segments.next()
-            && let Some(name_ref) = first.name_ref()
-            && segments.next().is_some()
+        if path.qualifier().is_some()
+            && path.segment().is_some()
+            && let Some(name_ref) = path.first_segment().and_then(|segment| segment.name_ref())
         {
             self.add_import(name_ref.text().as_ref());
         }
@@ -674,7 +678,8 @@ impl SourceParser {
 
         // External crate names start with a lowercase letter or underscore by
         // convention. Use this to filter out type names like `Foo::bar()`.
-        if !clean.chars().next().is_some_and(|char| char.is_ascii_lowercase() || char == '_') {
+        if !clean.as_bytes().first().is_some_and(|byte| byte.is_ascii_lowercase() || *byte == b'_')
+        {
             return;
         }
 
