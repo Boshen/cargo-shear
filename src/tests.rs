@@ -3,10 +3,19 @@ use std::{fmt::Write, path::Path, process::ExitCode};
 use rustc_hash::FxHashSet;
 
 use crate::{
-    CargoShear, CargoShearOptions, default_path,
+    CargoShear, CargoShearOptions, cargo_shear_options, default_path,
     output::{ColorMode, OutputFormat},
     source_parser::ParsedSource,
 };
+
+#[test]
+fn version_matches_package_version() {
+    let Err(failure) = cargo_shear_options().run_inner(&["--version"]) else {
+        panic!("--version should exit after printing the package version");
+    };
+
+    assert_eq!(failure.unwrap_stdout(), concat!("Version: ", env!("CARGO_PKG_VERSION"), "\n"));
+}
 
 #[track_caller]
 fn test(source_text: &str) {

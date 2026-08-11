@@ -64,10 +64,7 @@ use crate::{
     util::read_to_string,
 };
 
-const VERSION: &str = match option_env!("SHEAR_VERSION") {
-    Some(v) => v,
-    None => "dev",
-};
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Command-line options for cargo-shear.
 ///
