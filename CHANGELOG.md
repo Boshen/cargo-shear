@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.13.4](https://github.com/Boshen/cargo-shear/compare/v1.13.3...v1.13.4) - 2026-08-11
+
+### <!-- 1 -->🐛 Bug Fixes
+- report Cargo package version ([#561](https://github.com/Boshen/cargo-shear/pull/561)) (by @Boshen)
+
+### Contributors
+
+* @Boshen
+* @renovate[bot]
+
 ## [1.13.3](https://github.com/Boshen/cargo-shear/compare/v1.13.2...v1.13.3) - 2026-07-24
 
 ### <!-- 3 -->📚 Documentation
