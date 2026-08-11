@@ -576,7 +576,7 @@ impl SourceParser {
     ) {
         let Some(ident) = module.name() else { return };
         let text = ident.text();
-        let name = text.strip_prefix("r#").unwrap_or_else(|| text.as_ref());
+        let name = text.strip_prefix("r#").unwrap_or(text);
 
         let paths: Vec<_> =
             module.attrs().flat_map(|attr| Self::extract_path_attr(&attr)).collect();

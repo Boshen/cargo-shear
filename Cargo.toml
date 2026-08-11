@@ -21,7 +21,7 @@ ignore = "0.4.31"
 globset = { version = "0.4.19", features = ["serde1"] }
 cargo_metadata = "0.23.1"
 bpaf = { version = "0.9.26", features = ["derive", "batteries"] }
-ra_ap_syntax = "0.0.344"
+ra_ap_syntax = "0.0.347"
 pulldown-cmark = { version = "0.13", default-features = false, features = [
   "simd",
 ] }
