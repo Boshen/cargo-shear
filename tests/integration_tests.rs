@@ -2260,6 +2260,99 @@ fn unused_workspace_libname_fix() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// Without `keep-path-dependencies`, an uninherited workspace path dependency is
+// flagged like any other unused workspace dependency.
+#[test]
+fn unused_workspace_path_detection() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("unused_workspace_path").run()?;
+    assert_eq!(exit_code, ExitCode::FAILURE);
+
+    insta::assert_snapshot!(output, @r#"
+    shear/unused_workspace_dependency
+
+      × unused workspace dependency `new-crate`
+       ╭─[Cargo.toml:7:1]
+     6 │ # Unused
+     7 │ new-crate = { path = "new-crate" }
+       · ────┬────
+       ·     ╰── not used by any workspace member
+       ╰────
+      help: remove this dependency
+
+    shear/summary
+
+      ✗ 1 error
+
+    Advice:
+      ☞ run with `--fix` to fix 1 issue
+      ☞ to suppress a dependency issue
+       ╭─[Cargo.toml:2:12]
+     1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
+     2 │ ignored = ["crate-name"]
+       ·            ──────┬─────
+       ·                  ╰── add a crate name here
+       ╰────
+    "#);
+
+    Ok(())
+}
+
+// #533: with `keep-path-dependencies = true`, the pre-declared `new-crate` path
+// dependency is kept because a crate exists at its path, while `ghost` — whose
+// path contains no crate — is still flagged.
+#[test]
+fn unused_workspace_path_kept_detection() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _temp_dir) =
+        CargoShearRunner::new("unused_workspace_path_kept").run()?;
+    assert_eq!(exit_code, ExitCode::FAILURE);
+
+    insta::assert_snapshot!(output, @r#"
+    shear/unused_workspace_dependency
+
+      × unused workspace dependency `ghost`
+        ╭─[Cargo.toml:9:1]
+      8 │ # Unused: no crate at the declared path
+      9 │ ghost = { path = "ghost" }
+        · ──┬──
+        ·   ╰── not used by any workspace member
+     10 │ 
+        ╰────
+      help: remove this dependency
+
+    shear/summary
+
+      ✗ 1 error
+
+    Advice:
+      ☞ run with `--fix` to fix 1 issue
+      ☞ to suppress a dependency issue
+       ╭─[Cargo.toml:2:12]
+     1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
+     2 │ ignored = ["crate-name"]
+       ·            ──────┬─────
+       ·                  ╰── add a crate name here
+       ╰────
+    "#);
+
+    Ok(())
+}
+
+// `--fix` must remove the stale `ghost` entry but keep `new-crate`.
+#[test]
+fn unused_workspace_path_kept_fix() -> Result<(), Box<dyn Error>> {
+    let (exit_code, _output, temp_dir) = CargoShearRunner::new("unused_workspace_path_kept")
+        .options(CargoShearOptions::with_fix)
+        .run()?;
+    assert_eq!(exit_code, ExitCode::FAILURE);
+
+    let manifest = Manifest::from_path(temp_dir.path().join("Cargo.toml"))?;
+    let workspace = &manifest.workspace.as_ref().unwrap().dependencies;
+    assert!(workspace.contains_key("new-crate"));
+    assert!(!workspace.contains_key("ghost"));
+
+    Ok(())
+}
+
 // Without `--check-test-targets`, test/doctest mismatches are silent.
 #[test]
 fn test_disabled_with_tests_default_off() -> Result<(), Box<dyn Error>> {

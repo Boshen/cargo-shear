@@ -1,0 +1,7 @@
+[workspace]
+resolver = "3"
+members = ["app", "new-crate"]
+
+[workspace.dependencies]
+# Unused
+new-crate = { path = "new-crate" }

@@ -1,0 +1,12 @@
+[workspace]
+resolver = "3"
+members = ["app", "new-crate"]
+
+[workspace.dependencies]
+# Kept: a crate exists at the declared path
+new-crate = { path = "new-crate" }
+# Unused: no crate at the declared path
+ghost = { path = "ghost" }
+
+[workspace.metadata.cargo-shear]
+keep-path-dependencies = true

@@ -530,6 +530,8 @@ impl PackageProcessor {
             return result;
         }
 
+        let keep_path_deps = ctx.manifest.workspace.metadata.cargo_shear.keep_path_dependencies;
+
         for (dep, dependency) in &ctx.manifest.workspace.dependencies {
             let pkg = dependency.get_ref().package().unwrap_or(dep.get_ref());
 
@@ -540,6 +542,18 @@ impl PackageProcessor {
             // Members depend on a `cargo hakari` `workspace-hack` crate without ever
             // importing it, so never flag it as an unused workspace dependency.
             if ctx.hakari_packages.contains(pkg) {
+                continue;
+            }
+
+            // Some workflows pre-declare a path dependency in the workspace root
+            // before any member uses it (e.g. a freshly created crate that later
+            // commits depend on). With `keep-path-dependencies`, such an entry is
+            // kept as long as a crate exists at the declared path — a stale entry
+            // whose crate was deleted or moved is still flagged.
+            if keep_path_deps
+                && let Some(path) = dependency.get_ref().path()
+                && ctx.root.join(path).join("Cargo.toml").is_file()
+            {
                 continue;
             }
 
