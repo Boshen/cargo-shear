@@ -526,7 +526,7 @@ impl PackageProcessor {
             }
         }
 
-        if ctx.packages.len() <= 1 || ctx.manifest.workspace.dependencies.is_empty() {
+        if ctx.manifest.workspace.dependencies.is_empty() {
             return result;
         }
 
