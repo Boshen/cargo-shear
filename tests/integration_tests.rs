@@ -2108,7 +2108,7 @@ fn unused_table_fix() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-// Workspace dependency `anyhow` is not inherited by any workspace member.
+// #557: Workspace dependency `anyhow` is not inherited by the workspace's only member.
 #[test]
 fn unused_workspace_detection() -> Result<(), Box<dyn Error>> {
     let (exit_code, output, _temp_dir) = CargoShearRunner::new("unused_workspace").run()?;
@@ -2144,7 +2144,7 @@ fn unused_workspace_detection() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-// Unused workspace dependency `anyhow` should be removed.
+// #557: Unused workspace dependency `anyhow` should be removed from a single-member workspace.
 #[test]
 fn unused_workspace_fix() -> Result<(), Box<dyn Error>> {
     let (exit_code, _output, temp_dir) =
