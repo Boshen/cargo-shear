@@ -17,7 +17,7 @@ use ra_ap_syntax::{
     AstNode, AstToken, Edition, NodeOrToken, SourceFile, SyntaxKind, SyntaxNode, SyntaxToken,
     WalkEvent,
     ast::{
-        Attr, Comment, CommentShape, ExternCrate, HasAttrs, HasModuleItem, HasName, MacroCall,
+        AnyComment, Attr, CommentShape, ExternCrate, HasAttrs, HasModuleItem, HasName, MacroCall,
         MacroRules, Meta, Module, Path, String as AstString, TokenTree, Use, UseTree,
     },
 };
@@ -239,7 +239,10 @@ impl SourceParser {
     }
 
     fn visit_token(&mut self, token: SyntaxToken) {
-        if token.kind() == SyntaxKind::COMMENT {
+        if matches!(
+            token.kind(),
+            SyntaxKind::COMMENT | SyntaxKind::INNER_DOC_COMMENT | SyntaxKind::OUTER_DOC_COMMENT
+        ) {
             self.visit_comment(token);
         }
     }
@@ -364,11 +367,13 @@ impl SourceParser {
     }
 
     fn visit_comment(&mut self, token: SyntaxToken) {
-        let Some(comment) = Comment::cast(token) else { return };
-        let Some((text, _)) = comment.doc_comment() else { return };
+        let Some(comment) = AnyComment::cast(token) else { return };
+        if comment.doc_kind().is_none() {
+            return;
+        }
 
-        for line in text.lines() {
-            let line = match comment.kind().shape {
+        for line in comment.text().lines() {
+            let line = match comment.shape() {
                 CommentShape::Line => line.trim_start(),
                 CommentShape::Block => line.trim_start().trim_start_matches('*').trim_start(),
             };
