@@ -154,6 +154,7 @@ pub enum Dependency {
 #[derive(Debug, Deserialize, Clone, Default)]
 pub struct DependencyDetail {
     pub package: Option<String>,
+    pub path: Option<String>,
     #[serde(default)]
     pub optional: bool,
 }
@@ -164,6 +165,14 @@ impl Dependency {
         match self {
             Self::Simple(_) => None,
             Self::Detailed(detail) => detail.package.as_deref(),
+        }
+    }
+
+    #[must_use]
+    pub fn path(&self) -> Option<&str> {
+        match self {
+            Self::Simple(_) => None,
+            Self::Detailed(detail) => detail.path.as_deref(),
         }
     }
 
@@ -194,6 +203,10 @@ pub struct ShearConfig {
     pub ignored: FxHashSet<Spanned<String>>,
     #[serde(default, rename = "ignored-paths")]
     pub ignored_paths: Vec<SpannedGlob>,
+    /// Keep `[workspace.dependencies]` path entries whose crate exists on disk,
+    /// even when no member inherits them. Only read from workspace metadata.
+    #[serde(default, rename = "keep-path-dependencies")]
+    pub keep_path_dependencies: bool,
 }
 
 #[derive(Deserialize, Default)]
