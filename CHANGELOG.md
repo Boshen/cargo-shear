@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.14.0](https://github.com/Boshen/cargo-shear/compare/v1.13.5...v1.14.0) - 2026-09-22
+
+### <!-- 0 -->🚀 Features
+- add `keep-path-dependencies` workspace setting ([#545](https://github.com/Boshen/cargo-shear/pull/545)) (by @Boshen)
+
+### Contributors
+
+* @Boshen
+
 ## [1.13.5](https://github.com/Boshen/cargo-shear/compare/v1.13.4...v1.13.5) - 2026-09-21
 
 ### <!-- 1 -->🐛 Bug Fixes
