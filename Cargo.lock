@@ -504,9 +504,9 @@ checksum = "3eaf3ede3fee6db1a4c2ee091bf8a8b4dccdc6d17f656fb07896ee72867612f2"
 
 [[package]]
 name = "libmimalloc-sys2"
-version = "0.1.63"
+version = "0.1.64"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2812ea58f6620a137d0e7c7b9ba63f515248c5575bd669f739a9ea4b56ba8259"
+checksum = "07d0f8a90720962736f8a5965b28ba9b9f7a790073bc637b6e965cc14111dfd7"
 dependencies = [
  "cc",
  "cmake",
@@ -564,9 +564,9 @@ dependencies = [
 
 [[package]]
 name = "mimalloc-safe"
-version = "0.1.67"
+version = "0.1.68"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f9fd5a18b7a9c72d89d0e906a9d5b93c330c159e9d5072c858e4631f0bd0ada"
+checksum = "4193bb3155866f6c4bd60586ae65e6ae807d0bfe2f811ce8a469f1aa774fb121"
 dependencies = [
  "libmimalloc-sys2",
 ]
@@ -620,9 +620,9 @@ dependencies = [
 
 [[package]]
 name = "pulldown-cmark"
-version = "0.13.4"
+version = "0.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9f068eba8e7071c5f9511831b44f32c740d5adf574e990f946ddb53db2f314e"
+checksum = "278e9268c93b9e498a2da46c34d90ba93a3255eb99009646398f34bc73ab36eb"
 dependencies = [
  "bitflags",
  "memchr",
@@ -664,15 +664,15 @@ dependencies = [
 
 [[package]]
 name = "ra_ap_edition"
-version = "0.0.358"
+version = "0.0.359"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e95437d4702879e3851c80580524f36025589b3eeaec3f7798cdf88671c130b"
+checksum = "e40783f9c3f80a882ca667747f49d1db912dd047c8512dadb66636a70bbe6d1e"
 
 [[package]]
 name = "ra_ap_parser"
-version = "0.0.358"
+version = "0.0.359"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "64b1543d3639a969f5cb4d55a94154ef672f5e1c873b6161407f5705e3164bbc"
+checksum = "f540df8cb5fdfbee3679149b1a2a9b9e631d414385ab1f17c4f2ae38ce491b3d"
 dependencies = [
  "drop_bomb",
  "ra-ap-rustc_lexer",
@@ -684,9 +684,9 @@ dependencies = [
 
 [[package]]
 name = "ra_ap_stdx"
-version = "0.0.358"
+version = "0.0.359"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "60c564fa8518154e983d5c49be54bfc970cd91ba5b7fd9be07289e1965aa42cc"
+checksum = "5603480e6dc86c8e014bfa6ee88aa9b3d73d8fc48646eaaf3d7db155658c20ca"
 dependencies = [
  "crossbeam-channel",
  "crossbeam-utils",
@@ -700,9 +700,9 @@ dependencies = [
 
 [[package]]
 name = "ra_ap_syntax"
-version = "0.0.358"
+version = "0.0.359"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3b6f7b5310d58d302b6e654b7b7013676a94c462e9e21ae2152d49e5d067ae1"
+checksum = "02e3161a42822421820e060bf93a6e5e954f2a99e1594da4d1e46f8765b5570c"
 dependencies = [
  "either",
  "itertools",
