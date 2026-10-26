@@ -16,7 +16,7 @@ Detect and fix issues in Rust projects:
 cargo binstall cargo-shear
 
 # Build from source.
-cargo install cargo-shear
+cargo install cargo-shear --locked
 
 # Install from brew.
 brew install cargo-shear
