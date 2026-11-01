@@ -1,0 +1,7 @@
+[package]
+name = "path_outside_target"
+version = "0.1.0"
+edition = "2024"
+
+[dev-dependencies]
+anyhow = "1.0"

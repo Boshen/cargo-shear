@@ -132,7 +132,7 @@ impl<'a> PackageAnalyzer<'a> {
                     .as_encoded_bytes()
             };
 
-            let matching_files: Vec<_> = self
+            let mut matching_files: Vec<_> = self
                 .ctx
                 .workspace
                 .files
@@ -147,6 +147,22 @@ impl<'a> PackageAnalyzer<'a> {
                     }
                 })
                 .collect();
+
+            // A `#[path = "..."]` module or an `include!` can compile a file from
+            // outside the target's directory into the target, so follow them.
+            let mut seen: FxHashSet<&PathBuf> =
+                matching_files.iter().map(|(path, _)| *path).collect();
+            let mut index = 0;
+            while let Some(&(_, parsed)) = matching_files.get(index) {
+                for path in &parsed.paths {
+                    if let Some((path, parsed)) = self.ctx.workspace.files.get_key_value(path)
+                        && seen.insert(path)
+                    {
+                        matching_files.push((path, parsed));
+                    }
+                }
+                index += 1;
+            }
 
             let imports: FxHashSet<CompactString> = matching_files
                 .iter()
