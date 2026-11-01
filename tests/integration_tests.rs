@@ -1222,6 +1222,39 @@ fn unlinked_workspace_ignored_redundant_detection() -> Result<(), Box<dyn Error>
     Ok(())
 }
 
+// `anyhow` is used only by `shared/helper.rs`, which `tests/it.rs` loads with
+// `#[path = "../shared/helper.rs"]`. The file is outside the test target's directory,
+// but it is compiled into the target, so `anyhow` is used.
+#[test]
+fn path_outside_target_detection() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("path_outside_target").run()?;
+    assert_eq!(exit_code, ExitCode::SUCCESS);
+
+    insta::assert_snapshot!(output, @r"
+    shear/summary
+
+      ✓ no issues found
+    ");
+
+    Ok(())
+}
+
+// `src/lib.rs` loads `tests/unit/smoke.rs` with `#[path = "../tests/unit/smoke.rs"]`,
+// so the file is linked.
+#[test]
+fn path_parent_dir_detection() -> Result<(), Box<dyn Error>> {
+    let (exit_code, output, _temp_dir) = CargoShearRunner::new("path_parent_dir").run()?;
+    assert_eq!(exit_code, ExitCode::SUCCESS);
+
+    insta::assert_snapshot!(output, @r"
+    shear/summary
+
+      ✓ no issues found
+    ");
+
+    Ok(())
+}
+
 // Files that are empty (no items, only whitespace/comments) should be warned about.
 #[test]
 fn empty_files_detection() -> Result<(), Box<dyn Error>> {

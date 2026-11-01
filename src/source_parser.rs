@@ -8,7 +8,7 @@
 
 use std::{
     io,
-    path::{Path as StdPath, PathBuf},
+    path::{Component, Path as StdPath, PathBuf},
 };
 
 use compact_str::CompactString;
@@ -566,7 +566,7 @@ impl SourceParser {
                 continue;
             }
 
-            self.result.paths.insert(parent.join(value.as_ref()));
+            self.result.paths.insert(normalize(&parent.join(value.as_ref())));
         }
     }
 
@@ -714,8 +714,32 @@ impl SourceParser {
         let Some(parent) = &self.parent else { return };
 
         let base = dir.unwrap_or(parent);
-        self.result.paths.insert(base.join(path));
+        self.result.paths.insert(normalize(&base.join(path)));
     }
+}
+
+/// Resolve `.` and `..` components without touching the file system, so that
+/// `src/../tests/unit/smoke.rs` names the same file as `tests/unit/smoke.rs`
+/// found by the workspace walk. A relative path keeps its leading `.` or `..`.
+fn normalize(path: &StdPath) -> PathBuf {
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir if normalized.as_os_str().is_empty() => normalized.push(component),
+            Component::CurDir => {}
+            Component::ParentDir => match normalized.components().next_back() {
+                Some(Component::Normal(_)) => {
+                    normalized.pop();
+                }
+                Some(Component::RootDir | Component::Prefix(_)) => {}
+                Some(Component::CurDir | Component::ParentDir) | None => {
+                    normalized.push(component);
+                }
+            },
+            component => normalized.push(component),
+        }
+    }
+    normalized
 }
 
 #[cfg(test)]
@@ -923,6 +947,25 @@ mod tests {
                 PathBuf::from("impls/mod.rs"),
                 PathBuf::from("implementations/bar.rs"),
                 PathBuf::from("implementations/bar/mod.rs"),
+            ])
+        );
+    }
+
+    #[test]
+    fn collects_paths_parent_dir() {
+        let source = r#"
+            #[path = "../tests/unit/smoke.rs"]
+            mod tests;
+
+            include!("./generated/../generated.rs");
+        "#;
+
+        let parsed = ParsedSource::from_str(source, Path::new("/crate/src/lib.rs"));
+        assert_eq!(
+            parsed.paths,
+            FxHashSet::from_iter([
+                PathBuf::from("/crate/tests/unit/smoke.rs"),
+                PathBuf::from("/crate/src/generated.rs"),
             ])
         );
     }

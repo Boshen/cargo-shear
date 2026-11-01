@@ -115,13 +115,15 @@ impl WorkspaceContext {
         let paths: FxHashSet<PathBuf> =
             entry_points.iter().filter(|path| path.is_file()).cloned().chain(walked).collect();
 
-        let files: FxHashMap<PathBuf, ParsedSource> = paths
+        let mut files: FxHashMap<PathBuf, ParsedSource> = paths
             .into_par_iter()
             .filter_map(|path| {
                 let is_entry_point = entry_points.contains(&path);
                 ParsedSource::from_path(&path, is_entry_point).ok().map(|source| (path, source))
             })
             .collect();
+
+        Self::parse_unwalked(&mut files);
 
         let linked: FxHashSet<PathBuf> = entry_points
             .into_iter()
@@ -172,6 +174,33 @@ impl WorkspaceContext {
             ignored_deps,
             hakari_packages,
         })
+    }
+
+    /// Parse the files that `#[path = "..."]` modules and `include!`s name outside
+    /// every entry point's directory, which the walk never reaches, and the files
+    /// they name in turn. A file loaded through `#[path]` resolves its own
+    /// `mod foo;` next to itself, like an entry point.
+    fn parse_unwalked(files: &mut FxHashMap<PathBuf, ParsedSource>) {
+        let mut pending: Vec<PathBuf> = files
+            .values()
+            .flat_map(|parsed| parsed.paths.iter())
+            .filter(|path| !files.contains_key(*path) && path.is_file())
+            .cloned()
+            .collect();
+        while let Some(path) = pending.pop() {
+            if files.contains_key(&path) {
+                continue;
+            }
+            let Ok(parsed) = ParsedSource::from_path(&path, true) else { continue };
+            pending.extend(
+                parsed
+                    .paths
+                    .iter()
+                    .filter(|path| !files.contains_key(*path) && path.is_file())
+                    .cloned(),
+            );
+            files.insert(path, parsed);
+        }
     }
 
     /// Identify the workspace members that are `cargo hakari` `workspace-hack`
