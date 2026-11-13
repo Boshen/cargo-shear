@@ -2,6 +2,7 @@ use std::{collections::BTreeSet, error::Error, fmt, path::PathBuf};
 
 use miette::{Diagnostic, LabeledSpan, NamedSource, Severity, SourceSpan};
 use rustc_hash::FxHashSet;
+use toml::Spanned;
 
 use crate::{
     CargoShearOptions,
@@ -19,6 +20,9 @@ use crate::{
 /// Known crates that generate code at build time, and may require `--expand`.
 const KNOWN_CODEGEN_PKGS: &[&str] =
     &["automod", "prost-build", "tonic-build", "tonic-prost-build", "trybuild"];
+
+/// Related note attached to optional-dependency diagnostics.
+const OPTIONAL_BREAKING_CHANGE: &str = "removing an optional dependency may be a breaking change";
 
 /// Aggregated diagnostics and counts across every package and the workspace root.
 #[derive(Debug)]
@@ -250,28 +254,24 @@ impl fmt::Debug for ShearDiagnostic {
 
 impl ShearDiagnostic {
     pub fn unused_dependency(diagnostic: &UnusedDependency, source: &NamedSource<String>) -> Self {
-        Self {
-            kind: DiagnosticKind::UnusedDependency { name: diagnostic.name.get_ref().clone() },
-            source: Some(source.clone()),
-            span: Some(diagnostic.name.span().into()),
-            related: Vec::new(),
-            help: Some("remove this dependency".to_owned()),
-        }
+        Self::spanned(
+            DiagnosticKind::UnusedDependency { name: diagnostic.name.get_ref().clone() },
+            &diagnostic.name,
+            source,
+            Some("remove this dependency".to_owned()),
+        )
     }
 
     pub fn unused_workspace_dependency(
         diagnostic: &UnusedWorkspaceDependency,
         source: &NamedSource<String>,
     ) -> Self {
-        Self {
-            kind: DiagnosticKind::UnusedWorkspaceDependency {
-                name: diagnostic.name.get_ref().clone(),
-            },
-            source: Some(source.clone()),
-            span: Some(diagnostic.name.span().into()),
-            related: Vec::new(),
-            help: Some("remove this dependency".to_owned()),
-        }
+        Self::spanned(
+            DiagnosticKind::UnusedWorkspaceDependency { name: diagnostic.name.get_ref().clone() },
+            &diagnostic.name,
+            source,
+            Some("remove this dependency".to_owned()),
+        )
     }
 
     pub fn unused_optional_dependency(
@@ -279,17 +279,19 @@ impl ShearDiagnostic {
         source: &NamedSource<String>,
     ) -> Self {
         Self {
-            kind: DiagnosticKind::UnusedOptionalDependency {
-                name: diagnostic.name.get_ref().clone(),
-            },
-            source: Some(source.clone()),
-            span: Some(diagnostic.name.span().into()),
             related: ShearRelatedDiagnostic::from_features(
-                Some("removing an optional dependency may be a breaking change"),
+                Some(OPTIONAL_BREAKING_CHANGE),
                 &diagnostic.features,
                 source,
             ),
-            help: None,
+            ..Self::spanned(
+                DiagnosticKind::UnusedOptionalDependency {
+                    name: diagnostic.name.get_ref().clone(),
+                },
+                &diagnostic.name,
+                source,
+                None,
+            )
         }
     }
 
@@ -298,13 +300,13 @@ impl ShearDiagnostic {
         source: &NamedSource<String>,
     ) -> Self {
         Self {
-            kind: DiagnosticKind::UnusedFeatureDependency {
-                name: diagnostic.name.get_ref().clone(),
-            },
-            source: Some(source.clone()),
-            span: Some(diagnostic.name.span().into()),
             related: ShearRelatedDiagnostic::from_features(None, &diagnostic.features, source),
-            help: None,
+            ..Self::spanned(
+                DiagnosticKind::UnusedFeatureDependency { name: diagnostic.name.get_ref().clone() },
+                &diagnostic.name,
+                source,
+                None,
+            )
         }
     }
 
@@ -313,13 +315,12 @@ impl ShearDiagnostic {
         source: &NamedSource<String>,
     ) -> Self {
         let target = diagnostic.location.as_table(DepTable::Dev);
-        Self {
-            kind: DiagnosticKind::MisplacedDependency { name: diagnostic.name.get_ref().clone() },
-            source: Some(source.clone()),
-            span: Some(diagnostic.name.span().into()),
-            related: Vec::new(),
-            help: Some(format!("move this dependency to `{target}`")),
-        }
+        Self::spanned(
+            DiagnosticKind::MisplacedDependency { name: diagnostic.name.get_ref().clone() },
+            &diagnostic.name,
+            source,
+            Some(format!("move this dependency to `{target}`")),
+        )
     }
 
     pub fn misplaced_optional_dependency(
@@ -328,17 +329,19 @@ impl ShearDiagnostic {
     ) -> Self {
         let target = diagnostic.location.as_table(DepTable::Dev);
         Self {
-            kind: DiagnosticKind::MisplacedOptionalDependency {
-                name: diagnostic.name.get_ref().clone(),
-            },
-            source: Some(source.clone()),
-            span: Some(diagnostic.name.span().into()),
             related: ShearRelatedDiagnostic::from_features(
-                Some("removing an optional dependency may be a breaking change"),
+                Some(OPTIONAL_BREAKING_CHANGE),
                 &diagnostic.features,
                 source,
             ),
-            help: Some(format!("remove the `optional` flag and move to `{target}`")),
+            ..Self::spanned(
+                DiagnosticKind::MisplacedOptionalDependency {
+                    name: diagnostic.name.get_ref().clone(),
+                },
+                &diagnostic.name,
+                source,
+                Some(format!("remove the `optional` flag and move to `{target}`")),
+            )
         }
     }
 
@@ -376,38 +379,33 @@ impl ShearDiagnostic {
     }
 
     pub fn unknown_ignore(diagnostic: &UnknownIgnore, source: &NamedSource<String>) -> Self {
-        Self {
-            kind: DiagnosticKind::UnknownIgnore { name: diagnostic.name.get_ref().clone() },
-            source: Some(source.clone()),
-            span: Some(diagnostic.name.span().into()),
-            related: Vec::new(),
-            help: Some("remove from ignored list".to_owned()),
-        }
+        Self::spanned(
+            DiagnosticKind::UnknownIgnore { name: diagnostic.name.get_ref().clone() },
+            &diagnostic.name,
+            source,
+            Some("remove from ignored list".to_owned()),
+        )
     }
 
     pub fn redundant_ignore(diagnostic: &RedundantIgnore, source: &NamedSource<String>) -> Self {
-        Self {
-            kind: DiagnosticKind::RedundantIgnore { name: diagnostic.name.get_ref().clone() },
-            source: Some(source.clone()),
-            span: Some(diagnostic.name.span().into()),
-            related: Vec::new(),
-            help: Some("remove from ignored list".to_owned()),
-        }
+        Self::spanned(
+            DiagnosticKind::RedundantIgnore { name: diagnostic.name.get_ref().clone() },
+            &diagnostic.name,
+            source,
+            Some("remove from ignored list".to_owned()),
+        )
     }
 
     pub fn redundant_ignore_path(
         diagnostic: &RedundantIgnorePath,
         source: &NamedSource<String>,
     ) -> Self {
-        Self {
-            kind: DiagnosticKind::RedundantIgnorePath {
-                pattern: diagnostic.pattern.get_ref().clone(),
-            },
-            source: Some(source.clone()),
-            span: Some(diagnostic.pattern.span().into()),
-            related: Vec::new(),
-            help: Some("remove from ignored paths list".to_owned()),
-        }
+        Self::spanned(
+            DiagnosticKind::RedundantIgnorePath { pattern: diagnostic.pattern.get_ref().clone() },
+            &diagnostic.pattern,
+            source,
+            Some("remove from ignored paths list".to_owned()),
+        )
     }
 
     pub fn test_disabled_with_tests(diagnostic: &TestDisabledWithTests) -> Self {
@@ -446,6 +444,22 @@ impl ShearDiagnostic {
             },
             "set `doctest = false` to avoid running doc tests for this target",
         )
+    }
+
+    /// Builder for diagnostics that point at a spanned manifest entry.
+    fn spanned(
+        kind: DiagnosticKind,
+        name: &Spanned<String>,
+        source: &NamedSource<String>,
+        help: Option<String>,
+    ) -> Self {
+        Self {
+            kind,
+            source: Some(source.clone()),
+            span: Some(name.span().into()),
+            related: Vec::new(),
+            help,
+        }
     }
 
     fn sourceless(kind: DiagnosticKind, help: &str) -> Self {

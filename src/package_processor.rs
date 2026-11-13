@@ -319,6 +319,7 @@ impl PackageProcessor {
             }
 
             let is_ignored = ctx.ignored_imports.contains(&import);
+            let features = || used_imports.features.get(&*import).cloned().unwrap_or_default();
 
             if !code_imports.contains(&*import) {
                 if is_ignored {
@@ -330,19 +331,17 @@ impl PackageProcessor {
                 }
 
                 if dependency.get_ref().optional() {
-                    result.unused_optional_dependencies.push(UnusedOptionalDependency {
-                        name: dep.clone(),
-                        features: used_imports.features.get(&*import).cloned().unwrap_or_default(),
-                    });
+                    result
+                        .unused_optional_dependencies
+                        .push(UnusedOptionalDependency { name: dep.clone(), features: features() });
 
                     continue;
                 }
 
                 if feature_imports.contains(&*import) {
-                    result.unused_feature_dependencies.push(UnusedFeatureDependency {
-                        name: dep.clone(),
-                        features: used_imports.features.get(&*import).cloned().unwrap_or_default(),
-                    });
+                    result
+                        .unused_feature_dependencies
+                        .push(UnusedFeatureDependency { name: dep.clone(), features: features() });
 
                     continue;
                 }
@@ -367,7 +366,7 @@ impl PackageProcessor {
                     result.misplaced_optional_dependencies.push(MisplacedOptionalDependency {
                         name: dep.clone(),
                         location: location.clone(),
-                        features: used_imports.features.get(&*import).cloned().unwrap_or_default(),
+                        features: features(),
                     });
                 } else {
                     result.misplaced_dependencies.push(MisplacedDependency {
@@ -415,14 +414,16 @@ impl PackageProcessor {
         // Workspace-level globs are written relative to the workspace root, so we'll
         // need to rejoin package-relative paths under this prefix when matching them.
         let root = ctx.directory.strip_prefix(&ctx.workspace.root).unwrap_or(&ctx.directory);
+        let pkg_ignores = |path: &Path| pkg_ignored_paths.iter().any(|g| g.matcher.is_match(path));
+        let ws_ignores =
+            |path: &Path| ws_ignored_paths.iter().any(|g| g.matcher.is_match(root.join(path)));
 
         // A package-level pattern is redundant only if it matches neither an unlinked
         // nor an empty file in this package.
         result.redundant_ignore_paths = pkg_ignored_paths
             .iter()
             .filter(|glob| {
-                !unlinked_files.iter().any(|path| glob.matcher.is_match(path))
-                    && !empty_files.iter().any(|path| glob.matcher.is_match(path))
+                !unlinked_files.iter().chain(&empty_files).any(|path| glob.matcher.is_match(path))
             })
             .map(|glob| RedundantIgnorePath { pattern: glob.pattern.clone() })
             .collect();
@@ -431,19 +432,12 @@ impl PackageProcessor {
         // workspace pass can distinguish them from globs that match nothing anywhere.
         // A pattern that's already covered by a package-level glob doesn't count.
         for glob in ws_ignored_paths {
-            let matches_unlinked = unlinked_files.iter().any(|path| {
-                let not_matched_by_pkg =
-                    !pkg_ignored_paths.iter().any(|pkg| pkg.matcher.is_match(path));
-                not_matched_by_pkg && glob.matcher.is_match(root.join(path))
-            });
+            let is_used = unlinked_files
+                .iter()
+                .chain(&empty_files)
+                .any(|path| !pkg_ignores(path) && glob.matcher.is_match(root.join(path)));
 
-            let matches_empty = empty_files.iter().any(|path| {
-                let not_matched_by_pkg =
-                    !pkg_ignored_paths.iter().any(|pkg| pkg.matcher.is_match(path));
-                not_matched_by_pkg && glob.matcher.is_match(root.join(path))
-            });
-
-            if matches_unlinked || matches_empty {
+            if is_used {
                 result.used_workspace_ignore_paths.insert(glob.pattern.get_ref().clone());
             }
         }
@@ -451,19 +445,13 @@ impl PackageProcessor {
         // Drop files matched by either a package- or workspace-level ignore.
         result.unlinked_files = unlinked_files
             .into_iter()
-            .filter(|path| {
-                !pkg_ignored_paths.iter().any(|glob| glob.matcher.is_match(path))
-                    && !ws_ignored_paths.iter().any(|glob| glob.matcher.is_match(root.join(path)))
-            })
+            .filter(|path| !pkg_ignores(path) && !ws_ignores(path))
             .map(|path| UnlinkedFile { path })
             .collect();
 
         result.empty_files = empty_files
             .into_iter()
-            .filter(|path| {
-                !pkg_ignored_paths.iter().any(|glob| glob.matcher.is_match(path))
-                    && !ws_ignored_paths.iter().any(|glob| glob.matcher.is_match(root.join(path)))
-            })
+            .filter(|path| !pkg_ignores(path) && !ws_ignores(path))
             .map(|path| EmptyFile { path })
             .collect();
 
