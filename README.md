@@ -1,5 +1,8 @@
 # Cargo Shear ✂️ 🐑
 
+> [!NOTE]
+> Rust 1.100.0 introduces [reporting unused dependencies in Cargo](https://blog.rust-lang.org/2026/11/12/Rust-1.100.0/#reporting-unused-dependencies-in-cargo).
+
 Detect and fix issues in Rust projects:
 
 - **Unused dependencies** in `Cargo.toml`
