@@ -14,14 +14,21 @@ Detect and fix issues in Rust projects:
 
 ## Comparison with Cargo lints
 
-Cargo provides two built-in lints:
+Cargo's [`unused_dependencies`](https://doc.rust-lang.org/stable/cargo/reference/lints.html#unused_dependencies) uses rustc's unused-extern results. [`unused_workspace_dependencies`](https://doc.rust-lang.org/stable/cargo/reference/lints.html#unused_workspace_dependencies) checks manifest inheritance. cargo-shear instead collects crate references from source files and compares them with manifest entries.
 
-- [`unused_dependencies`](https://doc.rust-lang.org/stable/cargo/reference/lints.html#unused_dependencies) detects dependencies unused by the selected packages' targets. Its coverage depends on target selection, and it currently does not check `[dev-dependencies]`, even with `--all-targets`.
-- [`unused_workspace_dependencies`](https://doc.rust-lang.org/stable/cargo/reference/lints.html#unused_workspace_dependencies) detects entries in `[workspace.dependencies]` that no workspace member inherits. Inheritance alone does not mean the dependency is used in source code.
+| Check | Cargo lints | cargo-shear |
+| --- | --- | --- |
+| Unused normal/build dependencies | `cargo check` checks these tables; `cargo check --bin foo` skips normal dependencies, even for a single-bin package. Only selected packages are checked. | Checks all workspace members by default, including normal, build, dev, and target-specific dependency tables. |
+| Unused dev-dependencies | Currently unchecked, including with `--all-targets`. | Checks references collected from source files, including unit tests, integration tests, examples, benchmarks, and Rust doc-comment code blocks. |
+| Features and platforms | Checks dependencies participating in the selected build configuration. | Does not evaluate `cfg`: references in disabled feature/platform branches count as usage. A single scan can cover these branches without building each configuration. |
+| Macro-generated references | Uses compiler results after expansion. | Can miss generated references by default. `--expand` adds expanded references using nightly rustc and all features; build scripts are not expanded. |
+| Workspace dependencies | Reports entries that no member inherits. An inherited but unused dependency satisfies this lint. | Checks whether the underlying package has a source reference, feature reference, or ignore exemption in any member. Inheritance alone does not keep it. |
+| Moving dependencies to dev-dependencies | Can suggest a move when development-only usage is observed. | `--fix` moves non-optional normal dependencies referenced only by integration tests, examples, or benchmarks. References inside `#[cfg(test)]` in `src/` count as normal usage, so these are not moved. |
+| Other cleanup | These two lints concern dependencies. | Also reports unlinked and empty source files; `--fix` removes unused non-optional dependencies and unused workspace entries. Optional and feature-only dependencies are reported separately for manual review. |
 
-cargo-shear complements these lints by parsing source files without compiling the project. It checks dev-dependencies, detects misplaced dependencies and unlinked source files, and can apply manifest fixes with `--fix`.
+For example, an unused dependency declared only in `[dev-dependencies]` is a reason to run cargo-shear even with Cargo's lints enabled. A dependency used only in a Windows `cfg` branch is retained by cargo-shear when scanning on Linux, without a Windows build.
 
-The approaches have different tradeoffs: Cargo checks compiler-observed usage for the build being performed, while cargo-shear's default source analysis cannot see imports introduced by macro expansion. See [Limitations](#limitations) for details and the optional `--expand` mode.
+Source references are a heuristic: cargo-shear also counts references in scanned files that are not linked into a module tree, so stale code can keep a dependency from being reported. Default analysis does not compile the project, but it runs `cargo metadata --all-features`, which still requires dependency resolution. See [Limitations](#limitations).
 
 ## Installation
 
