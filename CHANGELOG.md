@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.14.1](https://github.com/Boshen/cargo-shear/compare/v1.14.0...v1.14.1) - 2026-11-13
+
+### <!-- 1 -->🐛 Bug Fixes
+- follow `#[path]` modules outside the target's directory ([#594](https://github.com/Boshen/cargo-shear/pull/594)) (by @Executioner1939)
+
+### <!-- 2 -->🚜 Refactor
+- remove duplicated logic across modules ([#599](https://github.com/Boshen/cargo-shear/pull/599)) (by @Boshen)
+
+### <!-- 3 -->📚 Documentation
+- compare cargo-shear with Cargo lints ([#598](https://github.com/Boshen/cargo-shear/pull/598)) (by @Boshen)
+- mention Cargo unused dependency reporting ([#597](https://github.com/Boshen/cargo-shear/pull/597)) (by @Boshen)
+
+### <!-- 9 -->💼 Other
+- Fix installing with: cargo install cargo-shear --locked ([#590](https://github.com/Boshen/cargo-shear/pull/590)) (by @notpeter)
+
+### Contributors
+
+* @Boshen
+* @Executioner1939
+* @notpeter
+* @renovate[bot]
+
 ## [1.14.0](https://github.com/Boshen/cargo-shear/compare/v1.13.5...v1.14.0) - 2026-09-22
 
 ### <!-- 0 -->🚀 Features
