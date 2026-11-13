@@ -1,7 +1,7 @@
 # Cargo Shear ✂️ 🐑
 
 > [!NOTE]
-> Rust 1.100.0 introduces [reporting unused dependencies in Cargo](https://blog.rust-lang.org/2026/11/12/Rust-1.100.0/#reporting-unused-dependencies-in-cargo).
+> Rust 1.100.0 introduces [reporting unused dependencies in Cargo](https://blog.rust-lang.org/2026/11/12/Rust-1.100.0/#reporting-unused-dependencies-in-cargo). See [how cargo-shear complements Cargo's lints](#comparison-with-cargo-lints) below.
 
 Detect and fix issues in Rust projects:
 
@@ -11,6 +11,17 @@ Detect and fix issues in Rust projects:
 
 > [!NOTE]
 > This tool is considered feature-complete. We continue to welcome contributions that focus on bug fixes, dependency upgrades, and UI/UX improvements.
+
+## Comparison with Cargo lints
+
+Cargo provides two built-in lints:
+
+- [`unused_dependencies`](https://doc.rust-lang.org/stable/cargo/reference/lints.html#unused_dependencies) detects dependencies unused by the selected packages' targets. Its coverage depends on target selection, and it currently does not check `[dev-dependencies]`, even with `--all-targets`.
+- [`unused_workspace_dependencies`](https://doc.rust-lang.org/stable/cargo/reference/lints.html#unused_workspace_dependencies) detects entries in `[workspace.dependencies]` that no workspace member inherits. Inheritance alone does not mean the dependency is used in source code.
+
+cargo-shear complements these lints by parsing source files without compiling the project. It checks dev-dependencies, detects misplaced dependencies and unlinked source files, and can apply manifest fixes with `--fix`.
+
+The approaches have different tradeoffs: Cargo checks compiler-observed usage for the build being performed, while cargo-shear's default source analysis cannot see imports introduced by macro expansion. See [Limitations](#limitations) for details and the optional `--expand` mode.
 
 ## Installation
 
