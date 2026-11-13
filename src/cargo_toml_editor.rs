@@ -120,31 +120,7 @@ impl CargoTomlEditor {
     }
 
     fn move_root_to_dev(manifest: &mut DocumentMut, dep: &MisplacedDependency) -> bool {
-        // Lift the entry out of `[dependencies]` so we can re-insert it elsewhere.
-        let Some(value) = manifest
-            .get_mut("dependencies")
-            .and_then(|item| item.as_table_mut())
-            .and_then(|deps| deps.remove(dep.name.get_ref()))
-        else {
-            return false;
-        };
-
-        // Create `[dev-dependencies]` on the fly if the manifest doesn't have one yet.
-        if !manifest.contains_key("dev-dependencies") {
-            manifest["dev-dependencies"] = Item::Table(Table::new());
-        }
-
-        // Re-insert into `[dev-dependencies]`. The earlier `contains_key` check
-        // means this should always succeed, but stay defensive in case of a
-        // non-table value at that key.
-        if let Some(dev_deps) =
-            manifest.get_mut("dev-dependencies").and_then(|item| item.as_table_mut())
-        {
-            dev_deps.insert(dep.name.get_ref(), value);
-            return true;
-        }
-
-        false
+        Self::move_to_dev(manifest.as_table_mut(), dep.name.get_ref())
     }
 
     fn move_target_to_dev(manifest: &mut DocumentMut, dep: &MisplacedDependency) -> bool {
@@ -152,38 +128,37 @@ impl CargoTomlEditor {
             return false;
         };
 
-        let Some(target) = manifest
+        manifest
             .get_mut("target")
             .and_then(|item| item.as_table_mut())
             .and_then(|targets| targets.get_mut(cfg))
             .and_then(|item| item.as_table_mut())
-        else {
-            return false;
-        };
+            .is_some_and(|target| Self::move_to_dev(target, dep.name.get_ref()))
+    }
 
-        // Lift the entry out of `[target.'cfg(...)'.dependencies]`.
-        let Some(value) = target
+    /// Move `name` from `parent.dependencies` to `parent.dev-dependencies`,
+    /// creating the latter if needed. `parent` is either the document root or
+    /// a `[target.'cfg(...)']` table.
+    fn move_to_dev(parent: &mut Table, name: &str) -> bool {
+        let Some(value) = parent
             .get_mut("dependencies")
             .and_then(|item| item.as_table_mut())
-            .and_then(|deps| deps.remove(dep.name.get_ref()))
+            .and_then(|deps| deps.remove(name))
         else {
             return false;
         };
 
-        // Create the dev-dependencies table for this `cfg` if it isn't there yet.
-        if !target.contains_key("dev-dependencies") {
-            target["dev-dependencies"] = Item::Table(Table::new());
-        }
+        // Stay defensive in case `dev-dependencies` exists but isn't a table.
+        let Some(dev_deps) = parent
+            .entry("dev-dependencies")
+            .or_insert_with(|| Item::Table(Table::new()))
+            .as_table_mut()
+        else {
+            return false;
+        };
 
-        // Re-insert into `[target.'cfg(...)'.dev-dependencies]`.
-        if let Some(dev_deps) =
-            target.get_mut("dev-dependencies").and_then(|item| item.as_table_mut())
-        {
-            dev_deps.insert(dep.name.get_ref(), value);
-            return true;
-        }
-
-        false
+        dev_deps.insert(name, value);
+        true
     }
 
     /// Remove a single flag (e.g. `test` or `doctest`) from the `[lib]` table.
@@ -203,58 +178,50 @@ impl CargoTomlEditor {
     /// Force a flag to `false` under `[lib]`, creating the table if it's absent.
     /// Used to suppress Cargo's defaults of `test = true` / `doctest = true`.
     pub fn set_lib_flag_false(manifest: &mut DocumentMut, flag: &str) {
-        if !manifest.contains_key("lib") {
-            manifest["lib"] = Item::Table(Table::new());
-        }
-        if let Some(table) = manifest.get_mut("lib").and_then(|item| item.as_table_mut()) {
+        if let Some(table) =
+            manifest.entry("lib").or_insert_with(|| Item::Table(Table::new())).as_table_mut()
+        {
             table[flag] = value(false);
         }
     }
 
     fn cleanup_empty_tables(manifest: &mut DocumentMut) {
+        let root = manifest.as_table_mut();
+
         // Top-level `[dependencies]` / `[dev-dependencies]` / `[build-dependencies]`.
         for key in DEP_TABLE_KEYS {
-            if manifest.get(key).and_then(|i| i.as_table()).is_some_and(Table::is_empty) {
-                manifest.remove(key);
-            }
+            Self::remove_if_empty(root, key);
         }
 
         // Target-specific tables, walked bottom-up: snapshot the keys first so
         // we can mutate `targets` without invalidating an in-flight iterator.
-        if let Some(targets) = manifest.get_mut("target").and_then(|i| i.as_table_mut()) {
+        if let Some(targets) = root.get_mut("target").and_then(|i| i.as_table_mut()) {
             let target_keys: Vec<String> = targets.iter().map(|(k, _)| k.to_owned()).collect();
             for cfg_key in &target_keys {
                 if let Some(target) = targets.get_mut(cfg_key).and_then(|i| i.as_table_mut()) {
                     for dep_key in DEP_TABLE_KEYS {
-                        if target
-                            .get(dep_key)
-                            .and_then(|i| i.as_table())
-                            .is_some_and(Table::is_empty)
-                        {
-                            target.remove(dep_key);
-                        }
+                        Self::remove_if_empty(target, dep_key);
                     }
                 }
-                if targets.get(cfg_key).and_then(|i| i.as_table()).is_some_and(Table::is_empty) {
-                    targets.remove(cfg_key);
-                }
+                Self::remove_if_empty(targets, cfg_key);
             }
         }
-        if manifest.get("target").and_then(|i| i.as_table()).is_some_and(Table::is_empty) {
-            manifest.remove("target");
-        }
+        Self::remove_if_empty(root, "target");
 
         // `[workspace.dependencies]` — only drop the `dependencies` sub-key, not
         // the whole `[workspace]` table (it carries members, resolver, etc.).
-        if let Some(workspace) = manifest.get_mut("workspace").and_then(|i| i.as_table_mut())
-            && workspace.get("dependencies").and_then(|i| i.as_table()).is_some_and(Table::is_empty)
-        {
-            workspace.remove("dependencies");
+        if let Some(workspace) = root.get_mut("workspace").and_then(|i| i.as_table_mut()) {
+            Self::remove_if_empty(workspace, "dependencies");
         }
 
         // `[lib]` — drop the table when it has no remaining keys.
-        if manifest.get("lib").and_then(|i| i.as_table()).is_some_and(Table::is_empty) {
-            manifest.remove("lib");
+        Self::remove_if_empty(root, "lib");
+    }
+
+    /// Remove `table[key]` if it is an empty table.
+    fn remove_if_empty(table: &mut Table, key: &str) {
+        if table.get(key).and_then(|i| i.as_table()).is_some_and(Table::is_empty) {
+            table.remove(key);
         }
     }
 

@@ -3,7 +3,7 @@
 use std::{
     env,
     ffi::OsString,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Command, Stdio},
 };
 
@@ -62,6 +62,15 @@ pub struct AnalysisResult {
 }
 
 impl AnalysisResult {
+    /// The import set for targets that draw from `table`.
+    const fn imports_mut(&mut self, table: DepTable) -> &mut FxHashSet<CompactString> {
+        match table {
+            DepTable::Normal => &mut self.normal,
+            DepTable::Dev => &mut self.dev,
+            DepTable::Build => &mut self.build,
+        }
+    }
+
     pub fn code_imports(&self) -> FxHashSet<CompactString> {
         self.normal.union(&self.dev).chain(&self.build).cloned().collect()
     }
@@ -138,12 +147,10 @@ impl<'a> PackageAnalyzer<'a> {
                 .files
                 .iter()
                 .filter(|(path, _)| {
-                    let path = path.as_os_str().as_encoded_bytes();
                     if is_build_script {
-                        path == dir_bytes
+                        path.as_os_str().as_encoded_bytes() == dir_bytes
                     } else {
-                        path.starts_with(dir_bytes)
-                            && matches!(path.get(dir_bytes.len()), Some(&(b'/' | b'\\')))
+                        is_inside(path, dir_bytes)
                     }
                 })
                 .collect();
@@ -153,11 +160,7 @@ impl<'a> PackageAnalyzer<'a> {
                 .flat_map(|(_, parsed)| parsed.imports.iter().cloned())
                 .collect();
 
-            match DepTable::from(kind) {
-                DepTable::Normal => self.result.normal.extend(imports),
-                DepTable::Dev => self.result.dev.extend(imports),
-                DepTable::Build => self.result.build.extend(imports),
-            }
+            self.result.imports_mut(DepTable::from(kind)).extend(imports);
 
             // Lib-like targets only. Bin targets share source directories with the
             // package's lib target, so we can't tell which file's tests "belong" to
@@ -231,11 +234,7 @@ impl<'a> PackageAnalyzer<'a> {
             }
 
             let parsed = ParsedSource::from_str(&output, target.src_path.as_ref());
-            match DepTable::from(kind) {
-                DepTable::Normal => self.result.normal.extend(parsed.imports),
-                DepTable::Dev => self.result.dev.extend(parsed.imports),
-                DepTable::Build => self.result.build.extend(parsed.imports),
-            }
+            self.result.imports_mut(DepTable::from(kind)).extend(parsed.imports);
         }
 
         Ok(())
@@ -265,28 +264,30 @@ impl<'a> PackageAnalyzer<'a> {
 
     fn analyze_unlinked(&mut self) {
         let dir_bytes = self.ctx.directory.as_os_str().as_encoded_bytes();
+
+        // The workspace root walks every Rust file in the tree, including those
+        // owned by member packages. Don't double-count their files here.
+        let is_root_package =
+            self.ctx.directory == self.ctx.workspace.root && self.ctx.workspace.packages.len() > 1;
+
         self.result.unlinked_files = self
             .ctx
             .workspace
             .files
             .keys()
             .filter(|path| {
-                // The workspace root walks every Rust file in the tree, including those
-                // owned by member packages. Don't double-count their files here.
-                if self.ctx.directory == self.ctx.workspace.root
-                    && self.ctx.workspace.packages.len() > 1
+                if is_root_package
+                    && self
+                        .ctx
+                        .workspace
+                        .packages
+                        .iter()
+                        .any(|pkg| pkg != &self.ctx.directory && path.starts_with(pkg))
                 {
-                    for pkg in &self.ctx.workspace.packages {
-                        if pkg != &self.ctx.directory && path.starts_with(pkg) {
-                            return false;
-                        }
-                    }
+                    return false;
                 }
 
-                let path_bytes = path.as_os_str().as_encoded_bytes();
-                path_bytes.starts_with(dir_bytes)
-                    && matches!(path_bytes.get(dir_bytes.len()), Some(&(b'/' | b'\\')))
-                    && !self.ctx.workspace.linked.contains(*path)
+                is_inside(path, dir_bytes) && !self.ctx.workspace.linked.contains(*path)
             })
             .cloned()
             .collect();
@@ -300,10 +301,8 @@ impl<'a> PackageAnalyzer<'a> {
             .files
             .iter()
             .filter(|(path, parsed)| {
-                let path_bytes = path.as_os_str().as_encoded_bytes();
                 // Restrict to files inside this package that are reachable from a module tree.
-                path_bytes.starts_with(dir_bytes)
-                    && matches!(path_bytes.get(dir_bytes.len()), Some(&(b'/' | b'\\')))
+                is_inside(path, dir_bytes)
                     && self.ctx.workspace.linked.contains(*path)
                     && parsed.is_empty
                     // Entry points (lib.rs, main.rs, build.rs, ...) are routinely
@@ -313,4 +312,11 @@ impl<'a> PackageAnalyzer<'a> {
             .map(|(path, _)| path.clone())
             .collect();
     }
+}
+
+/// Whether `path` lies strictly inside the directory whose encoded bytes are
+/// `dir_bytes` (a byte-prefix check followed by a path separator).
+fn is_inside(path: &Path, dir_bytes: &[u8]) -> bool {
+    let path = path.as_os_str().as_encoded_bytes();
+    path.starts_with(dir_bytes) && matches!(path.get(dir_bytes.len()), Some(&(b'/' | b'\\')))
 }

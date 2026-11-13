@@ -1,4 +1,4 @@
-use std::{error::Error, fmt, io};
+use std::{error::Error, fmt, io, ops::Range};
 
 use miette::{
     Diagnostic, GraphicalReportHandler, GraphicalTheme, LabeledSpan, NamedSource, Severity,
@@ -48,7 +48,7 @@ impl<W: io::Write> MietteRenderer<W> {
                 "  {} {} issue{} fixed",
                 "✓".style(theme.styles.advice),
                 analysis.fixed,
-                if analysis.fixed == 1 { "" } else { "s" }
+                plural(analysis.fixed)
             )?;
 
             return Ok(());
@@ -61,7 +61,7 @@ impl<W: io::Write> MietteRenderer<W> {
                 "  {} {} error{}",
                 "✗".style(theme.styles.error),
                 analysis.errors,
-                if analysis.errors == 1 { "" } else { "s" }
+                plural(analysis.errors)
             )?;
         }
 
@@ -71,7 +71,7 @@ impl<W: io::Write> MietteRenderer<W> {
                 "  {} {} warning{}",
                 "⚠".style(theme.styles.warning),
                 analysis.warnings,
-                if analysis.warnings == 1 { "" } else { "s" }
+                plural(analysis.warnings)
             )?;
         }
 
@@ -81,7 +81,7 @@ impl<W: io::Write> MietteRenderer<W> {
                 "  {} {} issue{} fixed",
                 "⚒".style(theme.styles.advice),
                 analysis.fixed,
-                if analysis.fixed == 1 { "" } else { "s" }
+                plural(analysis.fixed)
             )?;
         }
 
@@ -112,14 +112,14 @@ impl<W: io::Write> MietteRenderer<W> {
                 "  {} run with `--fix` to fix {} issue{}",
                 "☞".style(theme.styles.advice),
                 analysis.fixable,
-                if analysis.fixable == 1 { "" } else { "s" }
+                plural(analysis.fixable)
             )?;
         }
 
         if analysis.show_ignored {
             output.clear();
             handler
-                .render_report(&mut output, &IgnoreHelpDiagnostic::new())
+                .render_report(&mut output, &SnippetHelpDiagnostic::ignored())
                 .map_err(io::Error::other)?;
 
             write!(self.writer, "{output}")?;
@@ -128,7 +128,7 @@ impl<W: io::Write> MietteRenderer<W> {
         if analysis.show_ignored_paths {
             output.clear();
             handler
-                .render_report(&mut output, &IgnorePathHelpDiagnostic::new())
+                .render_report(&mut output, &SnippetHelpDiagnostic::ignored_paths())
                 .map_err(io::Error::other)?;
 
             write!(self.writer, "{output}")?;
@@ -138,34 +138,60 @@ impl<W: io::Write> MietteRenderer<W> {
     }
 }
 
-/// A diagnostic that displays help for ignoring dependency issues.
-struct IgnoreHelpDiagnostic {
+const fn plural(count: usize) -> &'static str {
+    if count == 1 { "" } else { "s" }
+}
+
+/// An advice diagnostic showing a `Cargo.toml` snippet for suppressing an issue.
+#[derive(Debug)]
+struct SnippetHelpDiagnostic {
+    message: &'static str,
     source: NamedSource<&'static str>,
+    label: &'static str,
+    /// Byte range within `source` that `label` points at.
+    span: Range<usize>,
 }
 
-impl IgnoreHelpDiagnostic {
-    const SOURCE: &str = "[package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]\nignored = [\"crate-name\"]";
+impl SnippetHelpDiagnostic {
+    /// Help for ignoring dependency issues.
+    fn ignored() -> Self {
+        Self::new(
+            "to suppress a dependency issue",
+            "[package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]\nignored = [\"crate-name\"]",
+            "add a crate name here",
+            80..92,
+        )
+    }
 
-    fn new() -> Self {
-        Self { source: NamedSource::new("Cargo.toml", Self::SOURCE) }
+    /// Help for ignoring unlinked/empty file issues.
+    fn ignored_paths() -> Self {
+        Self::new(
+            "to suppress a file issue",
+            "[package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]\nignored-paths = [\"tests/compile/*.rs\"]",
+            "add a file pattern here",
+            86..106,
+        )
+    }
+
+    fn new(
+        message: &'static str,
+        source: &'static str,
+        label: &'static str,
+        span: Range<usize>,
+    ) -> Self {
+        Self { message, source: NamedSource::new("Cargo.toml", source), label, span }
     }
 }
 
-impl fmt::Debug for IgnoreHelpDiagnostic {
+impl fmt::Display for SnippetHelpDiagnostic {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("IgnoreHelpDiagnostic").finish()
+        f.write_str(self.message)
     }
 }
 
-impl fmt::Display for IgnoreHelpDiagnostic {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "to suppress a dependency issue")
-    }
-}
+impl Error for SnippetHelpDiagnostic {}
 
-impl Error for IgnoreHelpDiagnostic {}
-
-impl Diagnostic for IgnoreHelpDiagnostic {
+impl Diagnostic for SnippetHelpDiagnostic {
     fn severity(&self) -> Option<Severity> {
         Some(Severity::Advice)
     }
@@ -175,47 +201,6 @@ impl Diagnostic for IgnoreHelpDiagnostic {
     }
 
     fn labels(&self) -> Option<Box<dyn Iterator<Item = LabeledSpan> + '_>> {
-        Some(Box::new(std::iter::once(LabeledSpan::at(80..92, "add a crate name here"))))
-    }
-}
-
-/// A diagnostic that displays help for ignoring unlinked file issues.
-struct IgnorePathHelpDiagnostic {
-    source: NamedSource<&'static str>,
-}
-
-impl IgnorePathHelpDiagnostic {
-    const SOURCE: &str = "[package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]\nignored-paths = [\"tests/compile/*.rs\"]";
-
-    fn new() -> Self {
-        Self { source: NamedSource::new("Cargo.toml", Self::SOURCE) }
-    }
-}
-
-impl fmt::Debug for IgnorePathHelpDiagnostic {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("IgnorePathHelpDiagnostic").finish()
-    }
-}
-
-impl fmt::Display for IgnorePathHelpDiagnostic {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "to suppress a file issue")
-    }
-}
-
-impl Error for IgnorePathHelpDiagnostic {}
-
-impl Diagnostic for IgnorePathHelpDiagnostic {
-    fn severity(&self) -> Option<Severity> {
-        Some(Severity::Advice)
-    }
-
-    fn source_code(&self) -> Option<&dyn miette::SourceCode> {
-        Some(&self.source)
-    }
-
-    fn labels(&self) -> Option<Box<dyn Iterator<Item = LabeledSpan> + '_>> {
-        Some(Box::new(std::iter::once(LabeledSpan::at(86..106, "add a file pattern here"))))
+        Some(Box::new(std::iter::once(LabeledSpan::at(self.span.clone(), self.label))))
     }
 }

@@ -352,23 +352,16 @@ impl<W: Write> CargoShear<W> {
         let processor = PackageProcessor::new(self.options.expand, self.options.check_test_targets);
         let workspace_ctx = WorkspaceContext::new(&metadata)?;
 
-        let packages = metadata.workspace_packages();
-        let packages: Vec<_> = packages
+        let packages: Vec<_> = metadata
+            .workspace_packages()
             .into_iter()
             .filter(|package| {
+                let name = package.name.as_str();
                 // `--exclude` always wins over `--package` (matches Cargo's behaviour).
-                if self.options.exclude.iter().any(|name| name == package.name.as_str()) {
-                    return false;
-                }
-
                 // When `--package` is given, restrict the run to its allowlist.
-                if !self.options.package.is_empty()
-                    && !self.options.package.iter().any(|name| name == package.name.as_str())
-                {
-                    return false;
-                }
-
-                true
+                !self.options.exclude.iter().any(|n| n == name)
+                    && (self.options.package.is_empty()
+                        || self.options.package.iter().any(|n| n == name))
             })
             .collect();
 
