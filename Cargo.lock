@@ -41,9 +41,9 @@ dependencies = [
 
 [[package]]
 name = "bpaf"
-version = "0.9.28"
+version = "0.9.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "597e81e56404b7a3e26ef7b449f82a4b7a661ae76c3cac692b42d6bad06a0fbe"
+checksum = "6ec87bdee42abd2534b8afb7b92086347dfff18e9c87751a7d25b062b33e87b4"
 dependencies = [
  "bpaf_derive",
 ]
@@ -504,9 +504,9 @@ checksum = "3eaf3ede3fee6db1a4c2ee091bf8a8b4dccdc6d17f656fb07896ee72867612f2"
 
 [[package]]
 name = "libmimalloc-sys2"
-version = "0.1.65"
+version = "0.1.66"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c68ecbf07017a81a170a98fd1486d340dd304bc1099d2ca9aceff310fc42e9d"
+checksum = "7dba4922950d581f24b14e2331e64777f6800a6155877cb2e2b5b8ea7749b4b5"
 dependencies = [
  "cc",
  "cmake",
@@ -564,9 +564,9 @@ dependencies = [
 
 [[package]]
 name = "mimalloc-safe"
-version = "0.1.69"
+version = "0.1.70"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91a05b5362ba7c45b5a2359693236833e97fd4378ee448effb663462941f9500"
+checksum = "deca8fbcd65d382e64050604b1e608e99d6c0bdcf3ff0d36c20ca852e847c458"
 dependencies = [
  "libmimalloc-sys2",
 ]
@@ -653,9 +653,9 @@ checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
 
 [[package]]
 name = "ra-ap-rustc_lexer"
-version = "0.166.0"
+version = "0.180.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "527c12b3731b7d0692498012810b85b2b8dfdb8b514321ed6afc434bd1c70191"
+checksum = "b905d81feeb517b3e36cdfe7100ce92e77419b14ef687d044c811a1cd9d5bcb3"
 dependencies = [
  "memchr",
  "unicode-ident",
@@ -664,15 +664,15 @@ dependencies = [
 
 [[package]]
 name = "ra_ap_edition"
-version = "0.0.360"
+version = "0.0.362"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "408235fd4b7b1f6d9865b84b5ba78be7d21428448559ed2a6701c3529cc1943d"
+checksum = "cd43a65cf099bc9504c03bafc9222be8f5c8f8b21cca99c6ff3fba88f14668f4"
 
 [[package]]
 name = "ra_ap_parser"
-version = "0.0.360"
+version = "0.0.362"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20e36c55a9e53316f3f63fb9b0ffe34061ca6c491750f60f9d0aea12e977084a"
+checksum = "6f1a1d37548815415f0c5d01dec840b6929e70ea8a27316d1140668103ff542a"
 dependencies = [
  "drop_bomb",
  "ra-ap-rustc_lexer",
@@ -684,9 +684,9 @@ dependencies = [
 
 [[package]]
 name = "ra_ap_stdx"
-version = "0.0.360"
+version = "0.0.362"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73f65a0ded5521db034ec5c43f4fa881ddedd4224daf2c2832bf0bac997254c1"
+checksum = "4c59e7f7080aee5c911e13e9026d8a48d0bad6a27c2ccf00d79287b6686367a4"
 dependencies = [
  "crossbeam-channel",
  "crossbeam-utils",
@@ -694,15 +694,16 @@ dependencies = [
  "jod-thread",
  "libc",
  "miow",
+ "thin-vec",
  "tracing",
  "windows-sys",
 ]
 
 [[package]]
 name = "ra_ap_syntax"
-version = "0.0.360"
+version = "0.0.362"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5beb5708da710e050cf7bc886ba35c9e06e271d844d1aa4923c5ac5da665412d"
+checksum = "92f0b061ea65326bda07525ff34a50480597a866d721e0bbac6ea4b9026df109"
 dependencies = [
  "either",
  "itertools",
@@ -717,6 +718,7 @@ dependencies = [
  "tracing",
  "triomphe",
  "unicode-ident",
+ "unicode-properties",
 ]
 
 [[package]]
@@ -758,9 +760,9 @@ checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
 name = "rowan"
-version = "0.17.0"
+version = "0.18.0-alpha.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14b574c58582fa59fa43a2feb6608b8744184659f08a2e0117e4b8224d95ed61"
+checksum = "aaea44c3d95fde0fcd2f4207a3de502924cc484eecdf76af64895afd4207dec5"
 dependencies = [
  "countme",
  "hashbrown 0.14.5",
@@ -783,9 +785,9 @@ checksum = "6b1e7f9a428571be2dc5bc0505c13fb6bf936822b894ec87abf8a08a4e51742d"
 
 [[package]]
 name = "rustc-literal-escaper"
-version = "0.0.7"
+version = "0.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8be87abb9e40db7466e0681dc8ecd9dcfd40360cb10b4c8fe24a7c4c3669b198"
+checksum = "bfe6f213fb658c8fb95baabd5420393438cf5a98d707f5dd701d9197c705f71e"
 
 [[package]]
 name = "rustix"
@@ -1017,6 +1019,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "thin-vec"
+version = "0.2.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6a4b9ba8738cb4a4f399d37e266becfd475e75eb73425b87a05a2f2039ba63e"
+
+[[package]]
 name = "thiserror"
 version = "2.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1132,15 +1140,15 @@ checksum = "dbc4bc3a9f746d862c45cb89d705aa10f187bb96c76001afab07a0d35ce60142"
 
 [[package]]
 name = "unicode-ident"
-version = "1.0.24"
+version = "1.0.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
+checksum = "a2c754d6c33795a1c324727428e5a7dedb5b06195f9890bdbcba760d3e246563"
 
 [[package]]
 name = "unicode-properties"
-version = "0.1.4"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7df058c713841ad818f1dc5d3fd88063241cc61f49f5fbea4b951e8cf5a8d71d"
+checksum = "993ad287eb20e8ba755312801cfe1413e0f25d604075863acaddca10b04c1833"
 
 [[package]]
 name = "unicode-width"
