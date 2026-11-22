@@ -664,15 +664,15 @@ dependencies = [
 
 [[package]]
 name = "ra_ap_edition"
-version = "0.0.362"
+version = "0.0.363"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd43a65cf099bc9504c03bafc9222be8f5c8f8b21cca99c6ff3fba88f14668f4"
+checksum = "537f158d48e45e27fc96049b4474f08f4f2a43f314e3a94358ae848cdf4506a4"
 
 [[package]]
 name = "ra_ap_parser"
-version = "0.0.362"
+version = "0.0.363"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f1a1d37548815415f0c5d01dec840b6929e70ea8a27316d1140668103ff542a"
+checksum = "804669feda720bade440f88c305b712de0278dd61f38e5eeb829e393c761cc8a"
 dependencies = [
  "drop_bomb",
  "ra-ap-rustc_lexer",
@@ -684,9 +684,9 @@ dependencies = [
 
 [[package]]
 name = "ra_ap_stdx"
-version = "0.0.362"
+version = "0.0.363"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c59e7f7080aee5c911e13e9026d8a48d0bad6a27c2ccf00d79287b6686367a4"
+checksum = "8148b3ba69f99b411f76b75995f77fa80ede17c994c0df3cc292b176826de311"
 dependencies = [
  "crossbeam-channel",
  "crossbeam-utils",
@@ -701,9 +701,9 @@ dependencies = [
 
 [[package]]
 name = "ra_ap_syntax"
-version = "0.0.362"
+version = "0.0.363"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "92f0b061ea65326bda07525ff34a50480597a866d721e0bbac6ea4b9026df109"
+checksum = "4db24e4411f20bd1e94b282652d0f13555b1156b491de772c0a4d761a0274dab"
 dependencies = [
  "either",
  "itertools",
@@ -1057,9 +1057,9 @@ dependencies = [
 
 [[package]]
 name = "toml"
-version = "1.2.1+spec-1.1.0"
+version = "1.2.2+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5755c51863cdac711f1956baf8eb9588e060755f7d3c4c979e70ea1e1f32cd7"
+checksum = "5426cb1b964690d913f6c5c1a1ae0b42f428ec506bb4d452876d7a209c9bca3b"
 dependencies = [
  "indexmap",
  "serde_core",
@@ -1081,9 +1081,9 @@ dependencies = [
 
 [[package]]
 name = "toml_edit"
-version = "0.25.19+spec-1.1.0"
+version = "0.25.20+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd43688c4858d7264ae1cf9a9f874a67c3feb74a883b1cd7bebd6a4ea8307218"
+checksum = "e76360e201d6dbd6583e17795ba71a88f47365a9139c8450a7979c32303b8e73"
 dependencies = [
  "indexmap",
  "toml_datetime",
@@ -1094,9 +1094,9 @@ dependencies = [
 
 [[package]]
 name = "toml_parser"
-version = "1.1.5+spec-1.1.0"
+version = "1.1.6+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "baa693a8032d7e1cada7d0041e96126df243179ff061456783ac7f12bda4744c"
+checksum = "e6769c452d71ba30696c6b37770c439a9cc9110f47f7d5cdbeda79840ef5ea31"
 dependencies = [
  "winnow 1.0.4",
 ]
